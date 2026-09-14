@@ -8,7 +8,7 @@ Use **Change Journey** in the top bar to choose **Pacific Coast** or **Red Rock 
 
 The third journey, **Midnight Alpine**, winds along a snowy mountain ledge at night. Pointed mountains rise to the right of the road, with irregular rocky flanks, snowy summits, and lower saddles between peaks. A steep drop falls away to the left. Snow-covered pines, guardrails, amber lamps, working headlights, light snowfall, and occasional summit relay huts complete the scene. It retains the same camera angle, car scale, and forgiving controls. Snow animation pauses with the drive, and night lighting is removed when returning to either daytime journey.
 
-The mountain faces include fractured rock columns, narrow gullies, projecting snow-covered shelves, ledge pines, and loose rubble at their feet. These local formations are staggered across the mountain sides and below the road; the overall summit shape stays intact. Their geometry is batched per chunk and released with the surrounding terrain.
+The slope below the road descends gradually through broad spurs, gullies, and uneven snow-covered shoulders. Local pockets flatten directly into the terrain on both sides, with small groups of pines growing on those shelves. These variations use continuous world-space height functions, so the terrain connects across chunks while retaining the overall summit shape.
 
 ## Run
 
@@ -43,7 +43,6 @@ Touch controls appear on touch devices. Driving starts directly with the keyboar
 - `src/world/birds.js`: small instanced gull flocks with gliding motion and intermittent wingbeats, driven by the simulation clock so they pause with the scene.
 - `src/world/desert-route.js`, `src/world/desert.js`: continuous canyon profiles with adaptive terrain columns along both walls, deterministic rock formations, a dry wash, and instanced rockfall and desert plants. Shared global boundary samples and the same nine-chunk streaming budget as the coast keep the valley seamless and bounded.
 - `src/world/snow-route.js`, `src/world/snow.js`: continuous mountain masses and ledge terrain, slope-dependent snow cover, instanced alpine scenery, seven pooled nearby lamp lights, one headlight beam, and a fixed pool of snow particles. Mountain summits and chunk borders use deterministic world coordinates, including reverse travel and floating-origin changes.
-- `src/world/snow-geology.js`: deterministic crag clusters with buried bases, solid snow caps, and ledge planting points. Rock and snow surfaces share two batched meshes per chunk.
 - `src/journeys.js`, `src/journey.css`: journey definitions and chooser styling. Switching updates environment lighting, HUD labels, and optional wind ambience while retaining the existing camera setup.
 - `src/vehicle.js`: small procedural car, fixed-step arcade driving, steering smoothing, gentle heading assistance, slope alignment, and soft roadside limits.
 - `src/rendering.js`: fixed isometric camera, two zoom levels, lighting, fog, and shadows.

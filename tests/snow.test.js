@@ -2,17 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
-import { snowColumns, snowVertex, snowHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell } from '../src/world/snow-route.js';
+import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell, ledgeEdge, terrainPocket } from '../src/world/snow-route.js';
 import { SnowWorld } from '../src/world/snow.js';
 import { DrivingController } from '../src/vehicle.js';
-import { cragsForChunk, buildCrags } from '../src/world/snow-geology.js';
 
 test('mountain ledges stay continuous, ordered and clear of the driving corridor', () => {
   for (let s = -10000; s < 10000; s += 13) {
     const columns = snowColumns(s);
     for (let col = 1; col < columns.length; col++) assert.ok(columns[col] > columns[col - 1], `folded snow terrain at ${s}`);
     for (const u of [-7, 0, 7]) assert.equal(snowHeight(s, u), snowRoadHeight(s));
-    assert.ok(snowHeight(s, -60) < snowRoadHeight(s) - 85);
+    assert.ok(snowHeight(s, ledgeEdge(s) - 155) < snowRoadHeight(s) - 88);
+    const descent = snowHeight(s, ledgeEdge(s) - 15) - snowHeight(s, ledgeEdge(s) - 80);
+    assert.ok(descent > 40 && descent < 94, `excessively steep or missing slope at ${s}`);
     assert.ok(snowHeight(s, 75) > snowRoadHeight(s) + 5);
     for (const u of [-60, -25, 7, 25, 70]) assert.ok(Math.abs(snowHeight(s + .001, u) - snowHeight(s - .001, u)) < .02);
   }
@@ -45,38 +46,20 @@ test('snow drive stays grounded on slopes and safely within the ledge', () => {
   assert.ok(car.speed < -2);
 });
 
-test('rock outcrops are stable across visits and keep their footprints clear of the road', () => {
-  for (let chunk = -40; chunk < 60; chunk++) {
-    const crags = cragsForChunk(chunk);
-    assert.deepEqual(crags, cragsForChunk(chunk));
-    for (const crag of crags) {
-      assert.ok(crag.s >= chunk * CHUNK_LENGTH && crag.s < (chunk + 1) * CHUNK_LENGTH);
-      assert.ok(Math.abs(crag.u) - crag.ru * 1.2 - 4 > 10);
-    }
-    assert.ok(crags.some(crag => crag.side < 0) && crags.some(crag => crag.side > 0));
+test('snow pockets flatten the terrain itself and blend continuously into the slope', () => {
+  let reshaped = 0;
+  for (let i = -40; i < 40; i++) for (const side of [-1, 1]) {
+    const pocket = terrainPocket(i, side), { s, u, ru, rs } = pocket;
+    assert.deepEqual(pocket, terrainPocket(i, side));
+    const slope = Math.abs(snowHeight(s, u + .2) - snowHeight(s, u - .2));
+    const baseSlope = Math.abs(snowBaseHeight(s, u + .2) - snowBaseHeight(s, u - .2));
+    assert.ok(slope < baseSlope * .4 + .001);
+    if (Math.abs(snowHeight(s, u + ru * .5) - snowBaseHeight(s, u + ru * .5)) > .5) reshaped++;
+    for (const t of [s - rs, s + rs]) assert.ok(Math.abs(snowHeight(t - .001, u) - snowHeight(t + .001, u)) < .02);
+    for (const v of [u - ru, u + ru]) assert.ok(Math.abs(snowHeight(s, v - .001) - snowHeight(s, v + .001)) < .02);
+    for (const v of [-7, 0, 7]) assert.equal(snowHeight(s, v), snowRoadHeight(s));
   }
-  const a = buildCrags(-3), b = buildCrags(-3);
-  for (const key of ['rock', 'snow']) {
-    assert.deepEqual(a[key].attributes.position.array, b[key].attributes.position.array);
-    assert.ok(a[key].attributes.position.array.every(Number.isFinite));
-    assert.ok(a[key].attributes.normal.array.every(Number.isFinite));
-  }
-  // Every ledge pine has a solid snow triangle directly under its planting point.
-  const positions = a.snow.attributes.position;
-  for (const tree of a.trees) {
-    const p = snowDrivingRoute.position(tree.s, tree.u, tree.y); p.z += -3 * CHUNK_LENGTH;
-    let supported = false;
-    for (let i = 0; i < positions.count; i += 3) {
-      const v = [0, 1, 2].map(j => new THREE.Vector3().fromBufferAttribute(positions, i + j));
-      const planar = v.map(q => new THREE.Vector3(q.x, 0, q.z));
-      const bary = THREE.Triangle.getBarycoord(new THREE.Vector3(p.x, 0, p.z), ...planar, new THREE.Vector3());
-      if (!bary || Math.min(bary.x, bary.y, bary.z) < -.001) continue;
-      const y = bary.x * v[0].y + bary.y * v[1].y + bary.z * v[2].y;
-      if (Math.abs(y - tree.y) < .3) { supported = true; break; }
-    }
-    assert.ok(supported, `unsupported pine at ${tree.s}, ${tree.u}`);
-  }
-  for (const detail of [a, b]) { detail.rock.dispose(); detail.snow.dispose(); }
+  assert.ok(reshaped > 100);
 });
 
 test('night effects remain bounded, animate deterministically and dispose on leaving', () => {
