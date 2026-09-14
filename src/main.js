@@ -1,6 +1,7 @@
 import './style.css';
 import './journey.css';
 import './ui.css';
+import './layout.css';
 import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
 import { DrivingController } from './vehicle.js';

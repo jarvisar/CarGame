@@ -75,7 +75,7 @@ mobile.on('pageerror', error => errors.push(error.message));
 await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
 await mobile.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
 await mobile.waitForTimeout(750);
-assert.equal(await mobile.locator('.touch-controls').isVisible(), true);
+assert.equal(await mobile.locator('.touch-controls').isVisible(), false);
 await mobile.screenshot({ path: '.artifacts/coastline-mobile.png' });
 await mobile.getByRole('button', { name: 'Let’s drive' }).tap();
 const accelerate = mobile.getByRole('group', { name: 'Virtual joystick', exact: true });

@@ -14,7 +14,7 @@ try {
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   await page.waitForTimeout(700);
-  assert.equal(await page.locator('.touch-controls').isVisible(), true);
+  assert.equal(await page.locator('.touch-controls').isVisible(), false, 'Driving controls stay hidden on the menu');
   const connect = () => page.evaluate(() => {
     window.testPads = [null, { index: 1, mapping: 'standard', connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) }];
   });
@@ -55,7 +55,7 @@ try {
   await page.evaluate(() => { window.testPads = []; });
   await page.waitForFunction(() => document.body.dataset.controller === 'false');
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);
-  assert.equal(await page.locator('.touch-controls').isVisible(), true);
+  assert.equal(await page.locator('.touch-controls').isVisible(), false, 'Driving controls stay hidden while paused');
   assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), false);
   await connect(); await frames(); await press(9);
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
@@ -68,6 +68,7 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
   await page.evaluate(() => { window.testPads = []; }); await frames();
   await page.locator('#resume').tap();
+  assert.equal(await page.locator('.touch-controls').isVisible(), true);
   await page.keyboard.down('w');
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   await page.keyboard.up('w');

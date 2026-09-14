@@ -15,7 +15,7 @@ try {
   async function checkLayout(name) {
     const issues = await page.evaluate(() => {
       const failures = [];
-      const selectors = ['#sound', '#pause', '#change-journey', '#view', '#reset', '#touch-stick'];
+      const selectors = document.querySelector('#welcome').classList.contains('hidden') ? ['#sound', '#pause', '#change-journey', '#view', '#reset', '#touch-stick'] : ['#sound', '#change-journey', '#start'];
       const rects = selectors.map(selector => ({ selector, rect: document.querySelector(selector).getBoundingClientRect() }));
       for (const { selector, rect } of rects) {
         if (rect.width < 44 || rect.height < 44) failures.push(`${selector} has a small touch target`);
@@ -53,10 +53,11 @@ try {
   const client = await page.context().newCDPSession(page);
   const point = async selector => { const r = await page.locator(selector).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
   const center = { ...await point('#touch-stick'), id: 1 };
+  const stickRadius = (await page.locator('#touch-stick').boundingBox()).width * .3;
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
   await frames();
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0, 'touching the center does not accelerate');
-  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y - 36 }] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y - stickRadius }] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y > .9));
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, x: center.x + 160 }] });

@@ -38,7 +38,9 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 - **P / Escape:** pause / resume
 - **M:** optional synthesized ocean and engine sound
 
-On touch devices, drag the virtual joystick toward the direction you want the car to move **on screen**. Up moves toward the top of the screen, regardless of the car's previous heading. Drag farther for more speed; release to stop. Camera orientation and terrain slope are accounted for, while roadside limits still apply. This directional driving mode only applies to the touch joystick; keyboard and physical controller steering retain their existing behavior. Driving starts directly with the keyboard or joystick; the welcome button also dismisses the introduction. Leaving the tab pauses the drive.
+On touch devices, tap **Let’s drive**, then drag the right-side virtual joystick toward the direction you want the car to move **on screen**. Up moves toward the top of the screen, regardless of the car's previous heading. Drag farther for more speed; release to stop. Camera orientation and terrain slope are accounted for, while roadside limits still apply. This directional driving mode only applies to the touch joystick; keyboard and physical controller steering retain their existing behavior and can start a drive directly. Leaving the tab pauses the drive.
+
+Driving controls and the combined area/distance/speed readout stay hidden on menus and pause screens. During a drive, the three-line readout sits in the bottom-left corner and the joystick sits at the bottom right. Short landscape screens hide repeated control help and compact the toolbar. Safe-area insets and available viewport height govern panel sizing; long menu and installation content scrolls inside its panel.
 
 ### Controllers
 
@@ -72,6 +74,8 @@ The touch joystick hides while a controller is detected and returns when it disc
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
 
 Run `npm test` for deterministic generation, continuity, driving, and streaming checks.
+
+With the development server running, `npm run test:responsive` audits menu, driving, pause and route-chooser layouts across 23 phone/tablet/desktop viewport sizes, plus notched screens, controller mode, dismissed help and expanded install instructions. It checks panel overlaps, reachable primary actions, target sizes, overflow, the three-line readout and right-side joystick. Reports and screenshots are saved in `.artifacts/responsive/`. These checks use Chrome emulation, not physical devices. Set `TEST_URL` to override the default development URL.
 
 With the development server running, `node scripts/us-units-test.mjs` checks speed and mileage conversions, US number formatting, the speed bar, Fahrenheit temperatures, and saved mileage across all routes. Set `TEST_URL` to use a server other than `http://127.0.0.1:5173`.
 

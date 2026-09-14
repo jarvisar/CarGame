@@ -1,0 +1,164 @@
+/* Shared limits for the header, panels, HUD and touch controls. */
+:root {
+  --edge: clamp(12px, 2.5vw, 32px);
+  --ui-top: calc(var(--edge) + var(--safe-top));
+  --ui-left: calc(var(--edge) + var(--safe-left));
+  --ui-right: calc(var(--edge) + var(--safe-right));
+  --ui-bottom: calc(var(--edge) + var(--safe-bottom));
+  --header-clear: calc(var(--ui-top) + 60px);
+  --stick-size: 132px;
+}
+.topbar { top: var(--ui-top); left: var(--ui-left); right: var(--ui-right); gap: 12px; }
+.top-actions { gap: 8px; }
+.journey-button { position: static; }
+.brand { min-width: 0; }
+
+/* Menus reserve space for their primary action, not for the driving HUD. */
+#app:has(.welcome:not(.hidden)) :is(.bottom-bar, .touch-controls, #pause),
+#app:has(#pause-overlay:not([hidden])) :is(.bottom-bar, .touch-controls, .welcome),
+#app:has(#journey-dialog[open]) :is(.topbar, .bottom-bar, .touch-controls, .welcome, #pause-overlay, #toast) { visibility: hidden; pointer-events: none; }
+#app:has(.welcome:not(.hidden)) #pause { display: none; }
+#app:has(#pause-overlay:not([hidden])) #pause { display: grid; visibility: visible; pointer-events: auto; }
+.welcome {
+  --panel-top: max(var(--header-clear), calc(50% - 220px));
+  top: var(--panel-top); bottom: auto; left: var(--ui-left); transform: none;
+  width: 420px; max-width: calc(100% - var(--ui-left) - var(--ui-right));
+  max-height: calc(100% - var(--panel-top) - var(--ui-bottom));
+  padding: clamp(18px, 3vw, 28px); scrollbar-width: thin;
+}
+.welcome.hidden { transform: translateY(8px); }
+.welcome h1 { font-size: clamp(34px, 4.2vw, 58px); margin: 16px 0; }
+.welcome p { font-size: 14px; line-height: 1.7; margin: 0 0 20px; }
+.welcome .start-button { min-height: 48px; }
+
+.bottom-bar { left: var(--ui-left); right: var(--ui-right); bottom: var(--ui-bottom); gap: 16px; }
+.location, .speedometer { min-width: 0; }
+.location { max-width: 30%; }
+.location > div { min-width: 0; }
+.location svg, .speedometer { flex-shrink: 0; }
+.location-title { line-height: 1.5; }
+.location-sub { line-height: 1.5; overflow-wrap: anywhere; }
+.controls { position: static; transform: none; margin: 0; gap: 12px; flex-shrink: 0; }
+.controls button { min-width: 44px; }
+.speedometer > #speed { font-size: 40px; }
+.speed-unit span { min-width: 0; }
+.touch-controls { left: var(--ui-left); right: var(--ui-right); bottom: var(--ui-bottom); align-items: center; gap: 16px; }
+#touch-stick { width: var(--stick-size); height: var(--stick-size); }
+
+.pause-overlay { padding: var(--header-clear) var(--ui-right) var(--ui-bottom) var(--ui-left); justify-content: flex-start; overflow-y: auto; overscroll-behavior: contain; }
+.pause-overlay > * { flex-shrink: 0; max-width: 100%; }
+.pause-overlay > .eyebrow { margin-top: clamp(0px, calc((100dvh - 540px) / 2), 180px); }
+.pause-overlay h2 { font-size: clamp(32px, 5vw, 48px); margin-top: 12px; }
+.pause-overlay p { margin: 12px 0 20px; }
+.pause-overlay .controller-hint { max-width: 330px; }
+#toast { top: var(--header-clear); max-width: calc(100% - var(--ui-left) - var(--ui-right)); width: max-content; white-space: normal; text-align: center; line-height: 1.5; }
+#app:has(.welcome:not(.hidden)) #toast { display: none; }
+
+#journey-dialog { width: min(930px, calc(100% - var(--ui-left) - var(--ui-right))); max-height: calc(100dvh - var(--ui-top) - var(--ui-bottom)); padding: 20px; overscroll-behavior: contain; scrollbar-width: thin; }
+.journey-dialog-heading { position: sticky; top: -20px; z-index: 1; padding: 4px 0; background: #f6f5ea; }
+body[data-journey=desert] .journey-dialog-heading { background: #fff2dd; }
+body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
+.journey-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.journey-card { min-width: 0; }
+
+@media (any-pointer: coarse) {
+  .bottom-bar { bottom: calc(var(--ui-bottom) + var(--stick-size) + 16px); }
+  body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); }
+  .controls { gap: 4px; }
+  .controls button { min-width: 64px; }
+}
+@media (max-width: 1100px) {
+  .weather, .speed-unit span, .controls > span, .controls kbd { display: none; }
+  .touch-utility-icon { display: block; width: 18px; height: 18px; }
+  .controls button { min-width: 64px; padding: 0 9px; gap: 6px; }
+  .controls .control-label { margin: 0; text-transform: capitalize; }
+}
+@media (max-width: 760px) {
+  :root { --header-clear: calc(var(--ui-top) + 116px); }
+  .journey-button { position: absolute; right: 0; top: 56px; }
+  .controls { position: fixed; top: calc(var(--ui-top) + 56px); left: var(--ui-left); bottom: auto; transform: none; gap: 4px; padding: 3px; }
+  .welcome { width: 360px; }
+  .welcome h1 { font-size: clamp(32px, 9vw, 44px); }
+  .location { gap: 7px; max-width: 65%; }
+  .location-sub { font-size: 11px; margin-top: 3px; }
+  .speedometer > #speed { font-size: 34px; }
+  #journey-dialog { padding: 16px; }
+  .journey-dialog-heading { top: -16px; }
+  .journey-options { grid-template-columns: 1fr; }
+  .journey-card { grid-template-columns: 88px minmax(0, 1fr); }
+}
+
+/* Short landscape screens trade secondary readouts for a clear driving area. */
+@media (max-height: 560px) and (orientation: landscape) {
+  :root { --edge: 12px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 114.4px; }
+  .brand-caption, .weather, .location, #stick-help { display: none; }
+  .brand-mark { width: 32px; height: 32px; }
+  .wordmark { font-size: 23px; }
+  .journey-button { position: static; font-size: 11px; padding: 10px 12px; }
+  .welcome { --panel-top: var(--header-clear); width: 380px; padding: 16px; }
+  .welcome h1 { font-size: 32px; margin: 10px 0; }
+  .welcome .eyebrow { display: none; }
+  .welcome p { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+  .bottom-bar, body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); justify-content: flex-end; }
+  .controls { position: fixed; top: auto; bottom: var(--ui-bottom); left: 50%; transform: translateX(-50%); }
+  .controls > span, .controls kbd, .speed-unit span { display: none; }
+  .speedometer > #speed { font-size: 30px; }
+  .pause-overlay h2 { font-size: 32px; margin-top: 8px; }
+  .pause-overlay p { margin: 8px 0 12px; }
+  .journey-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .journey-card { display: block; }
+  .journey-art, .journey-note { display: none; }
+  #journey-description { margin-bottom: 12px; font-size: 12px; }
+  #journey-heading { margin-top: 4px; font-size: 30px; }
+}
+@media (max-width: 600px) and (max-height: 560px) {
+  .welcome .eyebrow { display: none; }
+  .welcome h1 { font-size: 30px; margin: 8px 0 12px; }
+  .welcome p { font-size: 12px; line-height: 1.5; margin-bottom: 12px; }
+  .welcome { padding: 16px; }
+}
+@media (max-width: 600px) and (orientation: landscape) {
+  .brand-mark { display: none; }
+  .wordmark { font-size: 21px; }
+  .topbar { gap: 8px; }
+}
+
+/* Keep installation inline when a floating invitation would cover the menu. */
+#pwa-install-invitation { top: auto; bottom: var(--ui-bottom); left: auto; right: var(--ui-right); transform: none; animation: none; }
+@media (max-width: 1199px), (max-height: 759px) {
+  #pwa-install-invitation { display: none; }
+}
+
+/* One three-line readout: area, distance, speed. */
+.bottom-bar { justify-content: flex-start; }
+.location { display: flex; max-width: min(240px, 65%); padding: 10px 12px; border: 1px solid #ffffff50; border-radius: 10px; background: #f9f8eebf; backdrop-filter: blur(12px); }
+.location-copy { display: flex; flex-direction: column; gap: 3px; }
+.location-title { font-size: 10px; letter-spacing: .9px; }
+.location-sub { margin-top: 0; font-size: 11px; }
+.location .speedometer { position: static; min-width: 0; padding: 0; margin-top: 1px; gap: 7px; justify-content: flex-start; background: none; backdrop-filter: none; }
+.location .speedometer > #speed { font-size: 23px; letter-spacing: -.7px; line-height: 1; }
+.location .speed-unit { font-size: 9px; padding: 0; }
+.location .speed-track, .location .speed-unit span { display: none; }
+body[data-journey=snow] .location { background: #17273ee8; border-color: #93acc64a; }
+body[data-journey=snow] .location .speedometer { background: none; }
+@media (min-width: 761px) {
+  .controls { position: fixed; left: 50%; bottom: var(--ui-bottom); top: auto; transform: translateX(-50%); }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .location { padding: 8px 10px; }
+  .location svg { display: none; }
+}
+.bottom-bar, body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); }
+.touch-controls { flex-direction: row-reverse; }
+#stick-help { position: absolute; right: 0; bottom: calc(var(--stick-size) + 12px); max-width: 160px; }
+@media (any-pointer: coarse) {
+  .location { max-width: min(240px, calc(100% - var(--stick-size) - 16px)); }
+  body[data-controller=true] .location { max-width: min(240px, 65%); }
+}
+@media (max-width: 600px) and (orientation: landscape) {
+  .controls button { min-width: 44px; padding: 0; justify-content: center; }
+  .controls .control-label { display: none; }
+}
+@media (max-width: 360px) {
+  .location svg { display: none; }
+}

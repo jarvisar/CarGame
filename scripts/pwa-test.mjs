@@ -41,12 +41,15 @@ async function checkProduction(base) {
   context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   try {
     let page = await context.newPage();
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
     await page.setViewportSize({ width: 393, height: 851 });
+    assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Small screens use the inline install link');
     await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-invitation.png' : 'pwa-invitation-subpath.png') });
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
     await page.waitForFunction(() => localStorage.getItem('coastline-install-dismissed-v2'));
@@ -119,8 +122,16 @@ async function checkProduction(base) {
       document.querySelector('#welcome .pwa-install-button').click();
     });
     assert.equal(await page.evaluate(() => window.testInstallPromptCalled), true);
-    await page.locator('#welcome .pwa-install-button').click();
-    assert.equal(await page.locator('#welcome .pwa-install-help').isVisible(), true);
+    // Chrome can emit another native prompt after the stub finishes. Exercise
+    // fallback deterministically instead of depending on that event's timing.
+    await page.evaluate(() => {
+      const event = new Event('beforeinstallprompt', { cancelable: true });
+      event.prompt = async () => { throw new Error('Install prompt unavailable'); };
+      event.userChoice = Promise.resolve({ outcome: 'dismissed' });
+      window.dispatchEvent(event);
+      document.querySelector('#welcome .pwa-install-button').click();
+    });
+    await page.locator('#welcome .pwa-install-help').waitFor({ state: 'visible' });
     assert.match(await page.locator('#welcome .pwa-install-help').textContent(), /browser menu/);
     await page.setViewportSize({ width: 393, height: 851 });
     await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-mobile-install.png' : 'pwa-mobile-subpath-install.png') });
@@ -154,10 +165,11 @@ try {
     const page = await browser.newPage({ viewport: { width: 393, height: 851 }, hasTouch: true, isMobile: true });
     const url = `http://127.0.0.1:${dev.httpServer.address().port}/`;
     await page.goto(url);
-    await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('#loading.loaded'));
+    assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
     assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true);
     await page.screenshot({ path: path.resolve('.artifacts/pwa-dev-install.png') });
-    await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
+    await page.locator('#welcome .pwa-install-button').click();
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
