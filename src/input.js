@@ -3,6 +3,7 @@ export class Input {
     this.keys = new Set(); this.pointers = new Map(); this.onAction = onAction;
     this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
     window.addEventListener('keydown', e => {
+      if (document.querySelector('dialog[open]')) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);
       if (!e.repeat) {

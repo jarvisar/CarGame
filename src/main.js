@@ -1,6 +1,7 @@
 import './style.css';
+import './journey.css';
 import { createRendering } from './rendering.js';
-import { CoastalWorld } from './world/environment.js';
+import { JOURNEYS } from './journeys.js';
 import { DrivingController } from './vehicle.js';
 import { Input } from './input.js';
 import { DriveAudio } from './audio.js';
@@ -14,7 +15,12 @@ async function boot() {
   try {
     const rendering = createRendering($('#scene'));
     const { renderer, scene, camera } = rendering;
-    const world = new CoastalWorld(scene); const vehicle = new DrivingController(); const audio = new DriveAudio();
+    let journey = 'coast';
+    let world = new JOURNEYS.coast.World(scene);
+    let changingJourney = false, journeyWasPaused = false;
+    const savedJourneys = {};
+    const vehicle = new DrivingController(); const audio = new DriveAudio();
+    const journeyDialog = $('#journey-dialog');
     scene.add(vehicle.car); world.update(vehicle.s);
     function start() { if (paused) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
@@ -22,7 +28,56 @@ async function boot() {
       $('#pause-overlay').hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
       if (paused) $('#resume').focus(); else $('#pause').blur();
     }
+    function updateJourneyUi() {
+      const data = JOURNEYS[journey];
+      document.body.dataset.journey = journey;
+      $('.location-title').textContent = data.label;
+      $('.location svg text').textContent = data.routeNumber;
+      $('#weather-copy').textContent = data.weather; $('#temperature').textContent = data.temperature;
+      $('#welcome p').textContent = data.introduction; $('#pause-overlay p').textContent = data.breather;
+      $('#scene').setAttribute('aria-label', data.canvas);
+      document.querySelector('meta[name="theme-color"]').content = journey === 'desert' ? '#efc692' : '#c2e7e8';
+      document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
+    }
+    function openJourneys() {
+      if (changingJourney || journeyDialog.open) return;
+      journeyWasPaused = paused; setPaused(true); $('#pause-overlay').hidden = true;
+      journeyDialog.showModal();
+    }
+    async function changeJourney(id) {
+      if (changingJourney || !JOURNEYS[id]) return;
+      if (id === journey) { journeyDialog.close(); return; }
+      if (!journeyDialog.open) journeyWasPaused = paused;
+      changingJourney = true; paused = true; input.clear(); accumulator = 0;
+      $('#journey-transition').classList.add('active'); journeyDialog.close();
+      $('#pause-overlay').hidden = true;
+      savedJourneys[journey] = { s: vehicle.s, distance: vehicle.distance };
+      let nextWorld;
+      try {
+        await new Promise(resolve => setTimeout(resolve, 320));
+        nextWorld = new JOURNEYS[id].World(scene);
+        nextWorld.update(savedJourneys[id]?.s ?? 24);
+        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
+        else renderer.compile(scene, camera);
+        world.dispose(); world = nextWorld; journey = id;
+        vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
+        rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
+        vehicle.car.position.z = vehicle.groundedPosition.z + world.origin;
+        rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time);
+        updateHud(); renderer.render(scene, camera);
+        toast(`Welcome to ${JOURNEYS[id].title}`);
+      } catch (error) {
+        if (nextWorld && nextWorld !== world) nextWorld.dispose();
+        console.error('Could not change journey:', error); toast('That road is unavailable. Try again.');
+      } finally {
+        input.clear(); accumulator = 0; lastTime = 0; changingJourney = false;
+        setPaused(journeyWasPaused || document.hidden);
+        $('#journey-transition').classList.remove('active');
+      }
+    }
     async function action(name) {
+      if (changingJourney) return;
+      if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
       if (name === 'reset') { vehicle.reset(); rendering.snap(); toast('Back on the open road'); }
@@ -31,16 +86,25 @@ async function boot() {
         try {
           const enabled = await audio.toggle(); $('#sound').setAttribute('aria-pressed', String(enabled));
           $('#sound').setAttribute('aria-label', enabled ? 'Turn sound off' : 'Turn sound on'); $('#sound').title = `${enabled ? 'Turn sound off' : 'Turn sound on'} (M)`;
-          toast(enabled ? 'A little ocean, a little engine' : 'Enjoy the quiet');
+          toast(enabled ? JOURNEYS[journey].sound : 'Enjoy the quiet');
         } catch { toast('Sound is unavailable in this browser'); }
       }
     }
     const input = new Input(action);
+    $('#change-journey').addEventListener('click', openJourneys);
+    $('#close-journeys').addEventListener('click', () => journeyDialog.close());
+    journeyDialog.addEventListener('close', () => { if (!changingJourney) setPaused(journeyWasPaused || document.hidden); });
+    journeyDialog.addEventListener('click', event => {
+      if (event.target !== journeyDialog) return;
+      const rect = journeyDialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) journeyDialog.close();
+    });
+    document.querySelectorAll('button[data-journey]').forEach(button => button.addEventListener('click', () => changeJourney(button.dataset.journey)));
     for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', () => action(name));
-    $('#start').addEventListener('click', () => { start(); toast(window.matchMedia('(pointer: coarse)').matches ? 'Hold ↑ to wander down the coast' : 'W / ↑ to accelerate · S / ↓ to brake'); });
+    $('#start').addEventListener('click', () => { start(); toast(window.matchMedia('(pointer: coarse)').matches ? 'Hold ↑ to wander down the road' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (started) setPaused(true); input.clear(); audio.update(0, time, true); } lastTime = 0; accumulator = 0; });
-    window.addEventListener('blur', () => { if (started) setPaused(true); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } lastTime = 0; accumulator = 0; });
+    window.addEventListener('blur', () => { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restore the coast.'); });
     function updateHud() {
       const kmh = Math.round(Math.abs(vehicle.speed) * 3.6);
@@ -64,12 +128,12 @@ async function boot() {
       if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       requestAnimationFrame(frame);
     }
-    rendering.update(vehicle.car, 1, world.origin); updateHud();
+    rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
     else renderer.compile(scene, camera);
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { vehicle, world, rendering, input, action, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { vehicle, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

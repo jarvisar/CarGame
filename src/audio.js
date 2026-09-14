@@ -1,6 +1,7 @@
 // Quiet synthesized surf and a soft engine hum; no downloaded audio assets.
 export class DriveAudio {
-  constructor() { this.enabled = false; this.context = null; }
+  constructor() { this.enabled = false; this.context = null; this.journey = 'coast'; }
+  setJourney(id) { this.journey = id; }
   async toggle() {
     if (!this.context) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -14,7 +15,7 @@ export class DriveAudio {
       let previous = 0;
       for (let i = 0; i < data.length; i++) { previous = (previous + (Math.random() * 2 - 1) * .025) / 1.025; data[i] = previous * 4; }
       const noise = ctx.createBufferSource(); noise.buffer = buffer; noise.loop = true;
-      const lowpass = ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 750;
+      const lowpass = ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 750; this.windFilter = lowpass;
       this.surfGain = ctx.createGain(); this.surfGain.gain.value = .11;
       noise.connect(lowpass); lowpass.connect(this.surfGain); this.surfGain.connect(this.master); noise.start();
     }
@@ -26,6 +27,8 @@ export class DriveAudio {
     this.master.gain.setTargetAtTime(this.enabled && !paused ? .7 : 0, now, .15);
     this.engine.frequency.setTargetAtTime(34 + Math.abs(speed) * 2.1, now, .12);
     this.engineGain.gain.setTargetAtTime(.018 + Math.abs(speed) * .0012, now, .12);
-    this.surfGain.gain.setTargetAtTime(.095 + Math.sin(time * .33) * .03, now, .3);
+    const desert = this.journey === 'desert';
+    this.windFilter.frequency.setTargetAtTime(desert ? 1150 : 750, now, .5);
+    this.surfGain.gain.setTargetAtTime(desert ? .06 + Math.sin(time * .19) * .014 : .095 + Math.sin(time * .33) * .03, now, .3);
   }
 }

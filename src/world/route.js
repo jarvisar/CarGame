@@ -120,3 +120,13 @@ export function terrainVertex(row, column) {
   if (column >= 16) p.y += (randomAt(row, column + 700) - .5) * (column > 18 ? 8 : 3) * detail;
   return { ...p, s, u, column };
 }
+
+export const coastalDrivingRoute = {
+  frame: roadFrame,
+  position: positionAt,
+  height: terrainHeight,
+  bounds(s) {
+    const onBridge = Math.abs(s - bridgeAt(s).center) < 49;
+    return onBridge ? [-4.65, 4.65] : [Math.max(coastOffset(s) + 6, -15), 17];
+  },
+};

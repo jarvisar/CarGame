@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { clamp, roadFrame, positionAt, terrainHeight, coastOffset, bridgeAt } from './world/route.js';
+import { clamp, coastalDrivingRoute } from './world/route.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
@@ -46,14 +46,20 @@ export function createCar() {
 }
 
 export class DrivingController {
-  constructor() {
+  constructor(route = coastalDrivingRoute) {
+    this.route = route;
     const model = createCar(); Object.assign(this, model);
-    this.s = 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = roadFrame(this.s).angle;
+    this.s = 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.update(0, {});
   }
-  reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = roadFrame(this.s).angle; this.update(0, {}); }
+  reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
+  setRoute(route, state = {}) {
+    this.route = route; this.s = state.s ?? 24; this.distance = state.distance ?? 0;
+    this.pitch = 0; this.roll = 0; this.body.rotation.set(0, 0, 0); this.reset();
+  }
   update(dt, input) {
+    const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
     const forward = input.forward ? 1 : 0; const brake = input.brake ? 1 : 0;
     this.steer = THREE.MathUtils.damp(this.steer, (input.right ? 1 : 0) - (input.left ? 1 : 0), 7, dt);
     const offRoad = Math.abs(this.u) > 5.1;
@@ -81,9 +87,7 @@ export class DrivingController {
     this.u += Math.sin(difference) * step;
     if (Math.abs(difference) < 1.15) this.heading += (roadFrame(this.s).angle - frame.angle) * (1 - Math.abs(this.steer)) * .92;
     this.distance += Math.abs(step);
-    const onBridge = Math.abs(this.s - bridgeAt(this.s).center) < 49;
-    const coastLimit = onBridge ? -4.65 : Math.max(coastOffset(this.s) + 6, -15);
-    const inlandLimit = onBridge ? 4.65 : 17;
+    const [coastLimit, inlandLimit] = this.route.bounds(this.s);
     if (this.u < coastLimit || this.u > inlandLimit) {
       this.u = clamp(this.u, coastLimit, inlandLimit); this.speed *= Math.exp(-dt * 4);
       this.heading = THREE.MathUtils.damp(this.heading, roadFrame(this.s).angle, 3, dt);

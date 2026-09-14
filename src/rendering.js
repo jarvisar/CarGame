@@ -8,7 +8,7 @@ export function createRendering(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0'); scene.fog = new THREE.Fog('#c2e2db', 460, 860);
-  scene.add(new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45));
+  const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -160; sun.shadow.camera.right = 160; sun.shadow.camera.top = 200; sun.shadow.camera.bottom = -160;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 650; sun.shadow.normalBias = .65; sun.shadow.bias = -.0003; sun.shadow.radius = 2;
@@ -16,6 +16,7 @@ export function createRendering(canvas) {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
   const follow = new THREE.Vector3(); const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
+  const sunOffset = new THREE.Vector3(-110, 240, 100);
   let initialized = false; let view = 0; let viewHeight = 235; let previousOrigin = 0;
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function resize() {
@@ -35,8 +36,17 @@ export function createRendering(canvas) {
     camera.position.copy(follow).add(cameraOffset); camera.lookAt(follow);
     const nextHeight = THREE.MathUtils.damp(viewHeight, view === 0 ? 235 : 165, 4, dt);
     if (Math.abs(nextHeight - viewHeight) > .01) { viewHeight = nextHeight; resize(); }
-    sun.position.copy(follow).add(new THREE.Vector3(-110, 240, 100)); sun.target.position.copy(follow);
+    sun.position.copy(follow).add(sunOffset); sun.target.position.copy(follow);
   }
   window.addEventListener('resize', resize); resize();
-  return { renderer, scene, camera, update, resize, toggleView() { view = 1 - view; return view === 0 ? 'The scenic view' : 'A little closer'; }, snap() { initialized = false; } };
+  function setJourney(id) {
+    const desert = id === 'desert';
+    scene.background.set(desert ? '#dfb399' : '#b8dfe0'); scene.fog.color.set(desert ? '#dab49b' : '#c2e2db');
+    sky.color.set(desert ? '#ead6c5' : '#e4f2f5'); sky.groundColor.set(desert ? '#795447' : '#617149');
+    sky.intensity = desert ? 1.27 : 1.45;
+    sun.color.set(desert ? '#ffd8aa' : '#fff1db'); sun.intensity = desert ? 2.45 : 2.5;
+    sunOffset.set(...(desert ? [-170, 150, 120] : [-110, 240, 100]));
+    renderer.toneMappingExposure = desert ? .92 : .94;
+  }
+  return { renderer, scene, camera, update, resize, setJourney, toggleView() { view = 1 - view; return view === 0 ? 'The scenic view' : 'A little closer'; }, snap() { initialized = false; } };
 }
