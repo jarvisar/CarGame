@@ -15,7 +15,7 @@ try {
   async function checkLayout(name) {
     const issues = await page.evaluate(() => {
       const failures = [];
-      const selectors = ['#sound', '#pause', '#change-journey', '#view', '#reset', '[data-control=left]', '[data-control=right]', '[data-control=brake]', '[data-control=forward]'];
+      const selectors = ['#sound', '#pause', '#change-journey', '#view', '#reset', '#touch-stick'];
       const rects = selectors.map(selector => ({ selector, rect: document.querySelector(selector).getBoundingClientRect() }));
       for (const { selector, rect } of rects) {
         if (rect.width < 44 || rect.height < 44) failures.push(`${selector} has a small touch target`);
@@ -52,16 +52,33 @@ try {
   await page.waitForTimeout(1000);
   const client = await page.context().newCDPSession(page);
   const point = async selector => { const r = await page.locator(selector).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
-  const gas = { ...await point('[data-control=forward]'), id: 1 };
-  const right = { ...await point('[data-control=right]'), id: 2 };
-  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [gas, right] });
+  const center = { ...await point('#touch-stick'), id: 1 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
+  await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0, 'touching the center does not accelerate');
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y - 36 }] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
-  assert.ok(await page.evaluate(() => window.__coastline.input.state.forward && window.__coastline.input.state.right));
-  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [right] });
-  await page.waitForFunction(() => window.__coastline.input.state.forward && !window.__coastline.input.state.right);
+  assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y > .9));
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, x: center.x + 160 }] });
+  await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick.x), 1, 'pointer capture tracks drags beyond the stick');
   await client.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-  assert.ok(await page.evaluate(() => !window.__coastline.input.state.forward && !window.__coastline.input.state.right));
-  checks.push('simultaneous gas and steering; independent release; touch cancellation');
+  await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
+  assert.deepEqual(await page.evaluate(() => window.__coastline.input.state.touchStick), { x: 0, y: 0 });
+  checks.push('joystick deadzone, drag outside bounds, touch cancellation and stopping');
+  async function frames() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, y: center.y - 30 }] });
+  await frames();
+  // A second finger can pause without taking over the joystick's pointer.
+  const pausePoint = { ...await point('#pause'), id: 2 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...center, y: center.y - 30 }, pausePoint] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [pausePoint] });
+  await page.waitForFunction(() => window.__coastline.paused);
+  assert.equal(await page.evaluate(() => window.__coastline.input.touchStick.engaged), false);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.locator('#resume').tap();
+  assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick), undefined);
+  checks.push('second-finger pause clears joystick and prevents stale input on resume');
   for (const [width, height] of [[390, 844], [320, 568], [667, 375], [844, 390]]) {
     await page.setViewportSize({ width, height });
     await checkLayout(`driving ${width}x${height}`);

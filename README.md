@@ -2,11 +2,11 @@
 
 A small, endless coastal drive built with Three.js. The fixed orthographic camera, miniature car, turquoise water, faceted cliffs, and evergreen hills take their visual direction from the supplied reference.
 
-The scenery includes animated ocean swells, rolling shoreline breakers, sea-stack foam, broad sandy coves, occasional arched viaducts over tidal inlets, sheltered inland ponds, rocky mountain ridges, mixed pine and broadleaf groves, wildflowers, and small flocks of gliding gulls. The first bridge appears about 100 m ahead of the starting point; the first pond lies just beyond it inland.
+The scenery includes animated ocean swells, rolling shoreline breakers, sea-stack foam, broad sandy coves, occasional arched viaducts over tidal inlets, sheltered inland ponds, rocky mountain ridges, mixed pine and broadleaf groves, wildflowers, and small flocks of gliding gulls. The first bridge appears about 330 feet ahead of the starting point; the first pond lies just beyond it inland.
 
 Small hillside scree clusters, grass tufts, and beach pebble drifts add detail between the larger trees and rocks; the additions stream with the Pacific Coast scenery. Ocean highlights form irregular, curved wavelets, with varied foam along the shoreline.
 
-Use **Change Journey** in the top bar to choose **Pacific Coast** or **Red Rock Desert**. The desert road winds along the bottom of a sandy canyon under warm early-evening light. Broad sandstone shelves, steep orange cliffs, recessed bays, lower saddles, and large flat-topped mesas frame the road. Fractured rock shoulders, rockfall slopes, eroded spires, and a shallow gravel wash complete the terrain. Joshua trees, yuccas, agaves, barrel cacti, and sparse scrub dot the valley. Both journeys use the same fixed camera angle, car scale, and zoom options. The chooser pauses driving, and each journey remembers your position and distance for the current page session; you return stationary on the road. Escape or the close button dismisses the chooser without changing journeys.
+Use **Change Route** in the top bar to choose **Pacific Coast** or **Red Rock Desert**. The desert road winds along the bottom of a sandy canyon under warm early-evening light. Broad sandstone shelves, steep orange cliffs, recessed bays, lower saddles, and large flat-topped mesas frame the road. Fractured rock shoulders, rockfall slopes, eroded spires, and a shallow gravel wash complete the terrain. Joshua trees, yuccas, agaves, barrel cacti, and sparse scrub dot the valley. Both journeys use the same fixed camera angle, car scale, and zoom options. The chooser pauses driving, and each journey remembers your position and distance for the current page session; you return stationary on the road. Escape or the close button dismisses the chooser without changing journeys.
 
 The third journey, **Midnight Alpine**, winds along a snowy mountain ledge at night. Pointed mountains rise to the right of the road, with irregular rocky flanks, snowy summits, and lower saddles between peaks. A steep drop falls away to the left. Snow-covered pines, guardrails, amber lamps, working headlights, light snowfall, and occasional summit relay huts complete the scene. It retains the same camera angle, car scale, and forgiving controls. Snow animation pauses with the drive, and night lighting is removed when returning to either daytime journey.
 
@@ -27,6 +27,8 @@ Open the local URL printed by Vite. For a production build, run `npm run build`,
 
 ## Controls
 
+The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F). Driving physics and world geometry use meters internally; displayed measurements are converted to US units.
+
 - **W / ↑:** accelerate
 - **S / ↓:** brake, then reverse
 - **A D / ← →:** steer
@@ -36,7 +38,7 @@ Open the local URL printed by Vite. For a production build, run `npm run build`,
 - **P / Escape:** pause / resume
 - **M:** optional synthesized ocean and engine sound
 
-Touch controls appear on touch devices. Driving starts directly with the keyboard or touch controls; the welcome button also dismisses the introduction. Leaving the tab pauses the drive.
+On touch devices, drag the virtual joystick toward the direction you want the car to move **on screen**. Up moves toward the top of the screen, regardless of the car's previous heading. Drag farther for more speed; release to stop. Camera orientation and terrain slope are accounted for, while roadside limits still apply. This directional driving mode only applies to the touch joystick; keyboard and physical controller steering retain their existing behavior. Driving starts directly with the keyboard or joystick; the welcome button also dismisses the introduction. Leaving the tab pauses the drive.
 
 ### Controllers
 
@@ -50,7 +52,7 @@ Basic support uses the browser's [Gamepad API](https://w3c.github.io/gamepad/) f
 - **Left face button (Xbox X / PlayStation Square):** change view.
 - **Top face button (Xbox Y / PlayStation Triangle):** reset to the road.
 
-Touch driving buttons hide while a controller is detected and return when it disconnects. Disconnecting during a drive pauses the game. Release held controls before resuming after a menu or focus change. Journey selection still uses touch or mouse. Standard browser mappings work best; unmapped devices use the same button indices as a rough fallback, with no device-specific remapping. AYN Thor compatibility depends on its controls being exposed to the browser as a gamepad; it has not been tested on physical hardware.
+The touch joystick hides while a controller is detected and returns when it disconnects. Disconnecting during a drive pauses the game. Release held controls before resuming after a menu or focus change. Journey selection still uses touch or mouse. Standard browser mappings work best; unmapped devices use the same button indices as a rough fallback, with no device-specific remapping. AYN Thor compatibility depends on its controls being exposed to the browser as a gamepad; it has not been tested on physical hardware.
 
 ## Implementation
 
@@ -70,6 +72,8 @@ Touch driving buttons hide while a controller is detected and return when it dis
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
 
 Run `npm test` for deterministic generation, continuity, driving, and streaming checks.
+
+With the development server running, `node scripts/us-units-test.mjs` checks speed and mileage conversions, US number formatting, the speed bar, Fahrenheit temperatures, and saved mileage across all routes. Set `TEST_URL` to use a server other than `http://127.0.0.1:5173`.
 
 `npm run test:controller` checks simulated controller detection, driving, pause/resume, modal isolation, disconnect/reconnect, and touch-control visibility in Chrome. Set `TEST_URL` to use a development server other than `http://127.0.0.1:5173`.
 

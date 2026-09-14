@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-US">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#c2e7e8" />
-    <meta name="description" content="An endless Sunday drive. Explore a miniature California coastline in a little red car." />
-    <title>Coastline — An endless Sunday drive</title>
+    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, and snowy mountain roads." />
+    <title>Coastline — A scenic driving game</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
@@ -15,57 +15,57 @@
       <header class="topbar">
         <div class="brand">
           <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="11" stroke="currentColor" stroke-width="1.3"/><path d="M9 28c11 0 0-16 13-16M17 28c11 0 0-16 13-16" stroke="currentColor" stroke-width="1.6"/><path d="M13 28c11 0 0-16 13-16" stroke="currentColor" stroke-dasharray="3 3"/></svg>
-          <div><span class="wordmark">coastline</span><span class="brand-caption">AN ENDLESS SUNDAY DRIVE</span></div>
+          <div><span class="wordmark">coastline</span><span class="brand-caption">SCENIC DRIVING</span></div>
         </div>
         <div class="top-actions">
-          <span class="weather"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" stroke="currentColor" stroke-width="1.3"/></svg> <span id="weather-copy">A little Pacific air</span><span class="weather-divider"></span><span id="temperature">18°</span></span>
-          <button id="change-journey" class="journey-button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Change Journey</button>
+          <span class="weather"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.3"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5" stroke="currentColor" stroke-width="1.3"/></svg> <span id="weather-copy">Coastal breeze</span><span class="weather-divider"></span><span id="temperature">64°F</span></span>
+          <button id="change-journey" class="journey-button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Change Route</button>
           <button id="sound" class="icon-button" title="Turn sound on (M)" aria-label="Turn sound on" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path class="sound-off" d="m16 9 6 6m0-6-6 6" stroke="currentColor" stroke-width="1.5"/><path class="sound-on" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.5"/></svg></button>
           <button id="pause" class="icon-button" title="Pause (P or Escape)" aria-label="Pause" aria-pressed="false"><svg class="pause-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><svg class="play-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 5 10 7-10 7V5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
         </div>
       </header>
       <section id="welcome" class="welcome">
-        <div class="eyebrow"><span></span> THE LONG WAY HOME</div>
-        <h1>Nowhere to be.<br><em>Just drive.</em></h1>
-        <p>A little car. An open road. A coast without end.</p>
+        <div class="eyebrow"><span></span> COASTLINE</div>
+        <h1>Pick a road.<br><em>Start driving.</em></h1>
+        <p>Drive the Pacific Coast through green hills and ocean views.</p>
         <button id="start" class="start-button">Let’s drive <span aria-hidden="true">↗</span></button>
         <span class="start-hint">or press W / ↑ to get going</span>
-        <span class="touch-hint">Hold Gas to go. Use the arrows to steer.</span>
+        <span class="touch-hint">Drag the stick toward where you want to go on screen. Push farther to speed up; release to stop.</span>
         <span class="controller-hint">Left stick / D-pad: steer · RT / R2: gas<br>LT / L2: brake or reverse · Start / Menu: pause<br>Left face button: view · Top face button: reset</span>
       </section>
       <div id="pause-overlay" class="pause-overlay" hidden>
-        <span class="eyebrow">TAKE YOUR TIME</span><h2>A little breather.</h2><p>The coast will be here.</p><button id="resume" class="start-button">Keep wandering <span aria-hidden="true">↗</span></button><span class="controller-hint">Press Start / Menu to keep wandering.</span>
+        <span class="eyebrow">PACIFIC COAST</span><h2>Paused</h2><p>Resume when you’re ready.</p><button id="resume" class="start-button">Resume drive <span aria-hidden="true">↗</span></button><span class="controller-hint">Press Start / Menu to resume.</span>
       </div>
       <footer class="bottom-bar">
-        <div class="location"><svg viewBox="0 0 29 34" fill="none" aria-hidden="true"><path d="M4 4c7 2 14 2 21 0v17c0 4-7 7-10.5 10C11 28 4 25 4 21V4Z" stroke="currentColor" stroke-width="1.3"/><text x="14.5" y="22" text-anchor="middle" fill="currentColor" font-size="19" font-family="Georgia">1</text></svg><div><span class="location-title">PACIFIC COAST</span><span class="location-sub"><span id="distance">0.0</span> km of taking it slow</span></div></div>
+        <div class="location"><svg viewBox="0 0 29 34" fill="none" aria-hidden="true"><path d="M4 4c7 2 14 2 21 0v17c0 4-7 7-10.5 10C11 28 4 25 4 21V4Z" stroke="currentColor" stroke-width="1.3"/><text x="14.5" y="22" text-anchor="middle" fill="currentColor" font-size="19" font-family="Georgia">1</text></svg><div><span class="location-title">PACIFIC COAST</span><span class="location-sub"><span id="distance">0.0</span> mi driven</span></div></div>
         <div class="controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="control-label">drive</span></span><span class="control-separator"></span><button id="view" title="Change camera (V)"><kbd>V</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="m8 6 2-3h4l2 3" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="1.5"/></svg> <span class="control-label">view</span></button><button id="reset" title="Return to the road (R)" aria-label="Return to the road"><kbd>R</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">reset</span></button></div>
-        <div class="speedometer"><div class="speed-track"><div id="speed-fill"></div></div><span id="speed">00</span><div class="speed-unit">KM/H<span id="gear">READY WHEN YOU ARE</span></div></div>
+        <div class="speedometer"><div class="speed-track"><div id="speed-fill"></div></div><span id="speed">00</span><div class="speed-unit">MPH<span id="gear">READY</span></div></div>
       </footer>
-      <div class="touch-controls" role="group" aria-label="Touch driving controls"><div><button data-control="left" aria-label="Steer left"><span aria-hidden="true">←</span></button><button data-control="right" aria-label="Steer right"><span aria-hidden="true">→</span></button></div><div><button data-control="brake" aria-label="Brake or reverse"><span aria-hidden="true">↓</span><span class="pedal-label" aria-hidden="true">Brake</span></button><button data-control="forward" aria-label="Accelerate"><span aria-hidden="true">↑</span><span class="pedal-label" aria-hidden="true">Gas</span></button></div></div>
+      <div class="touch-controls" role="group" aria-label="Touch driving controls"><div id="touch-stick" role="group" aria-label="Virtual joystick" aria-describedby="stick-help"><span class="stick-guide" aria-hidden="true"></span><span class="stick-thumb" aria-hidden="true"></span></div><span id="stick-help">Drag to drive<br><span>Release to stop</span></span></div>
       <div id="toast" role="status"></div>
       <dialog id="journey-dialog" aria-labelledby="journey-heading" aria-describedby="journey-description">
-        <div class="journey-dialog-heading"><span class="eyebrow">FOLLOW YOUR CURIOSITY</span><button id="close-journeys" class="icon-button" aria-label="Close journey chooser"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
-        <h2 id="journey-heading">Where to next?</h2>
-        <p id="journey-description">Pick a road. Take your time.</p>
+        <div class="journey-dialog-heading"><span class="eyebrow">ROUTES</span><button id="close-journeys" class="icon-button" aria-label="Close route chooser"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
+        <h2 id="journey-heading">Choose a route</h2>
+        <p id="journey-description">Coast, desert, or mountains. Choose where to drive.</p>
         <div class="journey-options">
           <button class="journey-card" data-journey="coast" aria-label="Pacific Coast" aria-current="true">
             <svg class="journey-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#a9d9d6"/><path d="M42 0h238v150h-63L160 88 95 58Z" fill="#94ad56"/><path d="m42 0 53 58 65 30 57 62h-34l-44-41-66-28Z" fill="#b8ad91"/><path d="m97 0 34 43 60 41 40 66" fill="none" stroke="#ddcfaa" stroke-width="13"/><path d="m97 0 34 43 60 41 40 66" fill="none" stroke="#7c8580" stroke-width="9"/><path d="m97 0 34 43 60 41 40 66" fill="none" stroke="#efe5bb" stroke-width="1"/><g fill="#34604a"><path d="m183 14-12 32h24Zm40 27-15 38h28Zm30 39-13 31h26Zm-111-69-9 23h18Z"/></g><path d="m36 80 29 10m20 35 28 11M20 116l23 8" stroke="#e0f6e9" stroke-width="3" fill="none"/></svg>
-            <span class="journey-card-copy"><span class="journey-card-title">Pacific Coast <span aria-hidden="true">↗</span></span><span class="journey-card-description">Salt air, green hills &amp; open water.</span><span class="journey-current">YOU’RE HERE</span></span>
+            <span class="journey-card-copy"><span class="journey-card-title">Pacific Coast <span aria-hidden="true">↗</span></span><span class="journey-card-description">Salt air, green hills &amp; open water.</span><span class="journey-current">CURRENT ROUTE</span></span>
           </button>
           <button class="journey-card" data-journey="desert" aria-label="Red Rock Desert" aria-current="false">
             <svg class="journey-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#ecc18a"/><path d="m0 76 49-21 50 26 57-26 124 25v70H0Z" fill="#e3ad6d"/><path d="M182 18h56l14 80-20 16-65-17Z" fill="#bf6b3b"/><path d="m182 18 13 62 37 34-65-17Z" fill="#a85835"/><path d="m182 18 22-8 33 4 1 4-43 6Z" fill="#e59550"/><path d="M22 37h42l16 60-65 2Z" fill="#ce7d42"/><path d="m22 37 20 8 5 47-32 7Z" fill="#b3633b"/><path d="m22 37 20-7 22 7-22 8Z" fill="#e8a05c"/><path d="m140 0-13 46 30 42-45 62" fill="none" stroke="#fae0ac" stroke-width="13"/><path d="m140 0-13 46 30 42-45 62" fill="none" stroke="#817662" stroke-width="9"/><path d="m140 0-13 46 30 42-45 62" fill="none" stroke="#edcf91" stroke-width="1"/><path d="m58 132-1-19-9-8m9 12 12-14m-12 14 3-18" stroke="#7a6840" stroke-width="4" fill="none"/><g fill="#8f924d"><path d="m41 105 5-9 7 11Zm19-3 9-9 7 12Zm-4-4 5-9 5 11Z"/></g></svg>
-            <span class="journey-card-copy"><span class="journey-card-title">Red Rock Desert <span aria-hidden="true">↗</span></span><span class="journey-card-description">Warm sandstone &amp; wide-open quiet.</span><span class="journey-current">YOU’RE HERE</span></span>
+            <span class="journey-card-copy"><span class="journey-card-title">Red Rock Desert <span aria-hidden="true">↗</span></span><span class="journey-card-description">Sandstone cliffs &amp; winding canyon roads.</span><span class="journey-current">CURRENT ROUTE</span></span>
           </button>
           <button class="journey-card" data-journey="snow" aria-label="Midnight Alpine" aria-current="false">
             <svg class="journey-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#152238"/><path d="m0 145 47-71 53 9 46-58 37 11L220 5l60 47v98Z" fill="#364965"/><path d="m146 25 37 11 37-31 60 47-37-16-16 14-19-17-26 30-19-13-27 20-31 33-19-6Z" fill="#9cb3d5"/><path d="m0 145 47-71 16 15-28 19Z" fill="#778eaf"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#b2c4dc" stroke-width="16"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#354355" stroke-width="11"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#b9b299" stroke-width="1"/><g fill="#172f3c"><path d="m207 62-10 27h20Zm38-15-8 23h16Zm-27 58-12 33h24Zm-143 9-10 26h20Z"/></g><g fill="#afc2dd"><path d="m207 62-7 17h14Zm38-15-5 15h10Zm-27 58-8 22h16Zm-143 9-7 17h14Z"/></g><g stroke="#8592a3" stroke-width="2"><path d="M121 60V42h7m60 65V89h-7m-43 56v-17h7"/></g><g fill="#ffdda0"><circle cx="128" cy="43" r="2.5"/><circle cx="181" cy="90" r="2.5"/><circle cx="145" cy="129" r="2.5"/></g><g fill="#bdcce5"><circle cx="24" cy="21" r="1"/><circle cx="61" cy="37" r="1"/><circle cx="100" cy="13" r="1"/></g></svg>
-            <span class="journey-card-copy"><span class="journey-card-title">Midnight Alpine <span aria-hidden="true">↗</span></span><span class="journey-card-description">Moonlit peaks &amp; a little falling snow.</span><span class="journey-current">YOU’RE HERE</span></span>
+            <span class="journey-card-copy"><span class="journey-card-title">Midnight Alpine <span aria-hidden="true">↗</span></span><span class="journey-card-description">Moonlit peaks &amp; snow-covered pines.</span><span class="journey-current">CURRENT ROUTE</span></span>
           </button>
         </div>
-        <p class="journey-note">Your place on each road is saved for this visit.</p>
+        <p class="journey-note">Your position and mileage on each route are saved for this visit.</p>
       </dialog>
-      <div id="journey-transition" aria-hidden="true"><span>Taking the scenic route…</span></div>
-      <div id="loading" class="loading"><span class="loading-road"></span><span>Finding the scenic route…</span></div>
-      <div id="error" class="error" hidden><h2>A small detour.</h2><p>This drive needs a browser with WebGL 2 enabled. Try an up-to-date Chrome, Edge, Firefox, or Safari.</p><button onclick="location.reload()">Try again</button></div>
+      <div id="journey-transition" aria-hidden="true"><span>Changing route…</span></div>
+      <div id="loading" class="loading"><span class="loading-road"></span><span>Loading Coastline…</span></div>
+      <div id="error" class="error" hidden><h2>Unable to start the game</h2><p>This drive needs a browser with WebGL 2 enabled. Try an up-to-date Chrome, Edge, Firefox, or Safari.</p><button onclick="location.reload()">Try again</button></div>
     </main>
     <script type="module" src="/src/main.js"></script>
   </body>

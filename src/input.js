@@ -1,12 +1,13 @@
 import { GamepadInput } from './gamepad.js';
+import { TouchStick } from './touch-stick.js';
 
 export class Input {
   constructor(onAction, onControllerConnection = () => {}) {
-    this.keys = new Set(); this.pointers = new Map(); this.onAction = onAction;
+    this.keys = new Set(); this.onAction = onAction;
+    this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
     this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
     this.gamepad = new GamepadInput(onAction, connected => {
-      this.keys.clear(); this.pointers.clear();
-      document.querySelectorAll('[data-control]').forEach(button => button.classList.remove('active'));
+      this.keys.clear(); this.touchStick.clear();
       document.body.dataset.controller = String(connected);
       onControllerConnection(connected);
     });
@@ -24,15 +25,12 @@ export class Input {
     });
     window.addEventListener('keyup', e => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.clear());
-    document.querySelectorAll('[data-control]').forEach(button => {
-      button.addEventListener('pointerdown', e => { e.preventDefault(); button.setPointerCapture(e.pointerId); this.pointers.set(e.pointerId, button.dataset.control); button.classList.add('active'); onAction('drive'); });
-      const release = e => { this.pointers.delete(e.pointerId); button.classList.remove('active'); };
-      button.addEventListener('pointerup', release); button.addEventListener('pointercancel', release); button.addEventListener('lostpointercapture', release);
-    });
   }
   get state() {
-    const touch = new Set(this.pointers.values());
-    return Object.fromEntries(Object.entries(this.codes).map(([action, codes]) => [action, touch.has(action) || codes.some(code => this.keys.has(code)) || this.gamepad.state[action] || false]));
+    const state = Object.fromEntries(Object.entries(this.codes).map(([action, codes]) => [action, codes.some(code => this.keys.has(code)) || this.gamepad.state[action] || false]));
+    if (Object.values(state).some(Boolean) || this.gamepad.connected) this.touchStick.clear();
+    else if (this.touchStick.engaged) state.touchStick = this.touchStick.vector;
+    return state;
   }
-  clear() { this.keys.clear(); this.pointers.clear(); this.gamepad.clear(); document.querySelectorAll('[data-control]').forEach(button => button.classList.remove('active')); }
+  clear() { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(); }
 }

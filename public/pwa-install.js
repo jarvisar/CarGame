@@ -11,7 +11,7 @@
   invitation.setAttribute('role', 'region');
   invitation.setAttribute('aria-labelledby', 'pwa-install-heading');
   invitation.setAttribute('aria-describedby', 'pwa-install-description');
-  invitation.innerHTML = '<h2 id="pwa-install-heading">Take the scenic route with you.</h2><p id="pwa-install-description">Install Coastline for your next little escape.</p>';
+  invitation.innerHTML = '<h2 id="pwa-install-heading">Install Coastline</h2><p id="pwa-install-description">Add the game to your home screen for quick access.</p>';
   document.body.append(invitation);
   // Old versions also saved automatic timeouts; only explicit dismissals count now.
   const dismissalKey = 'coastline-install-dismissed-v2';

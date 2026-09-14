@@ -1,0 +1,65 @@
+export class TouchStick {
+  constructor(element, onDrive) {
+    this.element = element; this.onDrive = onDrive;
+    this.pointer = null; this.engaged = false; this.vector = { x: 0, y: 0 };
+    element.addEventListener('pointerdown', event => {
+      if (this.pointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      event.preventDefault();
+      const rect = element.getBoundingClientRect();
+      this.center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      this.radius = rect.width * .3;
+      this.pointer = event.pointerId; this.engaged = true;
+      element.setPointerCapture(event.pointerId); element.classList.add('active');
+      this.move(event);
+    });
+    element.addEventListener('pointermove', event => this.move(event));
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) element.addEventListener(type, event => {
+      if (event.pointerId === this.pointer) this.release();
+    });
+    element.addEventListener('contextmenu', event => event.preventDefault());
+    window.addEventListener('resize', () => this.release());
+  }
+  move(event) {
+    if (event.pointerId !== this.pointer) return;
+    event.preventDefault();
+    const x = (event.clientX - this.center.x) / this.radius, y = (this.center.y - event.clientY) / this.radius;
+    const length = Math.hypot(x, y), amount = Math.min(1, length);
+    const strength = amount <= .12 ? 0 : (amount - .12) / .88;
+    this.vector = { x: length ? x / length * strength : 0, y: length ? y / length * strength : 0 };
+    this.element.style.setProperty('--stick-x', `${length ? x / length * amount * this.radius : 0}px`);
+    this.element.style.setProperty('--stick-y', `${length ? -y / length * amount * this.radius : 0}px`);
+    if (strength) this.onDrive();
+  }
+  release() {
+    const pointer = this.pointer; this.pointer = null; this.vector = { x: 0, y: 0 };
+    this.element.classList.remove('active');
+    this.element.style.setProperty('--stick-x', '0px'); this.element.style.setProperty('--stick-y', '0px');
+    if (pointer !== null && this.element.hasPointerCapture(pointer)) this.element.releasePointerCapture(pointer);
+  }
+  clear() { if (this.engaged || this.pointer !== null) this.release(); this.engaged = false; }
+}
+
+// Invert the terrain's local screen projection. Including terrain height and the
+// actual road coordinates keeps cardinal and diagonal drags aligned with pixels
+// even on slopes, bends, or after rotating/resizing the camera.
+export function touchDrivingInput(stick, camera, route, s, u) {
+  const amount = Math.min(1, Math.hypot(stick.x, stick.y));
+  if (!amount) return { amount: 0 };
+  const step = .1, p = route.position(s, u), a = route.position(s + step, u), b = route.position(s, u + step);
+  const along = { x: (a.x - p.x) / step, y: (a.y - p.y) / step, z: (a.z - p.z) / step };
+  const across = { x: (b.x - p.x) / step, y: (b.y - p.y) / step, z: (b.z - p.z) / step };
+  camera.updateMatrixWorld();
+  const m = camera.matrixWorld.elements;
+  const screenX = v => m[0] * v.x + m[1] * v.y + m[2] * v.z;
+  const screenY = v => m[4] * v.x + m[5] * v.y + m[6] * v.z;
+  const ax = screenX(along), ay = screenY(along), bx = screenX(across), by = screenY(across);
+  const determinant = ax * by - ay * bx;
+  if (Math.abs(determinant) < .001) return { amount: 0 };
+  let ds = (stick.x * by - stick.y * bx) / determinant;
+  let du = (ax * stick.y - ay * stick.x) / determinant;
+  const dx = along.x * ds + across.x * du, dz = along.z * ds + across.z * du;
+  const length = Math.hypot(dx, dz);
+  if (length < .0001) return { amount: 0 };
+  ds /= length; du /= length;
+  return { amount, along: ds, across: du, heading: Math.atan2(dx, -dz) };
+}

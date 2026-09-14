@@ -85,8 +85,9 @@ export class DrivingController {
   update(dt, input) {
     this.copyPose(this.previousPose, this.currentPose);
     const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
+    const touch = input.touchDrive;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
-    this.steer = THREE.MathUtils.damp(this.steer, (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
+    this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
     const offRoad = Math.abs(this.u) > 5.1;
     let acceleration = 0;
     if (forward) acceleration += forward * (this.speed < -.3 ? 19 : 11.3);
@@ -94,23 +95,29 @@ export class DrivingController {
     if (input.handbrake) acceleration -= Math.sign(this.speed) * 27;
     const drag = .7 + .0095 * this.speed * this.speed + (offRoad ? 4.2 : 0);
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
+    if (touch) {
+      this.speed = Math.abs(this.speed);
+      const targetSpeed = touch.amount * (offRoad ? 15 : 28);
+      acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -24, 11.3) : 0;
+      if (touch.amount) this.heading = touch.heading;
+    }
     const oldSpeed = this.speed;
-    this.speed = clamp(this.speed + acceleration * dt, -7, offRoad ? 15 : 28);
+    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -7, offRoad ? 15 : 28);
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);
-    this.heading += this.steer * this.speed / 3.3 * (.52 / (1 + Math.abs(this.speed) * .105)) * dt;
+    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 / (1 + Math.abs(this.speed) * .105)) * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // A gentle alignment assist makes long bends relaxed; steering always wins.
-    if (Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
+    if (!touch && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
       const laneCorrection = clamp((this.u - 2.4) * .026, -.12, .12) * Math.sign(this.speed);
       this.heading -= (difference + laneCorrection) * Math.min(1, dt * .85);
       difference = this.heading - frame.angle;
     }
     const step = this.speed * dt;
-    this.s += Math.cos(difference) * step / frame.scale;
-    this.u += Math.sin(difference) * step;
-    if (Math.abs(difference) < 1.15) this.heading += (roadFrame(this.s).angle - frame.angle) * (1 - Math.abs(this.steer)) * .92;
+    this.s += touch?.amount ? touch.along * step : Math.cos(difference) * step / frame.scale;
+    this.u += touch?.amount ? touch.across * step : Math.sin(difference) * step;
+    if (!touch && Math.abs(difference) < 1.15) this.heading += (roadFrame(this.s).angle - frame.angle) * (1 - Math.abs(this.steer)) * .92;
     this.distance += Math.abs(step);
     const [coastLimit, inlandLimit] = this.route.bounds(this.s);
     if (this.u < coastLimit || this.u > inlandLimit) {

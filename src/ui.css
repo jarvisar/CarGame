@@ -8,8 +8,14 @@
 #app { height: 100dvh; min-height: 0; }
 .touch-hint, .touch-utility-icon, .controller-hint { display: none; }
 button { touch-action: manipulation; }
-.pedal-label { font-size: 11px; font-weight: 650; letter-spacing: .2px; }
 .controller-hint { margin-top: 14px; font-size: 12px; line-height: 1.7; }
+[data-control-help] { position: relative; padding-right: 38px; }
+.dismiss-control-help, .touch-controls .dismiss-control-help { position: absolute; right: -4px; top: -9px; display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; backdrop-filter: none; color: inherit; pointer-events: auto; font-size: 20px; line-height: 1; }
+.dismiss-control-help:hover { background: #25473e12; }
+.controls > [data-control-help] { padding-right: 0; }
+.controls .dismiss-control-help { position: static; min-width: 44px; padding: 0; font-size: 20px; }
+body[data-control-help-dismissed=true] [data-control-help], body[data-control-help-dismissed=true] .control-separator { display: none !important; }
+#app:has(.welcome:not(.hidden)) :is(.location, .speedometer) { visibility: hidden; }
 body[data-controller=true] :is(.touch-controls, .touch-hint, .start-hint) { display: none; }
 body[data-controller=true] .controller-hint { display: block; }
 
@@ -60,11 +66,6 @@ body[data-controller=true] .controller-hint { display: block; }
   .topbar { top: calc(20px + var(--safe-top)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); }
   .bottom-bar { bottom: calc(112px + var(--safe-bottom)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); }
   .touch-controls { display: flex; bottom: calc(24px + var(--safe-bottom)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  .touch-controls > div { gap: 10px; }
-  .touch-controls button { width: 64px; height: 64px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 26px; background: #f9f8eee8; box-shadow: 0 3px 12px #183f3618; }
-  .touch-controls button[data-control=forward] { border: 2px solid var(--ink); }
-  .touch-controls button.active { transform: translateY(2px); background: var(--ink); color: var(--cream); }
-  .touch-controls button > span { pointer-events: none; line-height: 1; }
   .pwa-install-button, #pwa-install-invitation .pwa-install-button { min-height: 44px; }
   .pwa-install-close { width: 44px; height: 44px; }
 }
@@ -113,22 +114,44 @@ body[data-controller=true] .controller-hint { display: block; }
   .bottom-bar { bottom: calc(104px + var(--safe-bottom)); }
   .controls { position: fixed; top: calc(72px + var(--safe-top)); left: calc(16px + var(--safe-left)); bottom: auto; transform: none; margin: 0; }
   .touch-controls { left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); bottom: calc(20px + var(--safe-bottom)); }
-  .touch-controls > div { gap: 8px; }
-  .touch-controls button { width: 60px; height: 64px; }
 }
 
-/* Short landscape screens put secondary controls between the two thumb groups. */
+/* The touch stick controls screen direction and speed together. */
+#touch-stick { position: relative; display: block; flex: 0 0 auto; width: 120px; height: 120px; border: 1px solid #ffffffb0; border-radius: 50%; background: #f9f8eebf; backdrop-filter: blur(12px); pointer-events: auto; touch-action: none; box-shadow: 0 3px 16px #183f3618; }
+.stick-guide { position: absolute; inset: 15px; border: 1px dashed #25473e55; border-radius: 50%; pointer-events: none; }
+.stick-thumb { position: absolute; left: calc(50% - 24px); top: calc(50% - 24px); width: 48px; height: 48px; border: 1px solid #25473e30; border-radius: 50%; background: var(--cream); box-shadow: 0 3px 10px #183f3626; transform: translate(var(--stick-x, 0px), var(--stick-y, 0px)); pointer-events: none; }
+#touch-stick.active .stick-thumb { background: var(--ink); border-color: var(--cream); }
+#stick-help { align-self: center; text-align: right; font-size: 12px; line-height: 1.8; padding: 10px 40px 10px 12px; border-radius: 10px; background: #f9f8eebf; backdrop-filter: blur(12px); }
+#stick-help .dismiss-control-help { right: 0; top: 0; }
+#stick-help > span { font-size: 11px; }
+body[data-journey=snow] :is(#touch-stick, #stick-help) { background: #17273ee8; border-color: #93acc64a; }
+body[data-journey=snow] .stick-guide { border-color: #93acc680; }
+body[data-journey=snow] .stick-thumb { background: #dce5f3; }
+body[data-journey=snow] #touch-stick.active .stick-thumb { background: #9fbde8; }
+@media (any-pointer: coarse) {
+  .bottom-bar { bottom: calc(160px + var(--safe-bottom)); }
+}
+@media (max-width: 760px) and (any-pointer: coarse) {
+  .welcome { max-height: calc(100% - 360px - var(--safe-top) - var(--safe-bottom)); }
+}
+@media (max-height: 560px) and (any-pointer: coarse) and (orientation: landscape) {
+  #touch-stick { width: 104px; height: 104px; }
+  .bottom-bar { bottom: calc(132px + var(--safe-bottom)); }
+  .welcome { max-height: calc(100% - 190px - var(--safe-top) - var(--safe-bottom)); }
+}
+
+/* Short landscape screens keep secondary controls clear of the stick. */
 @media (max-height: 560px) and (any-pointer: coarse) and (orientation: landscape) {
   .topbar { top: calc(10px + var(--safe-top)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }
   .journey-button { position: static; min-height: 44px; }
   .brand-caption { display: none; }
-  .welcome { top: calc(66px + var(--safe-top)); bottom: auto; left: calc(16px + var(--safe-left)); width: 340px; max-width: 48%; max-height: calc(100% - 164px - var(--safe-top) - var(--safe-bottom)); transform: none; padding: 16px; overflow-y: auto; pointer-events: auto; border-radius: 14px; background: #f9f8eedb; backdrop-filter: blur(12px); }
+  .welcome { top: calc(66px + var(--safe-top)); bottom: auto; left: calc(16px + var(--safe-left)); width: 340px; max-width: 48%; max-height: calc(100% - 190px - var(--safe-top) - var(--safe-bottom)); transform: none; padding: 16px; overflow-y: auto; pointer-events: auto; border-radius: 14px; background: #f9f8eedb; backdrop-filter: blur(12px); }
   body[data-journey=snow] .welcome { background: #17273ee8; }
   .welcome h1 { font-size: 32px; margin: 10px 0; }
   .welcome p { font-size: 12px; margin-bottom: 12px; }
   .welcome .start-button { min-height: 44px; }
   .touch-hint { font-size: 11px; margin-top: 10px; }
-  .bottom-bar { bottom: calc(94px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }
+  .bottom-bar { bottom: calc(132px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }
   #app:has(.welcome:not(.hidden)) .location { visibility: hidden; }
   .controls { position: fixed; top: auto; bottom: calc(18px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); margin: 0; }
   .touch-controls { bottom: calc(14px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }

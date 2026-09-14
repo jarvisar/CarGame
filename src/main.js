@@ -5,10 +5,15 @@ import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
 import { DrivingController } from './vehicle.js';
 import { Input } from './input.js';
+import { touchDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
 import { FrameClock } from './timing.js';
+import { setupControlHelp, controlHelpDismissed } from './control-help.js';
+
+setupControlHelp();
 
 const $ = selector => document.querySelector(selector);
+const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
 let toastTimer; let sceneReady = false;
@@ -37,7 +42,7 @@ async function boot() {
       $('.location-title').textContent = data.label;
       $('.location svg text').textContent = data.routeNumber;
       $('#weather-copy').textContent = data.weather; $('#temperature').textContent = data.temperature;
-      $('#welcome p').textContent = data.introduction; $('#pause-overlay p').textContent = data.breather;
+      $('#welcome p').textContent = data.introduction; $('#pause-overlay .eyebrow').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
       document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
@@ -69,7 +74,7 @@ async function boot() {
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); renderer.render(scene, camera);
-        toast(`Welcome to ${JOURNEYS[id].title}`);
+        toast(`${JOURNEYS[id].title} selected`);
       } catch (error) {
         if (nextWorld && nextWorld !== world) nextWorld.dispose();
         console.error('Could not change journey:', error); toast('That road is unavailable. Try again.');
@@ -84,18 +89,18 @@ async function boot() {
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { vehicle.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Back on the open road'); }
+      if (name === 'reset') { vehicle.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Car reset to the road'); }
       if (name === 'view') { toast(rendering.toggleView()); updateViewUi(); }
       if (name === 'sound') {
         try {
           const enabled = await audio.toggle(); $('#sound').setAttribute('aria-pressed', String(enabled));
           $('#sound').setAttribute('aria-label', enabled ? 'Turn sound off' : 'Turn sound on'); $('#sound').title = `${enabled ? 'Turn sound off' : 'Turn sound on'} (M)`;
-          toast(enabled ? JOURNEYS[journey].sound : 'Enjoy the quiet');
+          toast(enabled ? JOURNEYS[journey].sound : 'Sound off');
         } catch { toast('Sound is unavailable in this browser'); }
       }
     }
     const input = new Input(action, connected => {
-      toast(connected ? 'Controller connected · RT / R2 to drive' : 'Controller disconnected');
+      toast(connected ? controlHelpDismissed() ? 'Controller connected' : 'Controller connected · RT / R2 to drive' : 'Controller disconnected');
       if (!connected && started && !paused) setPaused(true);
     });
     $('#change-journey').addEventListener('click', openJourneys);
@@ -107,23 +112,35 @@ async function boot() {
       if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) journeyDialog.close();
     });
     document.querySelectorAll('button[data-journey]').forEach(button => button.addEventListener('click', () => changeJourney(button.dataset.journey)));
-    for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', () => action(name));
-    $('#start').addEventListener('click', () => { start(); toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Hold Gas to drive · steer with ← →' : 'W / ↑ to accelerate · S / ↓ to brake'); });
+    for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', event => {
+      if (name === 'pause' && event.pointerType === 'touch') return;
+      action(name);
+    });
+    // A secondary finger may not synthesize a click while the stick is held.
+    $('#pause').addEventListener('pointerup', event => {
+      if (event.pointerType === 'touch') { event.preventDefault(); action('pause'); }
+    });
+    $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Drag the stick where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
     document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } frameClock.suspend(); });
     window.addEventListener('blur', () => { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
-    $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restore the coast.'); });
+    $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     function updateHud() {
-      const kmh = Math.round(Math.abs(vehicle.speed) * 3.6);
-      $('#speed').textContent = String(kmh).padStart(2, '0'); $('#speed-fill').style.width = `${kmh / 101 * 100}%`;
-      $('#distance').textContent = (vehicle.distance / 1000).toFixed(1);
-      $('#gear').textContent = vehicle.speed < -.3 ? 'TAKING A STEP BACK' : Math.abs(vehicle.u) > 5.5 ? 'A LITTLE OFF THE PATH' : kmh > 2 ? 'NO HURRY AT ALL' : 'READY WHEN YOU ARE';
+      // Physics uses meters and seconds; convert only the displayed measurements.
+      const mph = Math.round(Math.abs(vehicle.speed) * 3600 / 1609.344);
+      $('#speed').textContent = String(mph).padStart(2, '0'); $('#speed-fill').style.width = `${Math.min(Math.abs(vehicle.speed) / 28, 1) * 100}%`;
+      $('#distance').textContent = mileageFormat.format(vehicle.distance / 1609.344);
+      $('#gear').textContent = vehicle.speed < -.3 ? 'REVERSE' : Math.abs(vehicle.u) > 5.5 ? 'OFF ROAD' : mph > 1 ? 'DRIVING' : 'READY';
     }
     function updateViewUi() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
       $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
     }
-    const simulate = dt => vehicle.update(dt, started ? input.state : {});
+    const simulate = dt => {
+      const state = started ? input.state : {};
+      if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, camera, vehicle.route, vehicle.s, vehicle.u);
+      vehicle.update(dt, state);
+    };
     function frame(timestamp) {
       input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || journeyDialog.open || changingJourney, paused });
       frameClock.tick(timestamp, !paused, simulate);

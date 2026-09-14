@@ -8,23 +8,23 @@ import { snowDrivingRoute } from './world/snow-route.js';
 export const JOURNEYS = {
   coast: {
     title: 'Pacific Coast', label: 'PACIFIC COAST', routeNumber: '1', World: CoastalWorld, route: coastalDrivingRoute,
-    weather: 'A little Pacific air', temperature: '18°',
-    introduction: 'A little car. An open road. A coast without end.',
-    breather: 'The coast will be here.', sound: 'A little ocean, a little engine',
+    weather: 'Coastal breeze', temperature: '64°F',
+    introduction: 'Drive the Pacific Coast through green hills and ocean views.',
+    sound: 'Ocean and engine sounds on',
     canvas: 'A low-poly coastal landscape. Drive with WASD or the arrow keys.',
   },
   desert: {
     title: 'Red Rock Desert', label: 'RED ROCK DESERT', routeNumber: '2', World: DesertWorld, route: desertDrivingRoute,
-    weather: 'The last warm light', temperature: '26°',
-    introduction: 'Canyon walls. Quiet roads. The last warm light.',
-    breather: 'The desert will be here.', sound: 'A little desert wind, a little engine',
+    weather: 'Clear skies', temperature: '79°F',
+    introduction: 'Drive through sandstone canyons in the evening sun.',
+    sound: 'Desert wind and engine sounds on',
     canvas: 'A continuous rocky canyon with sandstone cliffs and Joshua trees in warm evening light. Drive with WASD or the arrow keys.',
   },
   snow: {
     title: 'Midnight Alpine', label: 'MIDNIGHT ALPINE', routeNumber: '3', World: SnowWorld, route: snowDrivingRoute,
-    weather: 'A little mountain moonlight', temperature: '−6°',
-    introduction: 'Snow on the peaks. A warm light around the bend.',
-    breather: 'The mountains will be here.', sound: 'A little mountain wind, a little engine',
+    weather: 'Light snow', temperature: '21°F',
+    introduction: 'Follow a snowy mountain road under the night sky.',
+    sound: 'Mountain wind and engine sounds on',
     canvas: 'A snowy mountain road at night, with moonlit cliffs, alpine pines, guardrails and warm lamps. Drive with WASD or the arrow keys.',
   },
 };

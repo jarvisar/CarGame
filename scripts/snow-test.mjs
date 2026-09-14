@@ -10,7 +10,7 @@ try {
   await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline);
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure }; });
-  await page.getByRole('button', { name: 'Change Journey', exact: true }).click();
+  await page.getByRole('button', { name: 'Change Route', exact: true }).click();
   assert.equal(await page.locator('.journey-card').count(), 3);
   await page.screenshot({ path: '.artifacts/three-journeys.png' });
   await page.getByRole('button', { name: 'Midnight Alpine', exact: true }).click();
@@ -51,15 +51,15 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   mobile.on('pageerror', e => errors.push(e.message));
   await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' }); await mobile.waitForFunction(() => window.__coastline);
-  await mobile.getByRole('button', { name: 'Change Journey', exact: true }).tap();
+  await mobile.getByRole('button', { name: 'Change Route', exact: true }).tap();
   await mobile.screenshot({ path: '.artifacts/three-journeys-mobile.png' });
   await mobile.getByRole('button', { name: 'Midnight Alpine', exact: true }).tap();
   await mobile.waitForFunction(() => window.__coastline.journey === 'snow' && !window.__coastline.changingJourney);
   await mobile.click('#start'); await mobile.waitForTimeout(2500);
   await mobile.screenshot({ path: '.artifacts/snow-mobile.png' });
-  const forward = await mobile.getByRole('button', { name: 'Accelerate', exact: true }).boundingBox();
+  const forward = await mobile.getByRole('group', { name: 'Virtual joystick', exact: true }).boundingBox();
   const touch = await mobile.context().newCDPSession(mobile);
-  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: forward.x + forward.width / 2, y: forward.y + forward.height / 2 }] });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: forward.x + forward.width / 2, y: forward.y + forward.height / 2 - 36 }] });
   await mobile.waitForFunction(() => window.__coastline.vehicle.speed > 4);
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

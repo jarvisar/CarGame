@@ -1,9 +1,9 @@
 {
   "id": "./",
-  "name": "Coastline — An endless Sunday drive",
+  "name": "Coastline — A scenic driving game",
   "short_name": "Coastline",
-  "description": "A little car. An open road. An endless Sunday drive.",
-  "lang": "en",
+  "description": "A scenic driving game with coastal highways, desert canyons, and snowy mountain roads.",
+  "lang": "en-US",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
