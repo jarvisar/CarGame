@@ -10,6 +10,8 @@ page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text());
 await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
 await page.waitForTimeout(750);
+assert.equal(await page.evaluate(() => window.__coastline.rendering.camera.top), 82.5);
+assert.match(await page.locator('#view').getAttribute('aria-label'), /Medium view/);
 await page.screenshot({ path: '.artifacts/coastline-initial.png' });
 await page.keyboard.down('KeyW');
 await page.waitForFunction(() => window.__coastline.vehicle.speed > 8);
@@ -39,10 +41,15 @@ await page.getByRole('button', { name: 'Turn sound on' }).click();
 assert.equal(await page.locator('#sound').getAttribute('aria-pressed'), 'true');
 await page.getByRole('button', { name: 'Turn sound off' }).click();
 await page.keyboard.press('KeyV');
-await page.waitForFunction(() => window.__coastline.rendering.camera.top < 95);
+await page.waitForFunction(() => window.__coastline.rendering.camera.top < 59);
+assert.match(await page.locator('#view').getAttribute('aria-label'), /Close view/);
 assert.equal(await page.evaluate(() => window.__coastline.rendering.camera.isOrthographicCamera), true);
 await page.keyboard.press('KeyV');
 await page.waitForFunction(() => window.__coastline.rendering.camera.top > 113);
+assert.match(await page.locator('#view').getAttribute('aria-label'), /Scenic view/);
+await page.keyboard.press('KeyV');
+await page.waitForFunction(() => Math.abs(window.__coastline.rendering.camera.top - 82.5) < .2);
+assert.match(await page.locator('#view').getAttribute('aria-label'), /Medium view/);
 // Advance through dozens of chunk boundaries, including floating-origin shifts.
 const streaming = await page.evaluate(async () => {
   const a = window.__coastline; const records = [];
@@ -80,6 +87,15 @@ await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [
 assert.equal(await mobile.evaluate(() => window.__coastline.input.state.forward), false);
 assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 await mobile.screenshot({ path: '.artifacts/coastline-mobile-driving.png' });
+await mobile.locator('#reset').tap();
+await mobile.locator('#view').tap();
+await mobile.waitForFunction(() => window.__coastline.rendering.camera.top < 66);
+const closeCar = await mobile.evaluate(() => {
+  const a = window.__coastline;
+  return a.vehicle.car.position.clone().project(a.rendering.camera).toArray();
+});
+assert.ok(Math.abs(closeCar[0]) < .95 && Math.abs(closeCar[1]) < .8, 'close view keeps the car inside the mobile viewport');
+await mobile.screenshot({ path: '.artifacts/coastline-mobile-close.png' });
 assert.deepEqual(errors, []);
 const report = { passed: true, checks: ['WASD acceleration', 'arrow controls and reverse', 'steering', 'pause/resume', 'local reset', 'audio toggle', 'orthographic views', 'bounded streaming at 20 km', 'GPU resource release', 'floating origin', 'lost-focus input release', 'mobile touch input', 'responsive layout', 'no browser errors'], streaming };
 await writeFile('.artifacts/browser-report.json', JSON.stringify(report, null, 2));

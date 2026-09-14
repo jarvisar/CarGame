@@ -55,15 +55,35 @@ export class DrivingController {
     const model = createCar(); Object.assign(this, model);
     this.s = 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
+    this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
+    const pose = () => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), bodyPitch: 0, bodyRoll: 0, wheelSpin: 0, steer: 0 });
+    this.previousPose = pose(); this.currentPose = pose();
     this.update(0, {});
   }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
   setNight(enabled) { for (const light of this.nightLights) light.material.emissiveIntensity = enabled ? light.night : light.day; }
   setRoute(route, state = {}) {
     this.route = route; this.s = state.s ?? 24; this.distance = state.distance ?? 0;
-    this.pitch = 0; this.roll = 0; this.body.rotation.set(0, 0, 0); this.reset();
+    this.pitch = 0; this.roll = 0; this.bodyPitch = 0; this.bodyRoll = 0; this.reset();
+  }
+  copyPose(target, source) {
+    target.position.copy(source.position); target.quaternion.copy(source.quaternion);
+    for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) target[key] = source[key];
+  }
+  render(alpha, origin = 0) {
+    const a = this.previousPose, b = this.currentPose;
+    alpha = clamp(alpha, 0, 1);
+    // Interpolate in global coordinates, then rebase once for the entire display frame.
+    this.car.position.lerpVectors(a.position, b.position, alpha); this.car.position.z += origin;
+    this.car.quaternion.slerpQuaternions(a.quaternion, b.quaternion, alpha);
+    this.body.rotation.x = THREE.MathUtils.lerp(a.bodyPitch, b.bodyPitch, alpha);
+    this.body.rotation.z = THREE.MathUtils.lerp(a.bodyRoll, b.bodyRoll, alpha);
+    const steer = THREE.MathUtils.lerp(a.steer, b.steer, alpha);
+    const spin = THREE.MathUtils.lerp(a.wheelSpin, b.wheelSpin, alpha);
+    for (const w of this.wheels) { if (w.front) w.pivot.rotation.y = -steer * .38; w.wheel.rotation.x = spin; w.hub.rotation.x = spin; }
   }
   update(dt, input) {
+    this.copyPose(this.previousPose, this.currentPose);
     const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
     const forward = input.forward ? 1 : 0; const brake = input.brake ? 1 : 0;
     this.steer = THREE.MathUtils.damp(this.steer, (input.right ? 1 : 0) - (input.left ? 1 : 0), 7, dt);
@@ -104,8 +124,13 @@ export class DrivingController {
     this.pitch = THREE.MathUtils.damp(this.pitch, Math.atan(slope * Math.cos(difference) + lateralSlope * Math.sin(difference)), 10, dt || 1);
     this.roll = THREE.MathUtils.damp(this.roll, Math.atan(lateralSlope * Math.cos(difference) - slope * Math.sin(difference)), 9, dt || 1);
     this.car.rotation.set(0, -this.heading, 0, 'YXZ'); this.car.rotateX(this.pitch); this.car.rotateZ(this.roll);
-    this.body.rotation.z = THREE.MathUtils.damp(this.body.rotation.z, -this.steer * this.speed * .0022, 6, dt);
-    this.body.rotation.x = THREE.MathUtils.damp(this.body.rotation.x, -clamp(acceleration, -15, 12) * .002, 5, dt);
-    for (const w of this.wheels) { if (w.front) w.pivot.rotation.y = -this.steer * .38; w.wheel.rotation.x -= step / .48; w.hub.rotation.x -= step / .48; }
+    this.bodyRoll = THREE.MathUtils.damp(this.bodyRoll, -this.steer * this.speed * .0022, 6, dt);
+    this.bodyPitch = THREE.MathUtils.damp(this.bodyPitch, -clamp(acceleration, -15, 12) * .002, 5, dt);
+    this.wheelSpin -= step / .48;
+    this.currentPose.position.copy(this.groundedPosition); this.currentPose.quaternion.copy(this.car.quaternion);
+    for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) this.currentPose[key] = this[key];
+    // Resets and journey changes are teleports, so never blend from the old location.
+    if (dt === 0) this.copyPose(this.previousPose, this.currentPose);
+    this.render(1);
   }
 }

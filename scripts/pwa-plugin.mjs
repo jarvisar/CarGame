@@ -17,11 +17,12 @@ export function coastlinePwa() {
         { tag: 'meta', attrs: { name: 'apple-mobile-web-app-title', content: 'Coastline' } },
         ...(config.command === 'build' ? [{
           tag: 'script', attrs: { src: `${base}pwa-register.js`, defer: true }, injectTo: 'body',
-        }, {
+        }] : []),
+        {
           tag: 'script', attrs: { src: `${base}pwa-install.js`, defer: true }, injectTo: 'body',
         }, {
           tag: 'link', attrs: { rel: 'stylesheet', href: `${base}pwa-install.css` },
-        }] : []),
+        },
       ];
     },
     async closeBundle() {

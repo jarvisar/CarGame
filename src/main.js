@@ -5,9 +5,11 @@ import { JOURNEYS } from './journeys.js';
 import { DrivingController } from './vehicle.js';
 import { Input } from './input.js';
 import { DriveAudio } from './audio.js';
+import { FrameClock } from './timing.js';
 
 const $ = selector => document.querySelector(selector);
-let paused = false, started = false, time = 0, lastTime = 0, accumulator = 0, hudTime = 0;
+let paused = false, started = false, time = 0, hudTime = 0;
+const frameClock = new FrameClock();
 let toastTimer; let sceneReady = false;
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
@@ -24,7 +26,7 @@ async function boot() {
     scene.add(vehicle.car); world.update(vehicle.s);
     function start() { if (paused) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
-      paused = value; input.clear(); accumulator = 0;
+      paused = value; input.clear(); frameClock.suspend();
       $('#pause-overlay').hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
       if (paused) $('#resume').focus(); else $('#pause').blur();
     }
@@ -48,7 +50,7 @@ async function boot() {
       if (changingJourney || !JOURNEYS[id]) return;
       if (id === journey) { journeyDialog.close(); return; }
       if (!journeyDialog.open) journeyWasPaused = paused;
-      changingJourney = true; paused = true; input.clear(); accumulator = 0;
+      changingJourney = true; paused = true; input.clear(); frameClock.suspend();
       $('#journey-transition').classList.add('active'); journeyDialog.close();
       $('#pause-overlay').hidden = true;
       savedJourneys[journey] = { s: vehicle.s, distance: vehicle.distance };
@@ -63,7 +65,7 @@ async function boot() {
         vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
         vehicle.setNight(id === 'snow');
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
-        vehicle.car.position.z = vehicle.groundedPosition.z + world.origin;
+        vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); renderer.render(scene, camera);
         toast(`Welcome to ${JOURNEYS[id].title}`);
@@ -71,7 +73,7 @@ async function boot() {
         if (nextWorld && nextWorld !== world) nextWorld.dispose();
         console.error('Could not change journey:', error); toast('That road is unavailable. Try again.');
       } finally {
-        input.clear(); accumulator = 0; lastTime = 0; changingJourney = false;
+        input.clear(); frameClock.reset(); changingJourney = false;
         setPaused(journeyWasPaused || document.hidden);
         $('#journey-transition').classList.remove('active');
       }
@@ -81,8 +83,8 @@ async function boot() {
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { vehicle.reset(); rendering.snap(); toast('Back on the open road'); }
-      if (name === 'view') toast(rendering.toggleView());
+      if (name === 'reset') { vehicle.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Back on the open road'); }
+      if (name === 'view') { toast(rendering.toggleView()); updateViewUi(); }
       if (name === 'sound') {
         try {
           const enabled = await audio.toggle(); $('#sound').setAttribute('aria-pressed', String(enabled));
@@ -104,7 +106,7 @@ async function boot() {
     for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', () => action(name));
     $('#start').addEventListener('click', () => { start(); toast(window.matchMedia('(pointer: coarse)').matches ? 'Hold ↑ to wander down the road' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } lastTime = 0; accumulator = 0; });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } frameClock.suspend(); });
     window.addEventListener('blur', () => { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restore the coast.'); });
     function updateHud() {
@@ -113,14 +115,17 @@ async function boot() {
       $('#distance').textContent = (vehicle.distance / 1000).toFixed(1);
       $('#gear').textContent = vehicle.speed < -.3 ? 'TAKING A STEP BACK' : Math.abs(vehicle.u) > 5.5 ? 'A LITTLE OFF THE PATH' : kmh > 2 ? 'NO HURRY AT ALL' : 'READY WHEN YOU ARE';
     }
+    function updateViewUi() {
+      $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
+      $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
+    }
+    const simulate = dt => vehicle.update(dt, started ? input.state : {});
     function frame(timestamp) {
-      const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, .1) : 1 / 60; lastTime = timestamp;
+      frameClock.tick(timestamp, !paused, simulate);
+      const dt = frameClock.dt;
       if (!paused) {
-        time += dt; accumulator += dt;
-        const controls = started ? input.state : {};
-        // Fixed simulation steps keep acceleration and handling consistent across frame rates.
-        while (accumulator >= 1 / 60) { vehicle.update(1 / 60, controls); accumulator -= 1 / 60; }
-        world.update(vehicle.s); vehicle.car.position.z = vehicle.groundedPosition.z + world.origin;
+        time += dt;
+        world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
         rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }
       audio.update(vehicle.speed, time, paused);
@@ -129,7 +134,7 @@ async function boot() {
       if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       requestAnimationFrame(frame);
     }
-    rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi();
+    vehicle.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
     else renderer.compile(scene, camera);
     requestAnimationFrame(frame);

@@ -5,7 +5,7 @@ import { fitSunShadow } from '../src/shadows.js';
 
 test('sun shadows cover screen edges across journeys, zoom, resize and origin shifts', () => {
   for (const aspect of [390 / 844, 1.44, 16 / 9, 32 / 9]) {
-    for (const size of [165, 200, 235, 263.2]) {
+    for (const size of [115, 128.8, 165, 200, 235, 263.2]) {
       for (const offset of [[-110, 240, 100], [-170, 150, 120], [-150, 230, 110]]) {
         for (const z of [0, -1000, 1000]) {
           const target = new THREE.Vector3(25, 65, z);

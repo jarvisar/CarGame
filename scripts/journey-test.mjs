@@ -56,7 +56,7 @@ try {
   await page.evaluate(() => { const a = window.__coastline; a.vehicle.s = 300; a.vehicle.distance = 1245; a.vehicle.reset(); a.rendering.snap(); });
   await page.waitForTimeout(200);
   await page.keyboard.press('KeyV');
-  await page.waitForFunction(() => window.__coastline.rendering.camera.top < 83);
+  await page.waitForFunction(() => Math.abs(window.__coastline.rendering.camera.top - 57.5) < .2);
   const zoom = await page.evaluate(() => window.__coastline.rendering.camera.top);
   await page.keyboard.press('KeyP');
   for (const id of ['coast', 'desert', 'coast', 'desert', 'coast', 'desert']) {

@@ -49,7 +49,7 @@ async function checkProduction(base) {
     await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-invitation.png' : 'pwa-invitation-subpath.png') });
     await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
-    await page.waitForFunction(() => localStorage.getItem('coastline-install-dismissed'));
+    await page.waitForFunction(() => localStorage.getItem('coastline-install-dismissed-v2'));
     await page.setViewportSize({ width: 1280, height: 720 });
     const manifest = await page.evaluate(async () => {
       const link = document.querySelector('link[rel=manifest]');
@@ -109,13 +109,15 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    await page.locator('#welcome .pwa-install-button').waitFor({ state: 'visible' });
     await page.evaluate(() => {
       const event = new Event('beforeinstallprompt', { cancelable: true });
       event.prompt = async () => { window.testInstallPromptCalled = true; };
       event.userChoice = Promise.resolve({ outcome: 'dismissed' });
       window.dispatchEvent(event);
+      // Trigger the stub in the same task, before Chrome can emit a real prompt event.
+      document.querySelector('#welcome .pwa-install-button').click();
     });
-    await page.locator('#welcome .pwa-install-button').click();
     assert.equal(await page.evaluate(() => window.testInstallPromptCalled), true);
     await page.locator('#welcome .pwa-install-button').click();
     assert.equal(await page.locator('#welcome .pwa-install-help').isVisible(), true);
@@ -135,13 +137,32 @@ async function checkProduction(base) {
   }
 }
 
-await checkProduction('/');
-await checkProduction('/coastline/');
+if (!process.argv.includes('--dev-only')) {
+  await checkProduction('/');
+  await checkProduction('/coastline/');
+}
 const dev = await createViteServer({ server: { port: 0, host: '127.0.0.1' } });
 try {
   await dev.listen();
   const html = await (await fetch(`http://127.0.0.1:${dev.httpServer.address().port}/`)).text();
   assert.ok(html.includes('manifest.webmanifest'));
+  assert.ok(html.includes('pwa-install.js'), 'Development includes the install menu link and banner');
+  assert.ok(html.includes('pwa-install.css'), 'Development includes installation styling');
   assert.ok(!html.includes('pwa-register.js'), 'Development never registers an offline worker');
-  console.log('PASS development: manifest available, service worker registration disabled');
+  const browser = await chromium.launch(launchOptions);
+  try {
+    const page = await browser.newPage({ viewport: { width: 393, height: 851 }, hasTouch: true, isMobile: true });
+    const url = `http://127.0.0.1:${dev.httpServer.address().port}/`;
+    await page.goto(url);
+    await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true);
+    await page.screenshot({ path: path.resolve('.artifacts/pwa-dev-install.png') });
+    await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
+    assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true);
+    assert.equal(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length), 0);
+  } finally { await browser.close(); }
+  console.log('PASS development: manifest and install UI available, service worker registration disabled');
 } finally { await dev.close(); }

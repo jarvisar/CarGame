@@ -18,11 +18,12 @@ export function createRendering(canvas) {
   const follow = new THREE.Vector3(); const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
   const sunOffset = new THREE.Vector3(-110, 240, 100);
-  let initialized = false; let view = 0; let viewHeight = 235; let previousOrigin = 0;
+  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }];
+  let initialized = false; let view = 1; let viewHeight = views[view].height; let previousOrigin = 0;
+  const lookAhead = new THREE.Vector3(-24, 0, -46);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function resize() {
     const width = window.innerWidth, height = window.innerHeight;
-    renderer.setSize(width, height);
     const aspect = width / height;
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
@@ -30,18 +31,21 @@ export function createRendering(canvas) {
   }
   function update(car, dt, origin) {
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
-    // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
-    target.copy(car.position).add(new THREE.Vector3(-24, 0, -46));
-    if (window.innerWidth < window.innerHeight) target.x += 16;
-    if (!initialized) { follow.copy(target); initialized = true; }
-    follow.lerp(target, 1 - Math.exp(-dt * (reducedMotion ? 8 : 3)));
-    camera.position.copy(follow).add(cameraOffset); camera.lookAt(follow);
-    const nextHeight = THREE.MathUtils.damp(viewHeight, view === 0 ? 235 : 165, 4, dt);
+    if (!initialized) { follow.copy(car.position); initialized = true; }
+    follow.lerp(car.position, 1 - Math.exp(-dt * (reducedMotion ? 8 : 3)));
+    const nextHeight = THREE.MathUtils.damp(viewHeight, views[view].height, 4, dt);
     if (Math.abs(nextHeight - viewHeight) > .01) { viewHeight = nextHeight; resize(); }
-    sun.position.copy(follow).add(sunOffset); sun.target.position.copy(follow);
+    // Shorten the look-ahead in close view so the car stays onscreen in portrait layouts.
+    const framing = Math.min(1, viewHeight / 165);
+    target.copy(follow).addScaledVector(lookAhead, framing);
+    if (window.innerWidth < window.innerHeight) target.x += 16 * framing;
+    // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
+    camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
+    sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
     fitSunShadow(camera, sun);
   }
-  window.addEventListener('resize', resize); resize();
+  // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
+  window.addEventListener('resize', () => { renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75)); renderer.setSize(window.innerWidth, window.innerHeight); resize(); }); resize();
   function setJourney(id) {
     if (id === 'snow') {
       scene.background.set('#101a2b'); scene.fog.color.set('#152238');
@@ -58,5 +62,5 @@ export function createRendering(canvas) {
     sunOffset.set(...(desert ? [-170, 150, 120] : [-110, 240, 100]));
     renderer.toneMappingExposure = desert ? .92 : .94;
   }
-  return { renderer, scene, camera, update, resize, setJourney, toggleView() { view = 1 - view; return view === 0 ? 'The scenic view' : 'A little closer'; }, snap() { initialized = false; } };
+  return { renderer, scene, camera, update, resize, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; return views[view].label; }, snap() { initialized = false; } };
 }

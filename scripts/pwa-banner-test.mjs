@@ -26,9 +26,12 @@ try {
   await setup();
   await page.clock.fastForward(8100);
   assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Automatically disappears');
+  assert.equal(await page.evaluate(() => localStorage.getItem('coastline-install-dismissed-v2')), null, 'Timeout does not suppress future visits');
+  assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true, 'Permanent menu link survives timeout');
   await setup();
   await page.locator('#start').click();
   await page.locator('#pwa-install-invitation').waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => localStorage.getItem('coastline-install-dismissed-v2')), null, 'Starting a drive does not suppress future visits');
   await setup();
   await page.locator('#pwa-install-invitation .pwa-install-button').focus();
   await page.clock.fastForward(9000);
@@ -45,6 +48,8 @@ try {
   await setup();
   await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
   assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
+  assert.ok(await page.evaluate(() => localStorage.getItem('coastline-install-dismissed-v2')), 'Explicit dismissal is remembered');
+  assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true, 'Permanent menu link survives explicit dismissal');
   for (const mode of ['standalone', 'fullscreen']) {
     await page.goto('https://coastline.test/');
     await page.evaluate(mode => {

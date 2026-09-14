@@ -31,7 +31,7 @@ Open the local URL printed by Vite. For a production build, run `npm run build`,
 - **S / ↓:** brake, then reverse
 - **A D / ← →:** steer
 - **Space:** strong brake
-- **V:** switch between two orthographic zoom levels
+- **V:** cycle through medium (default), close, and scenic orthographic views. Medium matches the previous closer view; close adds another zoom level.
 - **R:** return to the road at the current location
 - **P / Escape:** pause / resume
 - **M:** optional synthesized ocean and engine sound
@@ -48,8 +48,9 @@ Touch controls appear on touch devices. Driving starts directly with the keyboar
 - `src/world/desert-route.js`, `src/world/desert.js`: continuous canyon profiles with adaptive terrain columns along both walls, deterministic rock formations, a dry wash, and instanced rockfall and desert plants. Shared global boundary samples and the same nine-chunk streaming budget as the coast keep the valley seamless and bounded.
 - `src/world/snow-route.js`, `src/world/snow.js`: continuous mountain masses and ledge terrain, slope-dependent snow cover, instanced alpine scenery, seven pooled nearby lamp lights, one headlight beam, and a fixed pool of snow particles. Mountain summits and chunk borders use deterministic world coordinates, including reverse travel and floating-origin changes.
 - `src/journeys.js`, `src/journey.css`: journey definitions and chooser styling. Switching updates environment lighting, HUD labels, and optional wind ambience while retaining the existing camera setup.
-- `src/vehicle.js`: small procedural car, fixed-step arcade driving, steering smoothing, gentle heading assistance, slope alignment, and soft roadside limits.
-- `src/rendering.js`: fixed isometric camera, two zoom levels, lighting, fog, and shadows.
+- `src/vehicle.js`: small procedural car, fixed-step arcade driving, steering smoothing, gentle heading assistance, slope alignment, and soft roadside limits. Position, orientation, body lean, steering, and wheels interpolate between physics steps before the camera follows the car.
+- `src/timing.js`: 60 Hz physics with display-rate rendering via `requestAnimationFrame`, including high-refresh and variable-refresh displays. Actual frame delivery depends on the browser, system settings, and available GPU/CPU performance. Pausing preserves interpolation progress; resets and journey changes discard old poses.
+- `src/rendering.js`: fixed isometric camera, three zoom levels (165-unit medium default, 115-unit close, 235-unit scenic), lighting, fog, and shadows. Zoom changes the projection without reallocating the canvas buffers.
 - `src/input.js`, `src/audio.js`, `src/main.js`: keyboard/touch input, optional synthesized sound, and scene lifecycle.
 
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).

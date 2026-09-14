@@ -13,17 +13,20 @@
   invitation.setAttribute('aria-describedby', 'pwa-install-description');
   invitation.innerHTML = '<h2 id="pwa-install-heading">Take the scenic route with you.</h2><p id="pwa-install-description">Install Coastline for your next little escape.</p>';
   document.body.append(invitation);
-  const dismissalKey = 'coastline-install-dismissed';
+  // Old versions also saved automatic timeouts; only explicit dismissals count now.
+  const dismissalKey = 'coastline-install-dismissed-v2';
   function dismissedRecently() {
     try { return Date.now() - Number(localStorage.getItem(dismissalKey)) < 7 * 24 * 60 * 60 * 1000; }
     catch { return false; }
   }
   let dismissTimer;
-  function dismissInvitation() {
+  function dismissInvitation(remember = false) {
     clearTimeout(dismissTimer);
     invitation.hidden = true;
     menuObserver.disconnect();
-    try { localStorage.setItem(dismissalKey, String(Date.now())); } catch { /* Storage is optional. */ }
+    if (remember) {
+      try { localStorage.setItem(dismissalKey, String(Date.now())); } catch { /* Storage is optional. */ }
+    }
   }
   function startDismissTimer() {
     clearTimeout(dismissTimer);
@@ -37,7 +40,7 @@
   invitation.addEventListener('focusout', () => setTimeout(startDismissTimer, 0));
   invitation.addEventListener('keydown', event => {
     event.stopPropagation();
-    if (event.key === 'Escape') dismissInvitation();
+    if (event.key === 'Escape') dismissInvitation(true);
   });
   invitation.addEventListener('keyup', event => event.stopPropagation());
   const controls = [];
@@ -71,7 +74,7 @@
         try {
           await prompt.prompt();
           await prompt.userChoice;
-          if (!invitation.hidden) dismissInvitation();
+          if (!invitation.hidden) dismissInvitation(true);
         } catch {
           showHelp();
         } finally {
@@ -98,7 +101,7 @@
   close.className = 'pwa-install-close';
   close.textContent = '×';
   close.setAttribute('aria-label', 'Dismiss install invitation');
-  close.addEventListener('click', dismissInvitation);
+  close.addEventListener('click', () => dismissInvitation(true));
   invitation.append(close);
 
   const loading = document.querySelector('#loading');
