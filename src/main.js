@@ -1,5 +1,6 @@
 import './style.css';
 import './journey.css';
+import './ui.css';
 import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
 import { DrivingController } from './vehicle.js';
@@ -104,7 +105,7 @@ async function boot() {
     });
     document.querySelectorAll('button[data-journey]').forEach(button => button.addEventListener('click', () => changeJourney(button.dataset.journey)));
     for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', () => action(name));
-    $('#start').addEventListener('click', () => { start(); toast(window.matchMedia('(pointer: coarse)').matches ? 'Hold ↑ to wander down the road' : 'W / ↑ to accelerate · S / ↓ to brake'); });
+    $('#start').addEventListener('click', () => { start(); toast(window.matchMedia('(any-pointer: coarse)').matches ? 'Hold Gas to drive · steer with ← →' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
     document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } frameClock.suspend(); });
     window.addEventListener('blur', () => { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });

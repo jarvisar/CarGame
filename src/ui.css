@@ -1,0 +1,142 @@
+/* Keep the scene and HUD inside the visible browser viewport, including notches. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+#app { height: 100dvh; min-height: 0; }
+.touch-hint, .touch-utility-icon { display: none; }
+button { touch-action: manipulation; }
+.pedal-label { font-size: 11px; font-weight: 650; letter-spacing: .2px; }
+
+/* Shared polish: readable panels and comfortable controls on every screen. */
+.icon-button, .journey-dialog-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
+.journey-button, .start-button { min-height: 44px; }
+.journey-button { font-size: 12px; }
+.controls { padding: 3px 10px; }
+.controls button { min-height: 44px; padding: 0 5px; }
+.controls .control-label { font-size: 12px; }
+.journey-card-description { font-size: 12px; line-height: 1.6; opacity: .85; }
+.journey-current { font-size: 9px; letter-spacing: 1.3px; }
+.journey-note { font-size: 12px; line-height: 1.6; }
+#journey-description { font-size: 14px; }
+.start-button { font-size: 14px; }
+.pause-overlay p { font-size: 14px; }
+.pwa-install-button, #pwa-install-invitation .pwa-install-button { min-height: 44px; }
+.pwa-install-close { width: 44px; height: 44px; }
+@media (min-width: 761px) {
+  .welcome { top: 50%; transform: translateY(-45%); max-width: 450px; max-height: calc(100% - 200px); padding: 28px; border: 1px solid #ffffff70; border-radius: 16px; background: #f9f8eedb; backdrop-filter: blur(12px); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; }
+  .welcome.hidden { transform: translateY(-40%); pointer-events: none; }
+  .welcome h1 { font-size: clamp(42px, 4vw, 60px); }
+  .welcome p { font-size: 14px; }
+  .start-hint { font-size: 11px; opacity: .85; }
+  .location-title { font-size: 10px; }
+  .location-sub { font-size: 12px; }
+  body[data-journey=snow] .welcome { background: #17273ee8; border-color: #93acc64a; }
+}
+@media (min-width: 761px) and (max-height: 560px) {
+  .welcome { top: 76px; transform: none; max-height: calc(100% - 168px); padding: 18px; }
+  .welcome h1 { font-size: 34px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .bottom-bar { gap: 14px; }
+  .location, .speedometer { min-width: 0; }
+  .controls { gap: 12px; }
+}
+
+@media (any-pointer: coarse) {
+  .icon-button, .journey-dialog-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
+  .journey-button, .start-button { min-height: 44px; }
+  .start-hint, .controls > span, .controls kbd { display: none; }
+  .touch-hint { display: block; margin-top: 14px; font-size: 12px; line-height: 1.6; }
+  .controls { gap: 4px; padding: 3px; }
+  .controls button { min-width: 64px; min-height: 44px; padding: 0 9px; justify-content: center; gap: 6px; }
+  .controls .control-label { font-size: 12px; margin: 0; text-transform: capitalize; }
+  .touch-utility-icon { display: block; width: 18px; height: 18px; }
+  .topbar { top: calc(20px + var(--safe-top)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); }
+  .bottom-bar { bottom: calc(112px + var(--safe-bottom)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); }
+  .touch-controls { display: flex; bottom: calc(24px + var(--safe-bottom)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .touch-controls > div { gap: 10px; }
+  .touch-controls button { width: 64px; height: 64px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 26px; background: #f9f8eee8; box-shadow: 0 3px 12px #183f3618; }
+  .touch-controls button[data-control=forward] { border: 2px solid var(--ink); }
+  .touch-controls button.active { transform: translateY(2px); background: var(--ink); color: var(--cream); }
+  .touch-controls button > span { pointer-events: none; line-height: 1; }
+  .pwa-install-button, #pwa-install-invitation .pwa-install-button { min-height: 44px; }
+  .pwa-install-close { width: 44px; height: 44px; }
+}
+
+@media (max-width: 760px) {
+  .topbar { top: calc(16px + var(--safe-top)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); gap: 8px; }
+  .brand { gap: 9px; }
+  .wordmark { font-size: 25px; }
+  .brand-caption { letter-spacing: 1.4px; }
+  .top-actions { gap: 8px; }
+  .icon-button, .journey-dialog-heading .icon-button { width: 44px; height: 44px; }
+  .journey-button { position: absolute; top: 56px; right: 0; min-height: 44px; padding: 10px 12px; font-size: 11px; }
+  .welcome { left: calc(16px + var(--safe-left)); top: max(calc(132px + var(--safe-top)), 25%); bottom: calc(186px + var(--safe-bottom)); transform: none; width: 360px; max-width: calc(100% - 32px - var(--safe-left) - var(--safe-right)); height: fit-content; max-height: calc(100% - 318px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; padding: 22px; border: 1px solid #ffffff70; border-radius: 16px; background: #f9f8eedb; backdrop-filter: blur(12px); }
+  .welcome.hidden { transform: translateY(8px); pointer-events: none; }
+  .welcome h1 { font-size: clamp(34px, 10vw, 44px); margin: 16px 0; letter-spacing: -1.8px; }
+  .welcome p { font-size: 13px; max-width: none; line-height: 1.7; margin-bottom: 20px; }
+  .welcome .start-button { width: 100%; min-height: 48px; font-size: 14px; }
+  .welcome .eyebrow { font-size: 8px; }
+  .bottom-bar { left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); bottom: calc(20px + var(--safe-bottom)); }
+  .location { gap: 8px; }
+  .location-title { font-size: 9px; letter-spacing: 1px; }
+  .location-sub { font-size: 10px; line-height: 1.5; max-width: 150px; }
+  .speedometer { gap: 7px; padding: 10px; }
+  .speedometer > #speed { font-size: 34px; }
+  .speed-unit { font-size: 9px; }
+  .speed-unit span { display: none; }
+  .speed-track { width: calc(100% - 20px); right: 10px; }
+  #toast { top: calc(126px + var(--safe-top)); max-width: calc(100% - 32px - var(--safe-left) - var(--safe-right)); width: max-content; white-space: normal; text-align: center; line-height: 1.5; font-size: 12px; padding: 10px 16px; z-index: 2; }
+  .pause-overlay { padding: calc(76px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left)); overflow-y: auto; }
+  .pause-overlay p { font-size: 14px; }
+  .pause-overlay .start-button { min-height: 48px; font-size: 14px; }
+  body[data-journey=snow] .welcome { background: #17273ee8; border-color: #93acc64a; }
+  #journey-dialog { width: calc(100% - 24px - var(--safe-left) - var(--safe-right)); max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); padding: 16px; overscroll-behavior: contain; }
+  #journey-description { font-size: 13px; margin-bottom: 18px; }
+  .journey-options { grid-template-columns: 1fr; gap: 12px; }
+  .journey-card { display: grid; grid-template-columns: 92px 1fr; }
+  .journey-art { height: 100%; min-height: 112px; object-fit: cover; }
+  .journey-card-copy { padding: 14px 12px; }
+  .journey-card-title { font-size: 14px; }
+  .journey-card-description { font-size: 12px; line-height: 1.5; opacity: .85; }
+  .journey-current { font-size: 8px; letter-spacing: 1px; margin-top: 10px; }
+  .journey-note { font-size: 11px; line-height: 1.5; }
+}
+
+@media (max-width: 760px) and (any-pointer: coarse) {
+  .bottom-bar { bottom: calc(104px + var(--safe-bottom)); }
+  .controls { position: fixed; top: calc(72px + var(--safe-top)); left: calc(16px + var(--safe-left)); bottom: auto; transform: none; margin: 0; }
+  .touch-controls { left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); bottom: calc(20px + var(--safe-bottom)); }
+  .touch-controls > div { gap: 8px; }
+  .touch-controls button { width: 60px; height: 64px; }
+}
+
+/* Short landscape screens put secondary controls between the two thumb groups. */
+@media (max-height: 560px) and (any-pointer: coarse) and (orientation: landscape) {
+  .topbar { top: calc(10px + var(--safe-top)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }
+  .journey-button { position: static; min-height: 44px; }
+  .brand-caption { display: none; }
+  .welcome { top: calc(66px + var(--safe-top)); bottom: auto; left: calc(16px + var(--safe-left)); width: 340px; max-width: 48%; max-height: calc(100% - 164px - var(--safe-top) - var(--safe-bottom)); transform: none; padding: 16px; overflow-y: auto; pointer-events: auto; border-radius: 14px; background: #f9f8eedb; backdrop-filter: blur(12px); }
+  body[data-journey=snow] .welcome { background: #17273ee8; }
+  .welcome h1 { font-size: 32px; margin: 10px 0; }
+  .welcome p { font-size: 12px; margin-bottom: 12px; }
+  .welcome .start-button { min-height: 44px; }
+  .touch-hint { font-size: 11px; margin-top: 10px; }
+  .bottom-bar { bottom: calc(94px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }
+  #app:has(.welcome:not(.hidden)) .location { visibility: hidden; }
+  .controls { position: fixed; top: auto; bottom: calc(18px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); margin: 0; }
+  .touch-controls { bottom: calc(14px + var(--safe-bottom)); left: calc(16px + var(--safe-left)); right: calc(16px + var(--safe-right)); }
+  #toast { top: calc(64px + var(--safe-top)); }
+  .pause-overlay { padding: calc(64px + var(--safe-top)) 24px calc(16px + var(--safe-bottom)); justify-content: flex-start; }
+  .pause-overlay h2 { font-size: 32px; margin-top: 10px; }
+  .pause-overlay p { margin: 8px 0 14px; }
+  #journey-dialog { max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); }
+  .journey-options { grid-template-columns: repeat(3, 1fr); }
+  .journey-card { display: block; }
+  .journey-art { height: 70px; min-height: 0; }
+  .journey-card-copy { padding: 10px; }
+  .journey-card-title { font-size: 13px; }
+}
