@@ -85,12 +85,12 @@ export class DrivingController {
   update(dt, input) {
     this.copyPose(this.previousPose, this.currentPose);
     const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
-    const forward = input.forward ? 1 : 0; const brake = input.brake ? 1 : 0;
-    this.steer = THREE.MathUtils.damp(this.steer, (input.right ? 1 : 0) - (input.left ? 1 : 0), 7, dt);
+    const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
+    this.steer = THREE.MathUtils.damp(this.steer, (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
     const offRoad = Math.abs(this.u) > 5.1;
     let acceleration = 0;
-    if (forward) acceleration += this.speed < -.3 ? 19 : 11.3;
-    if (brake) acceleration -= this.speed > .3 ? 20 : 6.5;
+    if (forward) acceleration += forward * (this.speed < -.3 ? 19 : 11.3);
+    if (brake) acceleration -= brake * (this.speed > .3 ? 20 : 6.5);
     if (input.handbrake) acceleration -= Math.sign(this.speed) * 27;
     const drag = .7 + .0095 * this.speed * this.speed + (offRoad ? 4.2 : 0);
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;

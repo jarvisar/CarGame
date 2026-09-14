@@ -1,7 +1,15 @@
+import { GamepadInput } from './gamepad.js';
+
 export class Input {
-  constructor(onAction) {
+  constructor(onAction, onControllerConnection = () => {}) {
     this.keys = new Set(); this.pointers = new Map(); this.onAction = onAction;
     this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
+    this.gamepad = new GamepadInput(onAction, connected => {
+      this.keys.clear(); this.pointers.clear();
+      document.querySelectorAll('[data-control]').forEach(button => button.classList.remove('active'));
+      document.body.dataset.controller = String(connected);
+      onControllerConnection(connected);
+    });
     window.addEventListener('keydown', e => {
       if (document.querySelector('dialog[open]')) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
@@ -24,7 +32,7 @@ export class Input {
   }
   get state() {
     const touch = new Set(this.pointers.values());
-    return Object.fromEntries(Object.entries(this.codes).map(([action, codes]) => [action, touch.has(action) || codes.some(code => this.keys.has(code))]));
+    return Object.fromEntries(Object.entries(this.codes).map(([action, codes]) => [action, touch.has(action) || codes.some(code => this.keys.has(code)) || this.gamepad.state[action] || false]));
   }
-  clear() { this.keys.clear(); this.pointers.clear(); document.querySelectorAll('[data-control]').forEach(button => button.classList.remove('active')); }
+  clear() { this.keys.clear(); this.pointers.clear(); this.gamepad.clear(); document.querySelectorAll('[data-control]').forEach(button => button.classList.remove('active')); }
 }

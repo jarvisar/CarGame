@@ -1,0 +1,86 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { GamepadInput } from '../src/gamepad.js';
+import { DrivingController } from '../src/vehicle.js';
+
+const pad = (index = 0, mapping = 'standard') => ({ index, mapping, connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) });
+const hold = (pad, index, value = 1) => { pad.buttons[index] = { pressed: value > .5, value }; };
+function fixture() {
+  const device = pad(), actions = [], connections = [], devices = [null, device];
+  const input = new GamepadInput(action => actions.push(action), connected => connections.push(connected), () => devices);
+  return { device, devices, input, actions, connections };
+}
+
+test('controller detection handles sparse slots, disconnects, and missing or restricted APIs', () => {
+  const { input, connections, devices, device } = fixture();
+  input.update(); input.update();
+  assert.deepEqual(connections, [true]);
+  hold(device, 7); input.update(); assert.equal(input.state.forward, 1);
+  devices[1] = null; input.update();
+  assert.deepEqual(input.state, {}); assert.deepEqual(connections, [true, false]);
+  devices[1] = device; hold(device, 7, 0); input.update();
+  assert.deepEqual(connections, [true, false, true]);
+  input.getGamepads = () => { throw new Error('API restricted'); };
+  input.update(); assert.equal(input.connected, false); assert.deepEqual(input.state, {});
+  input.getGamepads = () => []; assert.doesNotThrow(() => input.update());
+});
+
+test('stick deadzone, analog triggers, D-pad and face-button fallbacks', () => {
+  const { input, device, actions } = fixture();
+  device.axes[0] = .12; hold(device, 7, .04); input.update();
+  assert.equal(input.state.right, 0); assert.equal(input.state.forward, 0); assert.deepEqual(actions, []);
+  device.axes[0] = -.59; hold(device, 7, .75); input.update();
+  assert.ok(Math.abs(input.state.left - .5) < 1e-10);
+  assert.ok(input.state.forward > .7 && input.state.forward < .8);
+  hold(device, 7, 0); hold(device, 6, .54); hold(device, 15); input.update();
+  assert.equal(input.state.right, 1); assert.ok(Math.abs(input.state.brake - .5) < 1e-10);
+  device.mapping = ''; device.axes = []; hold(device, 0); hold(device, 1); input.update();
+  assert.equal(input.state.forward, 1); assert.equal(input.state.brake, 1);
+});
+
+test('shortcuts fire once per press and Start works while paused', () => {
+  const { input, device, actions } = fixture();
+  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset']]) {
+    hold(device, index); input.update(); input.update(); input.update();
+    assert.equal(actions.filter(item => item === action).length, 1);
+    hold(device, index, 0); input.update();
+  }
+  hold(device, 9); input.update({ paused: true });
+  assert.equal(actions.filter(item => item === 'pause').length, 2);
+  hold(device, 9, 0); hold(device, 7); input.update({ paused: true });
+  assert.deepEqual(input.state, {}); assert.equal(actions.includes('drive'), false);
+});
+
+test('focus loss and menus consume held inputs until the controller returns to neutral', () => {
+  const { input, device, actions } = fixture();
+  hold(device, 7); input.update(); input.clear();
+  input.update({ blocked: true }); input.update();
+  assert.deepEqual(input.state, {});
+  hold(device, 9); input.update({ blocked: true }); input.update();
+  assert.equal(actions.includes('pause'), false);
+  hold(device, 7, 0); hold(device, 9, 0); input.update();
+  hold(device, 7); input.update(); assert.equal(input.state.forward, 1);
+});
+
+test('a replacement controller cannot inherit held throttle', () => {
+  const { input, devices } = fixture();
+  input.update(); const replacement = pad(2); hold(replacement, 7);
+  devices[1] = replacement; input.update(); assert.deepEqual(input.state, {});
+  hold(replacement, 7, 0); input.update(); hold(replacement, 7); input.update();
+  assert.equal(input.state.forward, 1);
+});
+
+test('vehicle honors partial throttle and steering while preserving digital input', () => {
+  const full = new DrivingController(), partial = new DrivingController(), digital = new DrivingController();
+  for (let frame = 0; frame < 30; frame++) {
+    full.update(1 / 60, { forward: 1, right: 1 });
+    partial.update(1 / 60, { forward: .5, right: .5 });
+    digital.update(1 / 60, { forward: true, right: true });
+  }
+  assert.ok(partial.speed > 0 && partial.speed < full.speed);
+  assert.ok(Math.abs(partial.steer - full.steer / 2) < 1e-10);
+  assert.equal(full.speed, digital.speed); assert.equal(full.u, digital.u);
+  const reverse = new DrivingController();
+  for (let frame = 0; frame < 60; frame++) reverse.update(1 / 60, { brake: .5 });
+  assert.ok(reverse.speed < 0);
+});

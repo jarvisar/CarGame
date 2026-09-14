@@ -38,6 +38,20 @@ Open the local URL printed by Vite. For a production build, run `npm run build`,
 
 Touch controls appear on touch devices. Driving starts directly with the keyboard or touch controls; the welcome button also dismisses the introduction. Leaving the tab pauses the drive.
 
+### Controllers
+
+Basic support uses the browser's [Gamepad API](https://w3c.github.io/gamepad/) for connected USB/Bluetooth controllers and handheld controls exposed as a gamepad. Press a controller button after opening the page if it has not been detected yet.
+
+- **Left stick / D-pad:** steer (stick has a small deadzone).
+- **RT / R2:** gas; **LT / L2:** brake, then reverse. Analog triggers support partial pressure.
+- **Bottom face button (Xbox A / PlayStation Cross):** gas fallback.
+- **Right face button (Xbox B / PlayStation Circle):** brake/reverse fallback.
+- **Start / Menu / Options:** pause or resume.
+- **Left face button (Xbox X / PlayStation Square):** change view.
+- **Top face button (Xbox Y / PlayStation Triangle):** reset to the road.
+
+Touch driving buttons hide while a controller is detected and return when it disconnects. Disconnecting during a drive pauses the game. Release held controls before resuming after a menu or focus change. Journey selection still uses touch or mouse. Standard browser mappings work best; unmapped devices use the same button indices as a rough fallback, with no device-specific remapping. AYN Thor compatibility depends on its controls being exposed to the browser as a gamepad; it has not been tested on physical hardware.
+
 ## Implementation
 
 - `src/world/route.js`: continuous road, coastline, height functions, and deterministic terrain samples.
@@ -51,11 +65,13 @@ Touch controls appear on touch devices. Driving starts directly with the keyboar
 - `src/vehicle.js`: small procedural car, fixed-step arcade driving, steering smoothing, gentle heading assistance, slope alignment, and soft roadside limits. Position, orientation, body lean, steering, and wheels interpolate between physics steps before the camera follows the car.
 - `src/timing.js`: 60 Hz physics with display-rate rendering via `requestAnimationFrame`, including high-refresh and variable-refresh displays. Actual frame delivery depends on the browser, system settings, and available GPU/CPU performance. Pausing preserves interpolation progress; resets and journey changes discard old poses.
 - `src/rendering.js`: fixed isometric camera, three zoom levels (165-unit medium default, 115-unit close, 235-unit scenic), lighting, fog, and shadows. Zoom changes the projection without reallocating the canvas buffers.
-- `src/input.js`, `src/audio.js`, `src/main.js`: keyboard/touch input, optional synthesized sound, and scene lifecycle.
+- `src/input.js`, `src/gamepad.js`, `src/audio.js`, `src/main.js`: keyboard/touch/controller input, optional synthesized sound, and scene lifecycle.
 
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
 
 Run `npm test` for deterministic generation, continuity, driving, and streaming checks.
+
+`npm run test:controller` checks simulated controller detection, driving, pause/resume, modal isolation, disconnect/reconnect, and touch-control visibility in Chrome. Set `TEST_URL` to use a development server other than `http://127.0.0.1:5173`.
 
 With the development server running, `npm run test:browser` checks keyboard/touch controls and streaming in Chrome, and `npm run test:scenery` checks landmarks, bounded GPU resources, visible water animation, and frozen animation while paused. These browser scripts use the installed Windows Chrome executable. Screenshots and reports are written to `.artifacts/`.
 

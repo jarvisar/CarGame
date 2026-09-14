@@ -94,7 +94,10 @@ async function boot() {
         } catch { toast('Sound is unavailable in this browser'); }
       }
     }
-    const input = new Input(action);
+    const input = new Input(action, connected => {
+      toast(connected ? 'Controller connected · RT / R2 to drive' : 'Controller disconnected');
+      if (!connected && started && !paused) setPaused(true);
+    });
     $('#change-journey').addEventListener('click', openJourneys);
     $('#close-journeys').addEventListener('click', () => journeyDialog.close());
     journeyDialog.addEventListener('close', () => { if (!changingJourney) setPaused(journeyWasPaused || document.hidden); });
@@ -105,7 +108,7 @@ async function boot() {
     });
     document.querySelectorAll('button[data-journey]').forEach(button => button.addEventListener('click', () => changeJourney(button.dataset.journey)));
     for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', () => action(name));
-    $('#start').addEventListener('click', () => { start(); toast(window.matchMedia('(any-pointer: coarse)').matches ? 'Hold Gas to drive · steer with ← →' : 'W / ↑ to accelerate · S / ↓ to brake'); });
+    $('#start').addEventListener('click', () => { start(); toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Hold Gas to drive · steer with ← →' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
     document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } frameClock.suspend(); });
     window.addEventListener('blur', () => { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
@@ -122,6 +125,7 @@ async function boot() {
     }
     const simulate = dt => vehicle.update(dt, started ? input.state : {});
     function frame(timestamp) {
+      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || journeyDialog.open || changingJourney, paused });
       frameClock.tick(timestamp, !paused, simulate);
       const dt = frameClock.dt;
       if (!paused) {
