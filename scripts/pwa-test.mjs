@@ -50,7 +50,9 @@ async function checkProduction(base) {
     });
     assert.equal(manifest.data.display, 'standalone');
     assert.equal(new URL(manifest.data.start_url, manifest.url).href, url);
-    for (const icon of manifest.data.icons) {
+    assert.ok(manifest.data.screenshots.some(screenshot => screenshot.form_factor === 'wide'));
+    assert.ok(manifest.data.screenshots.some(screenshot => screenshot.form_factor === 'narrow'));
+    for (const icon of [...manifest.data.icons, ...manifest.data.screenshots]) {
       const dimensions = await page.evaluate(async src => {
         const image = new Image(); image.src = src; await image.decode();
         return `${image.naturalWidth}x${image.naturalHeight}`;
@@ -99,8 +101,26 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    await page.evaluate(() => {
+      const event = new Event('beforeinstallprompt', { cancelable: true });
+      event.prompt = async () => { window.testInstallPromptCalled = true; };
+      event.userChoice = Promise.resolve({ outcome: 'dismissed' });
+      window.dispatchEvent(event);
+    });
+    await page.locator('#welcome .pwa-install-button').click();
+    assert.equal(await page.evaluate(() => window.testInstallPromptCalled), true);
+    await page.locator('#welcome .pwa-install-button').click();
+    assert.equal(await page.locator('#welcome .pwa-install-help').isVisible(), true);
+    assert.match(await page.locator('#welcome .pwa-install-help').textContent(), /browser menu/);
+    await page.setViewportSize({ width: 393, height: 851 });
+    await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-mobile-install.png' : 'pwa-mobile-subpath-install.png') });
+    await page.locator('#welcome .pwa-install-button').focus();
+    await page.keyboard.press('Space');
+    assert.equal(await page.locator('#welcome .pwa-install-help').isVisible(), false);
+    await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+    assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), false);
     assert.deepEqual(errors, []);
-    console.log(`PASS ${base}: Chrome installability, icons, offline journeys/driving, safe updates and cache cleanup`);
+    console.log(`PASS ${base}: Chrome installability, icons/screenshots, install button/fallback, offline journeys/driving, safe updates and cache cleanup`);
   } finally {
     await context.close();
     await new Promise(resolve => server.close(resolve));

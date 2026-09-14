@@ -1,6 +1,6 @@
 import { roadFrame, roadHeight, positionAt, randomAt, smoothstep } from './route.js';
 
-export const SNOW_STEP = 8;
+export const SNOW_STEP = 4;
 export const LAMP_SPACING = 52;
 export const snowRoadHeight = s => roadHeight(s) + 38 + 5 * Math.sin(s / 270);
 export const snowFrame = s => ({ ...roadFrame(s), y: snowRoadHeight(s) });
@@ -28,12 +28,16 @@ export function mountainHeight(s, u) {
   return apron + peak * smoothstep(11, 26, u) + rockFaces;
 }
 
+const valleyColumns = Array.from({ length: 26 }, (_, i) => -350 + i * 299 / 25);
+const uplandColumns = Array.from({ length: 26 }, (_, i) => 103 + i * 247 / 25);
 export function snowColumns(s) {
   const edge = ledgeEdge(s);
-  return [-350, -300, -250, -210, -178, -148, -123, -103, -87, -73, -61, -51,
-    edge - 25, edge - 17, edge - 12, edge - 8, edge - 3, edge, -10, -7, 0, 7, 11,
-    16, 22, 28, 35, 43, 51, 60, 70, 80, 91, 103, 117, 134, 155, 180, 210, 245, 290, 350];
+  return [...valleyColumns, edge - 28, edge - 24, edge - 20, edge - 17, edge - 14, edge - 11,
+    edge - 8, edge - 5, edge - 2, edge, -10, -7, 0, 7, 11,
+    16, 22, 28, 35, 43, 51, 60, 70, 80, 91, ...uplandColumns];
 }
+const initialColumns = snowColumns(0);
+export const SNOW_COLUMN_COUNT = initialColumns.length;
 export function snowHeight(s, u) {
   const h = snowRoadHeight(s);
   if (Math.abs(u) <= 7) return h;
@@ -41,13 +45,17 @@ export function snowHeight(s, u) {
     const d = ledgeEdge(s) - u;
     const drop = 105 * smoothstep(0, 31, d) ** .8 + 18 * smoothstep(31, 105, d);
     const valley = smoothstep(35, 130, d) * (8 * Math.sin(s / 89 + u / 57) + 12 * Math.sin(s / 127 - u / 63) ** 2);
-    return h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17)) - drop + valley;
+    const fissure = (3.2 * (.5 + .5 * Math.sin(s / 6.7 + u / 47)) ** 8 + 1.3 * Math.sin(s / 11 + u / 19))
+      * smoothstep(1, 7, d) * (1 - smoothstep(29, 43, d));
+    return h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17)) - drop + valley - fissure;
   }
-  return h + mountainHeight(s, u);
+  const fissure = 2.8 * (.5 + .5 * Math.sin(s / 7.3 + u / 39)) ** 7
+    * smoothstep(14, 25, u) * (1 - smoothstep(48, 73, u));
+  return h + mountainHeight(s, u) - fissure;
 }
 export const snowPosition = (s, u, y = snowHeight(s, u)) => positionAt(s, u, y);
 export function snowVertex(row, column) {
-  const base = snowColumns(row * SNOW_STEP)[column], road = Math.abs(base) <= 7;
+  const road = Math.abs(initialColumns[column]) <= 7;
   const s = row * SNOW_STEP + (road ? 0 : (randomAt(row, column + 811) - .5) * 3.3);
   const columns = snowColumns(s);
   const gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 40), (columns[column + 1] ?? columns[column] + 40) - columns[column]);

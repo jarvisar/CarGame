@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
-import { SNOW_STEP, LAMP_SPACING, snowColumns, snowVertex, snowPosition, snowHeight, snowRoadHeight, lampAt, summitForCell } from './snow-route.js';
+import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowHeight, snowRoadHeight, lampAt, summitForCell } from './snow-route.js';
+import { buildCrags } from './snow-geology.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -43,7 +44,11 @@ function instances(group, geo, mat, items, name) {
 class SnowChunk {
   constructor(index) {
     this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `snow-chunk-${index}`; this.owned = [];
-    this.buildTerrain(); this.buildRoad(); this.buildScenery(index);
+    this.buildTerrain(); this.buildRoad();
+    this.crags = buildCrags(index);
+    this.addMesh(this.crags.rock, terrainMaterial, 'mountain-rock-buttresses');
+    this.addMesh(this.crags.snow, terrainMaterial, 'crag-snow-ledges');
+    this.buildScenery(index);
   }
   addMesh(g, mat, name) {
     const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.castShadow = true; mesh.receiveShadow = true;
@@ -51,9 +56,12 @@ class SnowChunk {
   }
   buildTerrain() {
     const vertices = [], colors = [], cross = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3();
+    const sampleRow = row => Array.from({ length: SNOW_COLUMN_COUNT }, (_, col) => snowVertex(row, col));
+    let current = sampleRow(this.start / SNOW_STEP);
     for (let row = this.start / SNOW_STEP; row < (this.start + CHUNK_LENGTH) / SNOW_STEP; row++) {
-      for (let col = 0; col < snowColumns(0).length - 1; col++) {
-        const a = snowVertex(row, col), b = snowVertex(row + 1, col), c = snowVertex(row, col + 1), d = snowVertex(row + 1, col + 1);
+      const next = sampleRow(row + 1);
+      for (let col = 0; col < SNOW_COLUMN_COUNT - 1; col++) {
+        const a = current[col], b = next[col], c = current[col + 1], d = next[col + 1];
         const tris = (row + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
         tris.forEach((tri, i) => {
           ab.set(tri[1].x - tri[0].x, tri[1].y - tri[0].y, tri[1].z - tri[0].z);
@@ -68,6 +76,7 @@ class SnowChunk {
           triangle(vertices, colors, ...tri, color, this.start);
         });
       }
+      current = next;
     }
     this.addMesh(geometry(vertices, colors), terrainMaterial, 'snowy-mountain');
   }
@@ -94,6 +103,15 @@ class SnowChunk {
       const direction = new THREE.Vector3().fromArray(b).sub(new THREE.Vector3().fromArray(a));
       metal.push({ p: a.map((v, i) => (v + b[i]) / 2), scale: [width, direction.length(), depth], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
     };
+    const pine = (s, u, y, height, angle) => {
+      trunks.push({ p: point(s, u, y + height * .26), scale: [.25, height * .6, .25] });
+      for (let tier = 0; tier < 3; tier++) {
+        const width = height * (.27 - tier * .062), coneHeight = height * .48;
+        const centerY = y + height * (.36 + tier * .22);
+        pines.push({ p: point(s, u, centerY), scale: [width, coneHeight, width], angle });
+        caps.push({ p: point(s, u, centerY + coneHeight * .12), scale: [width * .9, coneHeight * .83, width * .9], angle });
+      }
+    };
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const y = snowRoadHeight(s), endY = snowRoadHeight(s + 4);
       metal.push({ p: point(s, -7.2, y + .73), scale: [.2, 1.65, .22] });
@@ -114,13 +132,23 @@ class SnowChunk {
       const y = snowHeight(s, u);
       if (slope > 1.65) continue;
       const height = 5 + random() * 8.5, angle = random() * Math.PI;
-      trunks.push({ p: point(s, u, y + height * .26), scale: [.25, height * .6, .25] });
-      for (let tier = 0; tier < 3; tier++) {
-        const width = height * (.27 - tier * .062), coneHeight = height * .48;
-        const centerY = y + height * (.36 + tier * .22);
-        pines.push({ p: point(s, u, centerY), scale: [width, coneHeight, width], angle });
-        caps.push({ p: point(s, u, centerY + coneHeight * .12), scale: [width * .9, coneHeight * .83, width * .9], angle });
+      pine(s, u, y, height, angle);
+    }
+    for (const tree of this.crags.trees) pine(tree.s, tree.u, tree.y, tree.height, tree.angle);
+    for (const ledge of this.crags.ledges) {
+      const count = 1 + Math.floor(random() * 4);
+      for (let i = 0; i < count; i++) {
+        const s = ledge.s + (random() - .5) * ledge.rs, u = ledge.u + (random() - .5) * ledge.ru;
+        const size = .3 + random() * .6;
+        rocks.push({ p: point(s, u, ledge.y + size * .2), scale: [size, size * .65, size * .8], angle: random() * 6 });
       }
+    }
+    // Loose angular debris gathers below the face and around the roadside toe.
+    for (let i = 0; i < 105; i++) {
+      const s = this.start + random() * CHUNK_LENGTH;
+      const u = i % 3 ? -51 - random() * 31 : 12 + random() * 10;
+      const size = .35 + random() ** 1.6 * 1.9, y = snowHeight(s, u);
+      rocks.push({ p: point(s, u, y + size * .2), scale: [size, size * (.6 + random() * .6), size * .78], angle: random() * 6 });
     }
     for (let i = 0; i < 115; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = (random() > .5 ? 1 : -1) * (12 + random() ** 1.8 * 160);
