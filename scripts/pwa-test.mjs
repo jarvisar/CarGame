@@ -44,6 +44,13 @@ async function checkProduction(base) {
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
     await page.waitForFunction(() => navigator.serviceWorker.controller);
+    await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
+    await page.setViewportSize({ width: 393, height: 851 });
+    await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-invitation.png' : 'pwa-invitation-subpath.png') });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
+    await page.waitForFunction(() => localStorage.getItem('coastline-install-dismissed'));
+    await page.setViewportSize({ width: 1280, height: 720 });
     const manifest = await page.evaluate(async () => {
       const link = document.querySelector('link[rel=manifest]');
       return { url: link.href, data: await (await fetch(link.href)).json() };
@@ -69,6 +76,7 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Dismissal survives reload');
     // All journey assets are available even when switching for the first time offline.
     for (const journey of await page.locator('button[data-journey]').evaluateAll(buttons => buttons.map(button => button.dataset.journey))) {
       await page.locator('#change-journey').click();

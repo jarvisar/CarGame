@@ -10,6 +10,8 @@ Browser wording and availability vary. Installed copies open in a standalone win
 
 The welcome and pause screens include an **Add to home screen** button. When Chrome offers a native install prompt, it changes to **Install Coastline** and opens that prompt on tap. Otherwise it shows browser-menu instructions; on iPhone/iPad it explains the Share flow. Automatic browser prompts are not guaranteed, and an already installed app hides these controls.
 
+After the initial loading screen fades, a dismissible install invitation opens on the welcome screen. **Not now** or Escape dismisses it for seven days on that browser; the existing install buttons remain available. The invitation never interrupts an already started drive or appears in standalone mode. A tap is still required to open Chrome's native installation dialog. Without a native prompt, the invitation shows the appropriate manual installation instructions.
+
 The manifest includes real desktop (`wide`) and mobile (`narrow`) screenshots for Chrome's richer install UI. Refresh them with `node scripts/pwa-screenshots.mjs` after significant visual changes. These metadata warnings are separate from basic installation eligibility.
 
 For phone testing, open the deployed **HTTPS** URL in Chrome directly. A local network URL such as `http://192.168.x.x:5173` is not a secure context and does not qualify for the normal PWA install flow. After deploying a new build, close all existing Coastline tabs and installed windows and reopen the site to allow a downloaded worker update to activate; a second close/reopen may be needed if the first visit downloads the update. Check Chrome's menu for **Install app** or **Add to home screen** if no automatic prompt appears.

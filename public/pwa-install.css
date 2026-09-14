@@ -4,4 +4,12 @@
 .pwa-install-button:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }
 .pwa-install .pwa-install-help { font: inherit; font-size: 12px; line-height: 1.5; margin: 4px 0 0; }
 #pause-overlay .pwa-install { text-align: center; padding: 0 12px; }
+#pwa-install-invitation { box-sizing: border-box; width: min(420px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 28px; border: 1px solid #254c4326; border-radius: 18px; background: #f4f1df; color: #254c43; box-shadow: 0 20px 80px #152e3a40; }
+#pwa-install-invitation::backdrop { background: #152e3a66; backdrop-filter: blur(5px); }
+#pwa-install-invitation h2 { font: 32px/1.12 Georgia, serif; margin: 0 0 14px; }
+#pwa-install-invitation > p { font-size: 14px; line-height: 1.6; margin: 0 0 18px; }
+#pwa-install-invitation .pwa-install-button { min-height: 44px; padding: 12px 18px; border-radius: 6px; background: #254c43; color: #f4f1df; text-decoration: none; font-weight: 600; }
+#pwa-install-invitation .pwa-install-help { margin-top: 14px; }
+.pwa-install-later { min-height: 44px; margin-top: 8px; border: 0; background: transparent; color: inherit; padding: 10px 0; cursor: pointer; font: inherit; font-size: 13px; }
+.pwa-install-later:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 @media (max-height: 560px) { .pwa-install { margin-top: 2px; } .pwa-install .pwa-install-help { font-size: 11px; max-width: 300px; } }
