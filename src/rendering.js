@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fitSunShadow } from './shadows.js';
 
 export function createRendering(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -10,7 +11,7 @@ export function createRendering(canvas) {
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0'); scene.fog = new THREE.Fog('#c2e2db', 460, 860);
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -160; sun.shadow.camera.right = 160; sun.shadow.camera.top = 200; sun.shadow.camera.bottom = -160;
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 650; sun.shadow.normalBias = .65; sun.shadow.bias = -.0003; sun.shadow.radius = 2;
   scene.add(sun); scene.add(sun.target);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
@@ -25,6 +26,7 @@ export function createRendering(canvas) {
     const aspect = width / height;
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
+    if (initialized) fitSunShadow(camera, sun);
   }
   function update(car, dt, origin) {
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
@@ -37,6 +39,7 @@ export function createRendering(canvas) {
     const nextHeight = THREE.MathUtils.damp(viewHeight, view === 0 ? 235 : 165, 4, dt);
     if (Math.abs(nextHeight - viewHeight) > .01) { viewHeight = nextHeight; resize(); }
     sun.position.copy(follow).add(sunOffset); sun.target.position.copy(follow);
+    fitSunShadow(camera, sun);
   }
   window.addEventListener('resize', resize); resize();
   function setJourney(id) {
