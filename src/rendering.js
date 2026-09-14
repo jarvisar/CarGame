@@ -40,6 +40,13 @@ export function createRendering(canvas) {
   }
   window.addEventListener('resize', resize); resize();
   function setJourney(id) {
+    if (id === 'snow') {
+      scene.background.set('#101a2b'); scene.fog.color.set('#152238');
+      sky.color.set('#90a9d9'); sky.groundColor.set('#202b43'); sky.intensity = .72;
+      sun.color.set('#a9c5ff'); sun.intensity = 1.05; sunOffset.set(-150, 230, 110);
+      renderer.toneMappingExposure = .9;
+      return;
+    }
     const desert = id === 'desert';
     scene.background.set(desert ? '#dfb399' : '#b8dfe0'); scene.fog.color.set(desert ? '#dab49b' : '#c2e2db');
     sky.color.set(desert ? '#e5d8d0' : '#e4f2f5'); sky.groundColor.set(desert ? '#79635a' : '#617149');

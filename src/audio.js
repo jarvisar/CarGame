@@ -27,8 +27,8 @@ export class DriveAudio {
     this.master.gain.setTargetAtTime(this.enabled && !paused ? .7 : 0, now, .15);
     this.engine.frequency.setTargetAtTime(34 + Math.abs(speed) * 2.1, now, .12);
     this.engineGain.gain.setTargetAtTime(.018 + Math.abs(speed) * .0012, now, .12);
-    const desert = this.journey === 'desert';
-    this.windFilter.frequency.setTargetAtTime(desert ? 1150 : 750, now, .5);
-    this.surfGain.gain.setTargetAtTime(desert ? .06 + Math.sin(time * .19) * .014 : .095 + Math.sin(time * .33) * .03, now, .3);
+    const inland = this.journey !== 'coast';
+    this.windFilter.frequency.setTargetAtTime(this.journey === 'snow' ? 1400 : inland ? 1150 : 750, now, .5);
+    this.surfGain.gain.setTargetAtTime(inland ? .06 + Math.sin(time * .19) * .014 : .095 + Math.sin(time * .33) * .03, now, .3);
   }
 }

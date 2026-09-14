@@ -11,6 +11,7 @@ export function createCar() {
   const body = new THREE.Group(); car.add(body);
   const coral = mat('#d96143'); const roof = mat('#f5e8c8'); const glass = mat('#36545a', { roughness: .3, metalness: .16 });
   const tires = mat('#303b36'); const chrome = mat('#c9cbb6', { metalness: .2 });
+  const nightLights = [];
   box(body, [2.05, .64, 3.9], [0, .9, 0], coral);
   box(body, [1.96, .24, 1.12], [0, 1.3, -1.32], coral);
   box(body, [1.92, .22, .74], [0, 1.28, 1.51], coral);
@@ -21,8 +22,11 @@ export function createCar() {
     box(body, [.085, .16, 2], [side * .92, 1.24, .14], coral);
     box(body, [.09, .08, .27], [side * 1.03, 1.14, .52], chrome);
     box(body, [.23, .15, .29], [side * 1.1, 1.42, -.64], coral);
-    box(body, [.42, .25, .055], [side * .64, 1.03, -1.978], mat('#fff5cf', { emissive: '#e9cc84', emissiveIntensity: .24 }));
-    box(body, [.33, .18, .05], [side * .72, 1.03, 1.978], mat('#8e3328', { emissive: '#b8220d', emissiveIntensity: .1 }));
+    const front = mat('#fff5cf', { emissive: '#e9cc84', emissiveIntensity: .24 });
+    const rear = mat('#8e3328', { emissive: '#b8220d', emissiveIntensity: .1 });
+    box(body, [.42, .25, .055], [side * .64, 1.03, -1.978], front);
+    box(body, [.33, .18, .05], [side * .72, 1.03, 1.978], rear);
+    nightLights.push({ material: front, day: .24, night: 2.2 }, { material: rear, day: .1, night: 2.5 });
   }
   box(body, [1.98, .14, .17], [0, .64, -1.97], chrome);
   box(body, [1.98, .14, .17], [0, .64, 1.97], chrome);
@@ -42,7 +46,7 @@ export function createCar() {
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(.23, .23, .295, 10), roof); hub.rotation.z = Math.PI / 2; pivot.add(hub);
     wheels.push({ pivot, wheel, hub, front: z < 0 });
   }
-  return { car, body, wheels };
+  return { car, body, wheels, nightLights };
 }
 
 export class DrivingController {
@@ -54,6 +58,7 @@ export class DrivingController {
     this.update(0, {});
   }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
+  setNight(enabled) { for (const light of this.nightLights) light.material.emissiveIntensity = enabled ? light.night : light.day; }
   setRoute(route, state = {}) {
     this.route = route; this.s = state.s ?? 24; this.distance = state.distance ?? 0;
     this.pitch = 0; this.roll = 0; this.body.rotation.set(0, 0, 0); this.reset();

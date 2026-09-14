@@ -36,7 +36,7 @@ async function boot() {
       $('#weather-copy').textContent = data.weather; $('#temperature').textContent = data.temperature;
       $('#welcome p').textContent = data.introduction; $('#pause-overlay p').textContent = data.breather;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = journey === 'desert' ? '#efc692' : '#c2e7e8';
+      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function openJourneys() {
@@ -61,9 +61,10 @@ async function boot() {
         else renderer.compile(scene, camera);
         world.dispose(); world = nextWorld; journey = id;
         vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
+        vehicle.setNight(id === 'snow');
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
         vehicle.car.position.z = vehicle.groundedPosition.z + world.origin;
-        rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time);
+        rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); renderer.render(scene, camera);
         toast(`Welcome to ${JOURNEYS[id].title}`);
       } catch (error) {
@@ -120,7 +121,7 @@ async function boot() {
         // Fixed simulation steps keep acceleration and handling consistent across frame rates.
         while (accumulator >= 1 / 60) { vehicle.update(1 / 60, controls); accumulator -= 1 / 60; }
         world.update(vehicle.s); vehicle.car.position.z = vehicle.groundedPosition.z + world.origin;
-        rendering.update(vehicle.car, dt, world.origin); world.animate(time);
+        rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }
       audio.update(vehicle.speed, time, paused);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
