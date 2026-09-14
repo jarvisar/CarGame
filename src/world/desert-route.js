@@ -17,8 +17,9 @@ export function desertColumns(s) {
     const { foot } = canyonProfile(s, side);
     const wash = -dryWashCenter(s);
     const floor = side < 0 ? [7, 15, 20, wash - 3, wash - 1.5, wash, wash + 1.5, wash + 3] : [7, 15, 20, 27, 32];
+    const upland = Array.from({ length: 30 }, (_, i) => foot + 47 + (360 - foot - 47) * i / 29);
     return [...floor, foot - 7, foot, foot + 6, foot + 9, foot + 12, foot + 19, foot + 24,
-      foot + 28, foot + 34, foot + 41, foot + 47, foot + 62, foot + 84, foot + 115, foot + 160, foot + 220, 360];
+      foot + 28, foot + 34, foot + 41, ...upland];
   };
   return [...sideColumns(-1).reverse().map(u => -u), 0, ...sideColumns(1)];
 }
@@ -40,8 +41,10 @@ export function desertHeight(s, u) {
   const shoulder = smoothstep(7, 36, Math.abs(u));
   const dunes = 2.8 * Math.sin(s / 62 + u / 33) + 1.6 * Math.sin(s / 27 - u / 41);
   const foothills = smoothstep(32, 175, Math.abs(u)) * (3 + 5 * Math.sin(s / 103 + u / 77) ** 2);
+  const rim = smoothstep(41, 65, Math.abs(u) - canyonProfile(s, Math.sign(u) || 1).foot)
+    * (2.7 * Math.sin(s / 21 + u / 17) + 1.6 * Math.sin(s / 11 - u / 13));
   const wash = 1 - smoothstep(.5, 3, Math.abs(u - dryWashCenter(s)));
-  return roadHeight(s) + shoulder * (dunes + foothills) + canyonRise(s, u) - wash * 1.05;
+  return roadHeight(s) + shoulder * (dunes + foothills) + canyonRise(s, u) + rim - wash * 1.05;
 }
 export function desertPosition(s, u, height) { return positionAt(s, u, height ?? desertHeight(s, u)); }
 

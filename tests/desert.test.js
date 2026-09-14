@@ -25,6 +25,24 @@ test('desert formations are deterministic and keep clear of the driving corridor
   }
 });
 
+test('continuous canyon walls surround a clear road through long and reverse journeys', () => {
+  for (let s = -12000; s <= 12000; s += 19) {
+    const columns = desertColumns(s);
+    assert.equal(columns.length, DESERT_COLUMNS.length);
+    for (let i = 1; i < columns.length; i++) assert.ok(columns[i] > columns[i - 1], `terrain folds at ${s}`);
+    for (const side of [-1, 1]) {
+      const { foot, height } = canyonProfile(s, side);
+      assert.ok(foot - 7 > 32, `wall enters valley floor at ${s}`);
+      assert.ok(height > 18);
+      assert.equal(canyonRise(s, side * 17), 0);
+      assert.ok(desertHeight(s, side * (foot + 41)) - roadHeight(s) > 14, `missing canyon rim at ${s}`);
+      const rim = side * (foot + 28);
+      assert.ok(Math.abs(desertHeight(s - .001, rim) - desertHeight(s + .001, rim)) < .02);
+    }
+    for (const u of [-7, 0, 7]) assert.equal(desertHeight(s, u), roadHeight(s));
+  }
+});
+
 test('desert driving stays grounded and switching routes restores the given place', () => {
   const car = new DrivingController(desertDrivingRoute);
   for (let i = 0; i < 7200; i++) {

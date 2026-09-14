@@ -42,9 +42,9 @@ export function createRendering(canvas) {
   function setJourney(id) {
     const desert = id === 'desert';
     scene.background.set(desert ? '#dfb399' : '#b8dfe0'); scene.fog.color.set(desert ? '#dab49b' : '#c2e2db');
-    sky.color.set(desert ? '#ead6c5' : '#e4f2f5'); sky.groundColor.set(desert ? '#795447' : '#617149');
+    sky.color.set(desert ? '#e5d8d0' : '#e4f2f5'); sky.groundColor.set(desert ? '#79635a' : '#617149');
     sky.intensity = desert ? 1.27 : 1.45;
-    sun.color.set(desert ? '#ffd8aa' : '#fff1db'); sun.intensity = desert ? 2.45 : 2.5;
+    sun.color.set(desert ? '#ffe0bc' : '#fff1db'); sun.intensity = desert ? 2.45 : 2.5;
     sunOffset.set(...(desert ? [-170, 150, 120] : [-110, 240, 100]));
     renderer.toneMappingExposure = desert ? .92 : .94;
   }

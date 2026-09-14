@@ -52,6 +52,19 @@ for (let i = 0; i < 31; i++) {
 }
 const leafGeometry = geometry(leafPositions);
 
+// Broad, folded leaves give the agaves a different silhouette from fine yuccas.
+const agavePositions = [];
+for (let i = 0; i < 13; i++) {
+  const angle = i * 2.399963, x = Math.cos(angle), z = Math.sin(angle);
+  const length = .9 + randomAt(i, 724) * .8;
+  const left = { x: -z * .18, y: .08, z: x * .18 };
+  const right = { x: z * .18, y: .08, z: -x * .18 };
+  const fold = { x: x * length * .6, y: .58, z: z * length * .6 };
+  const tip = { x: x * length, y: .28 + randomAt(i, 725) * .4, z: z * length };
+  for (const p of [left, fold, right, left, tip, fold, fold, tip, right]) agavePositions.push(p.x, p.y, p.z);
+}
+const agaveGeometry = geometry(agavePositions);
+
 class DesertChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = [];
@@ -64,8 +77,8 @@ class DesertChunk {
   }
   buildGround() {
     const positions = [], colors = [];
-    const sand = ['#d9a477', '#d39b6f', '#dfae81', '#cf966a', '#e3b387', '#d5a174'];
-    const stone = ['#b96645', '#c5744a', '#ae5c40', '#d38a57', '#b3694a', '#bb7250'];
+    const sand = ['#d7a47c', '#d3a079', '#dbaa81', '#d09b73', '#deae84', '#d5a37c'];
+    const stone = ['#b77759', '#c0825e', '#ac6a51', '#cc8e68', '#b87659', '#bd7e60'];
     for (let row = this.start / DESERT_STEP; row < (this.start + CHUNK_LENGTH) / DESERT_STEP; row++) {
       for (let col = 0; col < DESERT_COLUMNS.length - 1; col++) {
         const a = desertVertex(row, col), b = desertVertex(row + 1, col), c = desertVertex(row, col + 1), d = desertVertex(row + 1, col + 1);
@@ -80,7 +93,7 @@ class DesertChunk {
             const stratum = Math.floor(canyonRise(s, u) / 7);
             color = new THREE.Color(stone[((stratum + Math.floor(facet * 3)) % stone.length + stone.length) % stone.length]);
             if (distance > 12 && distance < 24) color.lerp(new THREE.Color('#d89c70'), .25);
-            color.multiplyScalar(.94 + facet * .12);
+            color.multiplyScalar(.97 + facet * .06);
           } else if (Math.abs(u - dryWashCenter(s)) < 2.3) {
             color = new THREE.Color(facet > .5 ? '#b08d6d' : '#b99876');
           } else color = new THREE.Color(sand[Math.floor(facet * sand.length)]);
@@ -151,7 +164,7 @@ class DesertChunk {
   }
   buildPlants() {
     const random = seededRandom(this.index + 64713);
-    const stones = [], bushes = [], trunks = [], crowns = [], cacti = [];
+    const stones = [], bushes = [], trunks = [], crowns = [], cacti = [], agaves = [];
     const stoneColors = ['#c67a48', '#af643d', '#db9858', '#c28650', '#dbab74'];
     const greens = ['#6c753f', '#8e8546', '#626d44', '#959255'];
     const sample = () => ({ s: this.start + random() * CHUNK_LENGTH, u: (random() > .5 ? 1 : -1) * (10 + random() ** 1.5 * 210) });
@@ -203,6 +216,13 @@ class DesertChunk {
       }
       if (i % 9 === 0) cacti.push({ p: [p.x + 1.1, p.y + .55, p.z + this.start], scale: [.45, .7, .45], color: '#819052' });
     }
+    for (let i = 0; i < 30; i++) {
+      const s = this.start + random() * CHUNK_LENGTH;
+      const u = (random() > .5 ? 1 : -1) * (12 + random() * 33);
+      if (!canGrow(s, u)) continue;
+      const p = desertPosition(s, u), size = .7 + random() * .65;
+      agaves.push({ p: [p.x, p.y, p.z + this.start], scale: [size, size, size], r: [0, random() * 6, 0], color: i % 2 ? '#7e8970' : '#929371' });
+    }
     const branch = (a, b, radius) => {
       const direction = new THREE.Vector3().subVectors(b, a);
       trunks.push({ p: a.clone().add(b).multiplyScalar(.5).toArray(), scale: [radius, direction.length(), radius], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
@@ -228,6 +248,7 @@ class DesertChunk {
     instances(this.group, trunkGeometry, barkMaterial, trunks);
     instances(this.group, leafGeometry, plantMaterial, crowns);
     instances(this.group, cactusGeometry, plantMaterial, cacti);
+    instances(this.group, agaveGeometry, plantMaterial, agaves);
   }
   dispose() {
     this.group.removeFromParent();
