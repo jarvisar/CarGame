@@ -21,6 +21,7 @@ export class Input {
         if (e.code === 'KeyR') onAction('reset');
         if (e.code === 'KeyV') onAction('view');
         if (e.code === 'KeyM') onAction('sound');
+        if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('nextJourney');
       }
     });
     window.addEventListener('keyup', e => this.keys.delete(e.code));

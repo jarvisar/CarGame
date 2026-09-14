@@ -87,6 +87,11 @@ async function boot() {
     }
     async function action(name) {
       if (changingJourney) return;
+      if (name === 'nextJourney') {
+        const journeys = Object.keys(JOURNEYS);
+        await changeJourney(journeys[(journeys.indexOf(journey) + 1) % journeys.length]);
+        return;
+      }
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);

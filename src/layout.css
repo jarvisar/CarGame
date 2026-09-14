@@ -162,3 +162,21 @@ body[data-journey=snow] .location .speedometer { background: none; }
 @media (max-width: 360px) {
   .location svg { display: none; }
 }
+
+/* Anchor dismiss icons to the help area's corner, away from the copy. */
+.dismiss-control-help, .touch-controls .dismiss-control-help, .controls .dismiss-control-help {
+  position: absolute; top: 0; right: 0; width: 32px; height: 32px; min-width: 32px; min-height: 32px;
+  padding: 0; transform: none; background: transparent; font-size: 17px;
+}
+.dismiss-control-help > span { position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 22px; height: 22px; line-height: 1; }
+.dismiss-control-help:hover { background: transparent; }
+.dismiss-control-help:hover > span { background: #25473e15; border-radius: 50%; }
+.controls > [data-control-help] { position: static; }
+#stick-help { padding: 28px 14px 12px; }
+#stick-help .dismiss-control-help { top: 2px; right: 2px; }
+@media (min-width: 1101px) and (pointer: fine) {
+  body:not([data-control-help-dismissed=true]) .controls { padding-right: 36px; }
+}
+@media (any-pointer: coarse) {
+  .dismiss-control-help, .touch-controls .dismiss-control-help { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+}

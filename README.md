@@ -35,6 +35,7 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 - **Space:** strong brake
 - **V:** cycle through medium (default), close, and scenic orthographic views. Medium matches the previous closer view; close adds another zoom level.
 - **R:** return to the road at the current location
+- **N:** switch to the next scene, cycling through all routes while preserving each route’s progress
 - **P / Escape:** pause / resume
 - **M:** optional synthesized ocean and engine sound
 
