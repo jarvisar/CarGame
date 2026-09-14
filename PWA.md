@@ -6,11 +6,13 @@ Build with `npm run build` and deploy the entire `dist/` folder to an HTTPS host
 - **Android:** open in Chrome and use the browser menu's Install app or Add to Home screen option.
 - **Desktop Chrome / Edge:** use the install icon in the address bar or the browser menu's install option.
 
-Browser wording and availability vary. Installed copies open in a standalone window with the existing touch and keyboard controls.
+Browser wording and availability vary. The manifest requests `fullscreen` on launch, allowing Chrome on Android to hide the status and navigation bars. Unsupported browsers fall back to standalone mode. Android may temporarily reveal system controls following a swipe. Existing installations may take time to receive the updated manifest; after deploying, close and reopen the installed app. If it still uses the old display mode, reinstall from the updated HTTPS site. The existing touch and keyboard controls are unchanged. Install invitations are hidden in both fullscreen and standalone modes.
 
 The welcome and pause screens include an **Add to home screen** button. When Chrome offers a native install prompt, it changes to **Install Coastline** and opens that prompt on tap. Otherwise it shows browser-menu instructions; on iPhone/iPad it explains the Share flow. Automatic browser prompts are not guaranteed, and an already installed app hides these controls.
 
-After the initial loading screen fades, a dismissible install invitation opens on the welcome screen. **Not now** or Escape dismisses it for seven days on that browser; the existing install buttons remain available. The invitation never interrupts an already started drive or appears in standalone mode. A tap is still required to open Chrome's native installation dialog. Without a native prompt, the invitation shows the appropriate manual installation instructions.
+After the initial loading screen fades, a small install banner slides down from the top without blocking the menu. It disappears after eight seconds, when the user clicks **×**, or when driving starts. Hovering or focusing its controls pauses the timer so users can read installation instructions. Dismissal is remembered for seven days; the existing install buttons remain available. The banner does not appear in standalone mode and respects reduced-motion preferences. A tap opens Chrome's native installation dialog when available; otherwise the banner shows manual installation instructions.
+
+Run `node scripts/pwa-banner-test.mjs` to check the banner's loading, dismissal, driving, keyboard-focus, and install-button behavior independently of scene rendering.
 
 The manifest includes real desktop (`wide`) and mobile (`narrow`) screenshots for Chrome's richer install UI. Refresh them with `node scripts/pwa-screenshots.mjs` after significant visual changes. These metadata warnings are separate from basic installation eligibility.
 

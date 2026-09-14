@@ -6,7 +6,7 @@
   "lang": "en",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#d5e7d9",
   "theme_color": "#c2e7e8",
   "screenshots": [

@@ -47,7 +47,7 @@ async function checkProduction(base) {
     await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
     await page.setViewportSize({ width: 393, height: 851 });
     await page.screenshot({ path: path.resolve('.artifacts', base === '/' ? 'pwa-invitation.png' : 'pwa-invitation-subpath.png') });
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
     await page.waitForFunction(() => localStorage.getItem('coastline-install-dismissed'));
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -55,7 +55,7 @@ async function checkProduction(base) {
       const link = document.querySelector('link[rel=manifest]');
       return { url: link.href, data: await (await fetch(link.href)).json() };
     });
-    assert.equal(manifest.data.display, 'standalone');
+    assert.equal(manifest.data.display, 'fullscreen');
     assert.equal(new URL(manifest.data.start_url, manifest.url).href, url);
     assert.ok(manifest.data.screenshots.some(screenshot => screenshot.form_factor === 'wide'));
     assert.ok(manifest.data.screenshots.some(screenshot => screenshot.form_factor === 'narrow'));

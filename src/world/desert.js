@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight } from './route.js';
-import { DESERT_COLUMNS, DESERT_STEP, desertVertex, desertPosition, desertHeight, canyonProfile, canyonRise, dryWashCenter, mesasForChunk, insideMesa } from './desert-route.js';
+import { DESERT_COLUMNS, DESERT_STEP, desertVertex, desertPosition, desertHeight, canyonProfile, dryWashCenter, mesasForChunk, insideMesa } from './desert-route.js';
 
 const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
@@ -27,9 +27,10 @@ function triangle(positions, colors, a, b, c, color, start, upward = true) {
   if (upward && (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) { positions.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
 }
-function instances(group, source, material, items) {
+function instances(group, source, material, items, name) {
   if (!items.length) return;
   const mesh = new THREE.InstancedMesh(source, material, items.length);
+  if (name) mesh.name = name;
   items.forEach((item, index) => {
     transform.position.set(...item.p); transform.rotation.set(...(item.r ?? [0, 0, 0]));
     if (item.q) transform.quaternion.copy(item.q);
@@ -65,11 +66,43 @@ for (let i = 0; i < 13; i++) {
 }
 const agaveGeometry = geometry(agavePositions);
 
+// Bent, narrow blades catch the light around the reference's scrub pockets.
+const grassPositions = [];
+for (let i = 0; i < 17; i++) {
+  const angle = i * 2.399963, x = Math.cos(angle), z = Math.sin(angle);
+  const height = .45 + randomAt(i, 862) * .6;
+  const bend = .22 + randomAt(i, 863) * .4;
+  grassPositions.push(-z * .035, 0, x * .035, x * bend * .4, height * .7, z * bend * .4, z * .035, 0, -x * .035,
+    z * .035, 0, -x * .035, x * bend * .4, height * .7, z * bend * .4, x * bend, height, z * bend);
+}
+const grassGeometry = geometry(grassPositions);
+
+// Uneven rings make broad broken slabs with sloping fracture faces.
+const slabPositions = [];
+const slabRings = [[-.35, .93], [.08, 1.08], [.48, .68]].map(([y, radius], layer) =>
+  Array.from({ length: 7 }, (_, i) => {
+    const angle = i / 7 * Math.PI * 2;
+    const r = radius * (.85 + randomAt(i, 864) * .3);
+    return { x: Math.cos(angle) * r + layer * .07, y: y + (randomAt(i, 865) - .5) * .14, z: Math.sin(angle) * r };
+  }));
+for (let i = 0; i < 7; i++) {
+  const next = (i + 1) % 7;
+  for (let layer = 0; layer < 2; layer++) {
+    const a = slabRings[layer][i], b = slabRings[layer][next], c = slabRings[layer + 1][i], d = slabRings[layer + 1][next];
+    // Counterclockwise rings viewed from above; wall winding faces outward.
+    triangle(slabPositions, null, a, c, b, null, 0, false);
+    triangle(slabPositions, null, b, c, d, null, 0, false);
+  }
+  triangle(slabPositions, null, { x: .1, y: .52, z: 0 }, slabRings[2][i], slabRings[2][next], null, 0);
+  triangle(slabPositions, null, { x: 0, y: -.42, z: 0 }, slabRings[0][i], slabRings[0][next], null, 0, false);
+}
+const slabGeometry = geometry(slabPositions);
+
 class DesertChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = [];
     this.group.name = `desert-chunk-${index}`;
-    this.buildGround(); this.buildMesas(); this.buildRoad(); this.buildPlants();
+    this.buildGround(); this.buildMesas(); this.buildRoad(); this.buildPlants(); this.buildReferenceDetails();
   }
   addMesh(source, material, castShadow = false) {
     const mesh = new THREE.Mesh(source, material); mesh.castShadow = castShadow; mesh.receiveShadow = true;
@@ -77,8 +110,9 @@ class DesertChunk {
   }
   buildGround() {
     const positions = [], colors = [];
-    const sand = ['#d7a47c', '#d3a079', '#dbaa81', '#d09b73', '#deae84', '#d5a37c'];
-    const stone = ['#b77759', '#c0825e', '#ac6a51', '#cc8e68', '#b87659', '#bd7e60'];
+    const sand = ['#e7b77d', '#e5b47a', '#ebbd83', '#e2b178', '#e9ba80', '#e6b67c'];
+    const stone = ['#c77a46', '#d38247', '#cb7540', '#be6c3e', '#dc884a', '#c57745'];
+    const ab = new THREE.Vector3(), ac = new THREE.Vector3();
     for (let row = this.start / DESERT_STEP; row < (this.start + CHUNK_LENGTH) / DESERT_STEP; row++) {
       for (let col = 0; col < DESERT_COLUMNS.length - 1; col++) {
         const a = desertVertex(row, col), b = desertVertex(row + 1, col), c = desertVertex(row, col + 1), d = desertVertex(row + 1, col + 1);
@@ -89,14 +123,19 @@ class DesertChunk {
           const distance = Math.abs(u) - canyonProfile(s, Math.sign(u) || 1).foot;
           const facet = randomAt(row * 2 + i, col + 393);
           let color;
-          if (distance > -4) {
-            const stratum = Math.floor(canyonRise(s, u) / 7);
-            color = new THREE.Color(stone[((stratum + Math.floor(facet * 3)) % stone.length + stone.length) % stone.length]);
-            if (distance > 12 && distance < 24) color.lerp(new THREE.Color('#d89c70'), .25);
-            color.multiplyScalar(.97 + facet * .06);
+          ab.subVectors(tri[1], tri[0]); ac.subVectors(tri[2], tri[0]);
+          const normal = ab.cross(ac).normalize();
+          const steepness = 1 - Math.abs(normal.y);
+          if (distance > -4 && steepness > .24) {
+            // Give an entire vertical face a related color instead of noisy strata.
+            const block = Math.floor(randomAt(Math.floor(s / 24), Math.sign(u) + 393) * stone.length);
+            color = new THREE.Color(stone[block]).multiplyScalar(.97 + facet * .06);
           } else if (Math.abs(u - dryWashCenter(s)) < 2.3) {
-            color = new THREE.Color(facet > .5 ? '#b08d6d' : '#b99876');
-          } else color = new THREE.Color(sand[Math.floor(facet * sand.length)]);
+            color = new THREE.Color(facet > .5 ? '#c4a078' : '#caa67e');
+          } else {
+            color = new THREE.Color(sand[Math.floor(facet * sand.length)]);
+            if (distance > -4) color.lerp(new THREE.Color('#e2a568'), .32);
+          }
           triangle(positions, colors, ...tri, color, this.start);
         });
       }
@@ -109,18 +148,23 @@ class DesertChunk {
     this.mesas = mesasForChunk(this.index);
     for (const mesa of this.mesas) {
       const random = seededRandom(mesa.seed + 4371);
-      const sides = mesa.ru > 20 ? 14 : 9;
+      const broad = mesa.ru >= 18 || mesa.kind === 'buttress';
+      const sides = broad ? 12 : 9;
       const shape = Array.from({ length: sides }, () => .78 + random() * .34);
       const shelf = .23 + random() * .18;
-      const layers = mesa.ru < 10
+      const layers = !broad
         ? [[0, 1.22], [.16, .81], [.58, .72], [.94, .48], [1, .43]]
-        : [[0, 1.2], [.13, 1.01], [shelf, .95], [shelf + .025, .80], [.76, .74], [.79, .69], [.985, .67], [1, .62]];
+        : [[0, 1.13], [.12, 1], [shelf, .91], [shelf + .025, .79], [.65, .77], [.97, .73], [1, .68]];
       const base = desertHeight(mesa.s, mesa.u) - 1.5;
       const rings = layers.map(([height, radius], layer) => Array.from({ length: sides }, (_, i) => {
         const angle = i / sides * Math.PI * 2;
         const erosion = layer === 0 ? 1 : 1 + (randomAt(mesa.seed + layer, i + 572) - .5) * .11;
-        const s = mesa.s + Math.sin(angle) * mesa.rs * radius * shape[i] * erosion;
-        const u = mesa.u + Math.cos(angle) * mesa.ru * radius * shape[i] * erosion;
+        // Squared shoulders and wide caps give the buttes a broken mesa silhouette.
+        const sin = Math.sin(angle), cos = Math.cos(angle);
+        const along = broad ? Math.sign(sin) * Math.abs(sin) ** .58 : sin;
+        const across = broad ? Math.sign(cos) * Math.abs(cos) ** .58 : cos;
+        const s = mesa.s + along * mesa.rs * radius * shape[i] * erosion;
+        const u = mesa.u + across * mesa.ru * radius * shape[i] * erosion;
         // The same height variation at every level keeps thin ledges from
         // crossing each other while still breaking up their horizontal edges.
         const y = layer === 0 ? desertHeight(s, u) - 1 : base + height * mesa.height * (1 + (randomAt(mesa.seed, i + 16) - .5) * .03);
@@ -130,20 +174,21 @@ class DesertChunk {
         for (let i = 0; i < sides; i++) {
           const next = (i + 1) % sides;
           const a = rings[layer][i], b = rings[layer][next], c = rings[layer + 1][i], d = rings[layer + 1][next];
-          const color = new THREE.Color(stone[Math.floor(random() * stone.length)]);
+          const color = new THREE.Color(stone[Math.floor(randomAt(mesa.seed, i + 492) * stone.length)]);
           const center = new THREE.Vector3((a.x + b.x + c.x + d.x) / 4, (a.y + b.y + c.y + d.y) / 4, (a.z + b.z + c.z + d.z) / 4);
           const mesaCenter = desertPosition(mesa.s, mesa.u);
           const outward = new THREE.Vector3(center.x - mesaCenter.x, 0, center.z - mesaCenter.z).normalize();
           const wall = layers[layer + 1][0] - layers[layer][0] > .08;
-          if (wall) center.addScaledVector(outward, (random() - .15) * Math.min(mesa.ru, mesa.rs) * .11);
+          if (wall) center.addScaledVector(outward, (random() - .15) * Math.min(mesa.ru, mesa.rs) * .14);
+          else color.set('#e4a466');
           for (const tri of [[a, b, center], [b, d, center], [d, c, center], [c, a, center]]) {
-            triangle(positions, colors, ...tri, color.clone().multiplyScalar(.92 + random() * .14), this.start, false);
+            triangle(positions, colors, ...tri, color.clone().multiplyScalar(.93 + random() * .14), this.start, false);
           }
         }
       }
       const top = desertPosition(mesa.s, mesa.u, base + mesa.height + .15);
       const ring = rings.at(-1);
-      for (let i = 0; i < sides; i++) triangle(positions, colors, top, ring[i], ring[(i + 1) % sides], new THREE.Color('#df9b59').multiplyScalar(.94 + random() * .13), this.start);
+      for (let i = 0; i < sides; i++) triangle(positions, colors, top, ring[i], ring[(i + 1) % sides], new THREE.Color('#e9af6c').multiplyScalar(.98 + random() * .04), this.start);
     }
     this.addMesh(geometry(positions, colors), groundMaterial, true).name = 'sandstone-mesas';
   }
@@ -176,14 +221,14 @@ class DesertChunk {
     }
     // Continuous rockfall aprons and fractured blocks tie both canyon walls
     // into the valley floor, with occasional larger pieces on the ledges.
-    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
+    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 6) {
       for (const side of [-1, 1]) {
         const t = s + random() * 3;
         const { foot } = canyonProfile(t, side);
         for (let piece = 0; piece < 3; piece++) {
           const ledge = piece === 2 && random() > .52;
           const u = side * (foot + (ledge ? 17 + random() * 5 : -9 + random() * 15));
-          const p = desertPosition(t, u); const size = .8 + random() ** 1.4 * (ledge ? 2.8 : 4.4);
+          const p = desertPosition(t, u); const size = .6 + random() ** 1.8 * (ledge ? 2.5 : 3.8);
           stones.push({ p: [p.x, p.y + size * .21, p.z + this.start], scale: [size * .85, size * (.8 + random()), size * 1.1], r: [random() * .5, random() * 6, random() * .45], color: stoneColors[Math.floor(random() * stoneColors.length)] });
         }
       }
@@ -249,6 +294,91 @@ class DesertChunk {
     instances(this.group, leafGeometry, plantMaterial, crowns);
     instances(this.group, cactusGeometry, plantMaterial, cacti);
     instances(this.group, agaveGeometry, plantMaterial, agaves);
+  }
+  buildReferenceDetails() {
+    // Independent seed keeps the established scenery in exactly the same places.
+    const random = seededRandom(this.index + 98173);
+    const trunks = [], foliage = [], scrub = [], grasses = [], slabs = [], gravel = [];
+    const greens = ['#7e8645', '#8e934d', '#a0a35a', '#727d47'];
+    const stoneColors = ['#d79c69', '#c3895e', '#e1af7c', '#b97851'];
+    const clear = (s, u, radius = 1) => Math.abs(u) - radius > 9
+      && Math.abs(u - dryWashCenter(s)) > radius + 2
+      && !insideMesa(s, u, 1.5)
+      && Math.abs(desertHeight(s, u + radius) - desertHeight(s, u - radius)) < radius * .6
+      && Math.abs(desertHeight(s + radius, u) - desertHeight(s - radius, u)) < radius * .6;
+    const at = (s, u) => {
+      const p = desertPosition(s, u);
+      return new THREE.Vector3(p.x, p.y, p.z + this.start);
+    };
+    const branch = (a, b, radius) => {
+      const direction = b.clone().sub(a);
+      trunks.push({ p: a.clone().add(b).multiplyScalar(.5).toArray(), scale: [radius, direction.length(), radius], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
+    };
+    // Small, twisting leafy trees complement the existing spiky Joshua trees.
+    for (let i = 0; i < 9; i++) {
+      const s = this.start + 6 + random() * (CHUNK_LENGTH - 12);
+      const side = i % 2 ? -1 : 1;
+      const u = side * (i < 6 ? 16 + random() * 27 : canyonProfile(s, side).foot + 43 + random() * 13);
+      if (!clear(s, u, 3.5)) continue;
+      const root = at(s, u); root.y -= .18;
+      const height = 3.3 + random() * 2.2;
+      const fork = root.clone().add(new THREE.Vector3(.25, height * .48, -.15));
+      branch(root, fork, height * .055);
+      for (let arm = 0; arm < 4; arm++) {
+        const angle = arm * 1.57 + random() * .65;
+        const elbow = fork.clone().add(new THREE.Vector3(Math.cos(angle) * height * .24, height * .19, Math.sin(angle) * height * .24));
+        const tip = elbow.clone().add(new THREE.Vector3(Math.cos(angle) * .3, height * (.17 + random() * .13), Math.sin(angle) * .3));
+        branch(fork, elbow, height * .031); branch(elbow, tip, height * .018);
+        for (let lobe = 0; lobe < 4; lobe++) {
+          const theta = lobe * 2.4 + angle, size = height * (.15 + random() * .09);
+          const p = tip.clone().add(new THREE.Vector3(Math.cos(theta) * size * .6, (random() - .3) * size, Math.sin(theta) * size * .6));
+          foliage.push({ p: p.toArray(), scale: [size, size * .78, size * .88], r: [0, theta, .1], color: greens[(arm + lobe) % greens.length] });
+        }
+      }
+    }
+    // Broad slabs sit in little groups, with chips spilling into nearby sand.
+    for (let i = 0; i < 12; i++) {
+      const s = this.start + 8 + random() * (CHUNK_LENGTH - 16), side = i % 2 ? -1 : 1;
+      const u = side * (i < 8 ? 19 + random() * 25 : canyonProfile(s, side).foot + 43 + random() * 12);
+      if (!clear(s, u, 5)) continue;
+      for (let j = 0; j < 3; j++) {
+        const t = s + (random() - .5) * 7, v = u + (random() - .5) * 5;
+        if (!clear(t, v, 3)) continue;
+        const size = j === 0 ? 2.8 + random() * 1.6 : 1 + random() * 1.4;
+        const p = at(t, v); p.y += size * .17;
+        slabs.push({ p: p.toArray(), scale: [size * 1.25, size * .85, size * .82], r: [(random() - .5) * .2, random() * Math.PI * 2, (random() - .5) * .15], color: stoneColors[(i + j) % stoneColors.length] });
+      }
+      for (let j = 0; j < 15; j++) {
+        const t = s + (random() - .5) * 13, v = u + (random() - .5) * 10;
+        if (!clear(t, v, .5)) continue;
+        const size = .12 + random() ** 2 * .48, p = at(t, v); p.y += size * .2;
+        gravel.push({ p: p.toArray(), scale: [size, size * .6, size * .8], r: [.15, random() * 6, .2], color: stoneColors[j % stoneColors.length] });
+      }
+    }
+    // Vegetation grows in scattered pockets, leaving open sand between them.
+    for (let i = 0; i < 42; i++) {
+      const s = this.start + 5 + random() * (CHUNK_LENGTH - 10), side = i % 2 ? -1 : 1;
+      const u = side * (i % 4 ? 12 + random() * 31 : canyonProfile(s, side).foot + 43 + random() * 20);
+      if (!clear(s, u, 2)) continue;
+      const size = .6 + random() * .6;
+      for (let lobe = 0; lobe < 5; lobe++) {
+        const angle = lobe * 2.4, t = s + Math.cos(angle) * size * .5, v = u + Math.sin(angle) * size * .5;
+        const p = at(t, v); p.y += size * .28;
+        scrub.push({ p: p.toArray(), scale: [size * .6, size * (.4 + random() * .25), size * .55], r: [0, angle, 0], color: greens[(i + lobe) % greens.length] });
+      }
+      for (let j = 0; j < 6; j++) {
+        const t = s + (random() - .5) * 6, v = u + (random() - .5) * 6;
+        if (!clear(t, v, .7)) continue;
+        const p = at(t, v), scale = .7 + random() * .8;
+        grasses.push({ p: p.toArray(), scale: [scale, scale, scale], r: [0, random() * 6, 0], color: j % 2 ? '#c2aa68' : '#a3a064' });
+      }
+    }
+    instances(this.group, trunkGeometry, barkMaterial, trunks, 'desert-leafy-tree-branches');
+    instances(this.group, bushGeometry, plantMaterial, foliage, 'desert-leafy-tree-canopies');
+    instances(this.group, bushGeometry, plantMaterial, scrub, 'desert-scrub-pockets');
+    instances(this.group, grassGeometry, plantMaterial, grasses, 'desert-dry-grass');
+    instances(this.group, slabGeometry, rockMaterial, slabs, 'desert-fractured-slabs');
+    instances(this.group, stoneGeometry, rockMaterial, gravel, 'desert-stone-chips');
   }
   dispose() {
     this.group.removeFromParent();

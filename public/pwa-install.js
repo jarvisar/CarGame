@@ -1,24 +1,45 @@
 (() => {
-  const standalone = window.matchMedia('(display-mode: standalone)');
+  const appDisplay = window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)');
   let installed = false;
-  const isInstalled = () => installed || standalone.matches || navigator.standalone === true;
+  const isInstalled = () => installed || appDisplay.matches || navigator.standalone === true;
   if (isInstalled()) return;
 
   let installPrompt;
-  const invitation = document.createElement('dialog');
+  const invitation = document.createElement('section');
   invitation.id = 'pwa-install-invitation';
+  invitation.hidden = true;
+  invitation.setAttribute('role', 'region');
   invitation.setAttribute('aria-labelledby', 'pwa-install-heading');
   invitation.setAttribute('aria-describedby', 'pwa-install-description');
-  invitation.innerHTML = '<h2 id="pwa-install-heading">Take the scenic route with you.</h2><p id="pwa-install-description">Add Coastline to your home screen for a full-screen drive, even offline after your first visit.</p>';
+  invitation.innerHTML = '<h2 id="pwa-install-heading">Take the scenic route with you.</h2><p id="pwa-install-description">Install Coastline for your next little escape.</p>';
   document.body.append(invitation);
   const dismissalKey = 'coastline-install-dismissed';
   function dismissedRecently() {
     try { return Date.now() - Number(localStorage.getItem(dismissalKey)) < 7 * 24 * 60 * 60 * 1000; }
     catch { return false; }
   }
-  invitation.addEventListener('close', () => {
+  let dismissTimer;
+  function dismissInvitation() {
+    clearTimeout(dismissTimer);
+    invitation.hidden = true;
+    menuObserver.disconnect();
     try { localStorage.setItem(dismissalKey, String(Date.now())); } catch { /* Storage is optional. */ }
+  }
+  function startDismissTimer() {
+    clearTimeout(dismissTimer);
+    if (!invitation.hidden && !invitation.contains(document.activeElement)) {
+      dismissTimer = setTimeout(dismissInvitation, 8000);
+    }
+  }
+  invitation.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse') clearTimeout(dismissTimer); });
+  invitation.addEventListener('pointerleave', startDismissTimer);
+  invitation.addEventListener('focusin', () => clearTimeout(dismissTimer));
+  invitation.addEventListener('focusout', () => setTimeout(startDismissTimer, 0));
+  invitation.addEventListener('keydown', event => {
+    event.stopPropagation();
+    if (event.key === 'Escape') dismissInvitation();
   });
+  invitation.addEventListener('keyup', event => event.stopPropagation());
   const controls = [];
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -50,7 +71,7 @@
         try {
           await prompt.prompt();
           await prompt.userChoice;
-          if (invitation.open) invitation.close();
+          if (!invitation.hidden) dismissInvitation();
         } catch {
           showHelp();
         } finally {
@@ -72,15 +93,19 @@
     });
   }
 
-  const later = document.createElement('button');
-  later.type = 'button';
-  later.className = 'pwa-install-later';
-  later.textContent = 'Not now';
-  later.autofocus = true;
-  later.addEventListener('click', () => invitation.close());
-  invitation.append(later);
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'pwa-install-close';
+  close.textContent = '×';
+  close.setAttribute('aria-label', 'Dismiss install invitation');
+  close.addEventListener('click', dismissInvitation);
+  invitation.append(close);
 
   const loading = document.querySelector('#loading');
+  const welcome = document.querySelector('#welcome');
+  const menuObserver = new MutationObserver(() => {
+    if (welcome?.classList.contains('hidden')) dismissInvitation();
+  });
   let ready = false;
   const observer = new MutationObserver(showWhenReady);
   if (loading) observer.observe(loading, { attributes: true, attributeFilter: ['class'] });
@@ -92,7 +117,9 @@
     await Promise.allSettled(loading.getAnimations().map(animation => animation.finished));
     if (!window.isSecureContext || isInstalled() || dismissedRecently() ||
       document.querySelector('#error:not([hidden]), #welcome.hidden, dialog[open]')) return;
-    invitation.showModal();
+    invitation.hidden = false;
+    if (welcome) menuObserver.observe(welcome, { attributes: true, attributeFilter: ['class'] });
+    startDismissTimer();
   }
   showWhenReady();
 
@@ -110,10 +137,11 @@
     installed = true;
     installPrompt = undefined;
     observer.disconnect();
-    if (invitation.open) invitation.close();
+    clearTimeout(dismissTimer);
+    menuObserver.disconnect();
     invitation.remove();
     for (const { container } of controls) container.hidden = true;
   }
   window.addEventListener('appinstalled', hideInstalledControls);
-  standalone.addEventListener('change', () => { if (isInstalled()) hideInstalledControls(); });
+  appDisplay.addEventListener('change', () => { if (isInstalled()) hideInstalledControls(); });
 })();
