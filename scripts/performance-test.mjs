@@ -44,7 +44,7 @@ try {
     await settle();
     const resizedFrame = await renderFrame(); await settle();
     assert.equal(await renderFrame(), resizedFrame, `${id}: resize must return to idle rendering`);
-    await page.keyboard.press('KeyR');
+    await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
     await page.waitForFunction(frame => window.__coastline.rendering.renderer.info.render.frame > frame, resizedFrame);
     await settle();
     const resetFrame = await renderFrame(); await settle();

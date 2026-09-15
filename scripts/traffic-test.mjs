@@ -41,7 +41,7 @@ try {
     await page.screenshot({ path: `.artifacts/traffic-${journey}.png` });
   }
   // Run the actual controller and fleet together through an impact and origin shift.
-  const impact = await page.evaluate(() => {
+  const impact = await page.evaluate(async () => {
     const a = window.__coastline;
     a.vehicle.s = 1022; a.vehicle.reset(); a.vehicle.speed = 28;
     a.traffic.reset(a.vehicle.route, a.vehicle.s);
@@ -53,7 +53,7 @@ try {
       a.world.update(a.vehicle.s); a.vehicle.render(.5, a.world.origin); a.traffic.render(.5, a.world.origin);
     }
     const result = { hit, behind: a.vehicle.s < other.s, origin: a.world.origin, playerZ: a.vehicle.car.position.z, trafficZ: other.car.position.z + a.traffic.group.position.z };
-    a.action('reset'); result.clearAfterReset = a.traffic.vehicles.every(car => Math.abs(car.s - a.vehicle.s) >= 18);
+    await a.action('reset'); result.clearAfterReset = a.traffic.vehicles.every(car => Math.abs(car.s - a.vehicle.s) >= 18);
     return result;
   });
   assert.ok(impact.hit && impact.behind && impact.clearAfterReset); assert.equal(impact.origin, 1024);

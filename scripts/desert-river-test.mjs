@@ -37,10 +37,10 @@ try {
   await page.evaluate(() => { const a = window.__coastline; a.vehicle.s = 291; a.vehicle.reset(); a.rendering.snap(); });
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => window.__coastline.vehicle.s > 310, { timeout: 30000 });
-  await page.keyboard.up('KeyW'); await page.keyboard.press('KeyR');
+  await page.keyboard.up('KeyW'); await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
   await page.keyboard.down('ArrowDown');
   await page.waitForFunction(() => window.__coastline.vehicle.s < 302, { timeout: 30000 });
-  await page.keyboard.up('ArrowDown'); await page.keyboard.press('KeyR');
+  await page.keyboard.up('ArrowDown'); await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
   await page.evaluate(() => { const a = window.__coastline; a.vehicle.s = 315; a.vehicle.reset(); a.rendering.snap(); });
   await page.keyboard.press('KeyV'); await page.keyboard.press('KeyV');
   await page.waitForTimeout(1400);

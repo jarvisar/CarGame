@@ -50,7 +50,8 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.paused), false, 'holding Start must not toggle repeatedly');
   await button(9, 0); await frames();
   await press(2); assert.match(await page.locator('#view').getAttribute('aria-label'), /Extra close view/);
-  await press(3); assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0);
+  await press(3); await page.waitForFunction(() => !window.__coastline.changingJourney);
+  assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0);
   await button(6, 1); await page.waitForFunction(() => window.__coastline.vehicle.speed < -1);
   await button(6, 0); await frames();
   for (const selector of ['#change-journey', '#view', '#reset', '#next-journey', '#pause']) {

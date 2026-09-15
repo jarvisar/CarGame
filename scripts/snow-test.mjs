@@ -18,7 +18,7 @@ try {
   await page.waitForFunction(() => window.__coastline.journey === 'snow' && !window.__coastline.changingJourney);
   await page.click('#start');
   await page.keyboard.down('KeyW'); await page.waitForFunction(() => window.__coastline.vehicle.speed > 8); await page.keyboard.up('KeyW');
-  await page.keyboard.press('KeyR');
+  await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
   await page.keyboard.down('ArrowDown'); await page.waitForFunction(() => window.__coastline.vehicle.speed < -2); await page.keyboard.up('ArrowDown');
   for (const s of [24, 148, 420, 1025, 10000, -300]) {
     await page.evaluate(s => { const a = window.__coastline; a.vehicle.s = s; a.vehicle.reset(); a.rendering.snap(); }, s);
