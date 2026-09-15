@@ -111,9 +111,9 @@ export class SnowChunk {
     }
     this.addMesh(geometry(vertices, colors), terrainMaterial, 'snowy-mountain');
   }
-  ribbon(low, high, lift, mat, name) {
+  ribbon(ranges, lift, mat, name) {
     const vertices = [];
-    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
+    for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
       const p = (t, u) => snowPosition(t, u, snowRoadHeight(t) + lift);
       const a = p(s, low), b = p(s + 2, low), c = p(s, high), d = p(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
@@ -121,11 +121,10 @@ export class SnowChunk {
     this.addMesh(geometry(vertices), mat, name);
   }
   buildRoad() {
-    this.ribbon(-7, 7, .025, snowMaterial, 'plowed-snow-shoulders');
-    this.ribbon(-5.5, 5.5, .075, roadMaterial, 'mountain-road');
-    this.ribbon(-4.98, -4.85, .094, edgeMaterial, 'road-edge');
-    this.ribbon(4.85, 4.98, .094, edgeMaterial, 'road-edge');
-    this.ribbon(-.08, .08, .096, lineMaterial, 'center-line');
+    this.ribbon([[-7, 7]], .025, snowMaterial, 'plowed-snow-shoulders');
+    this.ribbon([[-5.5, 5.5]], .075, roadMaterial, 'mountain-road');
+    this.ribbon([[-4.98, -4.85], [4.85, 4.98]], .094, edgeMaterial, 'road-edge');
+    this.ribbon([[-.08, .08]], .096, lineMaterial, 'center-line');
     const banks = [];
     for (const side of [-1, 1]) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const profile = [[5.55, .05], [6.1, .33], [6.65, .54], [7.45, .1]];

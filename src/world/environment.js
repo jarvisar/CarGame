@@ -238,9 +238,9 @@ export class CoastalChunk {
       surf.name = line === 0 ? 'shore-wash' : 'rolling-breakers';
     }
   }
-  ribbon(low, high, lift, material, dashed = false) {
+  ribbon(ranges, lift, material, dashed = false) {
     const positions = [];
-    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
+    for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
       if (dashed && Math.floor(s / 4) % 3 === 2) continue;
       const point = (t, u) => { const f = roadFrame(t); return positionAt(t, u, f.y + lift); };
       const a = point(s, low), b = point(s + 2, low), c = point(s, high), d = point(s + 2, high);
@@ -249,10 +249,11 @@ export class CoastalChunk {
     this.addMesh(geometryFrom(positions), material);
   }
   buildRoad() {
-    this.ribbon(-6.25, 6.25, .045, shoulderMaterial);
-    this.ribbon(-5.5, 5.5, .075, roadMaterial);
-    this.ribbon(-5.05, -4.89, .09, lineMaterial); this.ribbon(4.89, 5.05, .09, lineMaterial);
-    this.ribbon(-.15, -.055, .093, centerMaterial); this.ribbon(.055, .15, .093, centerMaterial);
+    this.ribbon([[-6.25, 6.25]], .045, shoulderMaterial);
+    this.ribbon([[-5.5, 5.5]], .075, roadMaterial);
+    // Matching markings share geometry and a draw call within each chunk.
+    this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, lineMaterial);
+    this.ribbon([[-.15, -.055], [.055, .15]], .093, centerMaterial);
   }
   buildScenery() {
     const random = seededRandom(this.index + 8913);

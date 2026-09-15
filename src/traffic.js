@@ -4,6 +4,7 @@ import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-m
 
 const LANE = 2.4;
 const BEHIND = 380, AHEAD = 620;
+const DENSITY = { coast: 1, snow: .75, desert: .5 };
 
 // Four separating axes give a forgiving rectangular footprint even when the
 // player is sideways. All collision coordinates are independent of render origin.
@@ -29,6 +30,14 @@ export class Traffic {
   constructor(scene, route, s, journey = 'coast') {
     this.group = new THREE.Group(); this.group.name = 'traffic'; scene.add(this.group);
     this.models = createTrafficModels();
+    // A small shared pool illuminates nearby traffic without shadow-map passes.
+    this.headlightRigs = Array.from({ length: 3 }, () => {
+      const rig = new THREE.Group();
+      const light = new THREE.SpotLight('#ffe0a6', 170, 24, .64, .8, 1.5);
+      light.castShadow = false;
+      rig.add(light, light.target);
+      return { rig, light };
+    });
     // Three cars in each direction over a kilometer: usually one or two in view.
     this.vehicles = Array.from({ length: 6 }, (_, index) => {
       const model = this.models.create(index % TRAFFIC_MODELS.length, TRAFFIC_COLORS[0]);
@@ -40,10 +49,15 @@ export class Traffic {
   random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
   reset(route, s, journey = this.journey) {
     this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300 }[journey];
+    this.spacing = 1 / (DENSITY[journey] ?? 1);
+    for (const { rig } of this.headlightRigs) {
+      rig.removeFromParent();
+      if (journey === 'snow') this.group.add(rig);
+    }
     this.lastPlayerS = s; this.models.setNight(journey === 'snow');
     for (const car of this.vehicles) {
       car.generation = 0; car.u = car.direction * LANE;
-      car.s = s - 280 + Math.floor(car.index / 2) * 360 + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35;
+      car.s = s + (-280 + Math.floor(car.index / 2) * 360 + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35) * this.spacing;
       this.respawn(car, car.s);
     }
   }
@@ -55,9 +69,9 @@ export class Traffic {
   }
   recycle(car, playerS) {
     // Pick a clear spot outside the camera, including when reversing or resetting.
-    let bestS = playerS + AHEAD - 30, bestGap = -Infinity;
+    let bestS = playerS + (AHEAD - 30) * this.spacing, bestGap = -Infinity;
     for (const offset of [-360, -300, 460, 530, 600]) {
-      const s = playerS + offset + this.random(car, 3) * 12;
+      const s = playerS + (offset + this.random(car, 3) * 12) * this.spacing;
       const gap = Math.min(...this.vehicles.filter(other => other !== car && other.direction === car.direction).map(other => Math.abs(other.s - s)));
       if (gap > bestGap) { bestGap = gap; bestS = s; }
     }
@@ -78,7 +92,7 @@ export class Traffic {
     if (Math.abs(player.s - this.lastPlayerS) > 120) this.reset(this.route, player.s);
     this.lastPlayerS = player.s;
     for (const car of this.vehicles) {
-      if (car.s < player.s - BEHIND || car.s > player.s + AHEAD) this.recycle(car, player.s);
+      if (car.s < player.s - BEHIND * this.spacing || car.s > player.s + AHEAD * this.spacing) this.recycle(car, player.s);
       car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
       let target = car.cruiseSpeed;
       const scale = this.route.frame(car.s).scale;
@@ -121,6 +135,20 @@ export class Traffic {
       car.car.position.lerpVectors(car.previousPosition, car.position, clamp(alpha, 0, 1));
       car.car.quaternion.slerpQuaternions(car.previousQuaternion, car.quaternion, clamp(alpha, 0, 1));
     }
+    if (this.journey === 'snow') {
+      const nearest = [...this.vehicles].sort((a, b) => Math.abs(a.s - this.lastPlayerS) - Math.abs(b.s - this.lastPlayerS));
+      for (const [index, { rig, light }] of this.headlightRigs.entries()) {
+        const car = nearest[index];
+        rig.position.copy(car.car.position); rig.quaternion.copy(car.car.quaternion);
+        light.position.set(0, 1.01, -car.spec.length / 2 - .05);
+        light.target.position.set(0, -1, -car.spec.length / 2 - 10);
+        // Fade in from 225 to 150 meters; every vehicle retains its glowing lamps.
+        light.intensity = 170 * clamp((225 - Math.abs(car.s - this.lastPlayerS)) / 75, 0, 1);
+      }
+    }
   }
-  dispose() { this.group.removeFromParent(); this.models.dispose(); }
+  dispose() {
+    this.group.removeFromParent(); this.models.dispose();
+    for (const { light } of this.headlightRigs) light.dispose();
+  }
 }

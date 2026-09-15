@@ -23,6 +23,21 @@ try {
     const frozenFrame = await renderFrame();
     await settle();
     assert.equal(await renderFrame(), frozenFrame, `${id}: paused scene must not redraw`);
+    const idleWork = await page.evaluate(async () => {
+      let hudMutations = 0;
+      const hud = new MutationObserver(records => { hudMutations += records.length; }), canvas = new MutationObserver(() => {});
+      for (const id of ['speed', 'distance', 'gear']) hud.observe(document.getElementById(id), { childList: true, subtree: true, characterData: true });
+      for (let i = 0; i < 20; i++) await new Promise(requestAnimationFrame);
+      hudMutations += hud.takeRecords().length;
+      hud.disconnect();
+      canvas.observe(document.querySelector('#scene'), { attributes: true, attributeFilter: ['width', 'height'] });
+      window.dispatchEvent(new Event('resize'));
+      const canvasResizes = canvas.takeRecords().length; canvas.disconnect();
+      return { hudMutations, canvasResizes };
+    });
+    assert.equal(idleWork.hudMutations, 0, `${id}: unchanged HUD text must not be replaced`);
+    assert.equal(idleWork.canvasResizes, 0, `${id}: unchanged viewport must not resize canvas buffers`);
+    await settle();
     const beforeResize = page.viewportSize();
     await page.setViewportSize({ width: beforeResize.width === 960 ? 980 : 960, height: 660 });
     await page.waitForFunction(frame => window.__coastline.rendering.renderer.info.render.frame > frame, frozenFrame);

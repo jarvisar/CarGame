@@ -199,12 +199,17 @@ async function boot() {
     window.addEventListener('pageshow', () => { audio.setHidden(document.hidden); needsRender = true; });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
+    const hud = { speed: $('#speed'), fill: $('#speed-fill'), distance: $('#distance'), gear: $('#gear') };
     function updateHud() {
       // Physics uses meters and seconds; convert only the displayed measurements.
       const mph = Math.round(Math.abs(vehicle.speed) * 3600 / 1609.344);
-      $('#speed').textContent = String(mph).padStart(2, '0'); $('#speed-fill').style.width = `${Math.min(Math.abs(vehicle.speed) / 28, 1) * 100}%`;
-      $('#distance').textContent = mileageFormat.format(vehicle.distance / 1609.344);
-      $('#gear').textContent = vehicle.speed < -.3 ? 'REVERSE' : Math.abs(vehicle.u) > 5.5 ? 'OFF ROAD' : mph > 1 ? 'DRIVING' : 'READY';
+      const speed = String(mph).padStart(2, '0'), distance = mileageFormat.format(vehicle.distance / 1609.344);
+      const gear = vehicle.speed < -.3 ? 'REVERSE' : Math.abs(vehicle.u) > 5.5 ? 'OFF ROAD' : mph > 1 ? 'DRIVING' : 'READY';
+      // Replacing unchanged text still invalidates layout, including while paused.
+      if (hud.speed.textContent !== speed) hud.speed.textContent = speed;
+      if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
+      if (hud.gear.textContent !== gear) hud.gear.textContent = gear;
+      hud.fill.style.width = `${Math.min(Math.abs(vehicle.speed) / 28, 1) * 100}%`;
     }
     function updateViewUi() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;

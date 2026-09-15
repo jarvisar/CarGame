@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { randomAt } from './route.js';
 
 const WIDTH = 300, HEIGHT = 200, DEPTH = 360, COUNT = 1350;
-const wrap = (value, extent) => ((value % extent) + extent) % extent - extent / 2;
+// Floor also wraps negative world coordinates, without two floating-point remainders per axis.
+const wrap = (value, extent) => value - Math.floor(value / extent) * extent - extent / 2;
 
 // Soft circular flakes in a world-anchored volume. A single draw call supplies
 // fine distant snow and a few larger foreground flakes without image assets.

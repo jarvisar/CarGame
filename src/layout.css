@@ -190,13 +190,14 @@ body[data-journey=snow] .location .speedometer { background: none; }
   .dismiss-control-help, .touch-controls .dismiss-control-help { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 }
 
-/* Persistent driving actions share one panel under the top-right utility buttons. */
-:root { --header-clear: calc(var(--ui-top) + 116px); }
+/* Persistent driving actions sit above the top-right utility buttons. */
+:root { --header-clear: calc(var(--ui-top) + 124px); }
+.top-actions { position: absolute; top: 64px; right: 0; }
 .drive-actions {
-  position: absolute; top: 56px; right: 0;
-  display: flex; align-items: center; padding: 3px; gap: 2px;
-  border: 1px solid #ffffff70; border-radius: 12px;
-  background: #f9f8eebf; backdrop-filter: blur(12px); pointer-events: auto;
+  position: relative; flex-shrink: 0;
+  display: flex; align-items: center; padding: 1px 3px; gap: 2px;
+  border: 1px solid #f9f8ee75; border-radius: 12px;
+  background: #f9f8ee5e; backdrop-filter: blur(12px); pointer-events: auto;
 }
 .drive-actions button {
   position: static; display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -213,7 +214,7 @@ body[data-journey=snow] .location .speedometer { background: none; }
 #app:has(#pause-overlay:not([hidden])) .brand { display: none; }
 #app:has(.welcome.hidden, #pause-overlay:not([hidden])) .topbar { justify-content: flex-end; }
 body[data-controller=true] .drive-actions { display: none; }
-body[data-journey=snow] .drive-actions { background: #17273ee8; border-color: #93acc64a; }
+body[data-journey=snow] .drive-actions { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] .drive-actions button { background: transparent; }
 body[data-journey=snow] .drive-actions button:hover { background: #304663e0; }
 @media (any-pointer: coarse), (max-width: 1100px) {

@@ -3,8 +3,16 @@ import { fitSunShadow } from './shadows.js';
 
 export function createRendering(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  let canvasWidth, canvasHeight, pixelRatio;
+  function resizeCanvas() {
+    const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio, 1.75);
+    if (width === canvasWidth && height === canvasHeight && ratio === pixelRatio) return;
+    // Update size and density together: setPixelRatio followed by setSize allocates twice.
+    renderer.setDrawingBufferSize(width, height, ratio);
+    canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
+    canvasWidth = width; canvasHeight = height; pixelRatio = ratio;
+  }
+  resizeCanvas();
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
@@ -54,7 +62,7 @@ export function createRendering(canvas) {
     fitSunShadow(camera, sun);
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
-  window.addEventListener('resize', () => { renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75)); renderer.setSize(window.innerWidth, window.innerHeight); resize(); }); resize();
+  window.addEventListener('resize', () => { resizeCanvas(); resize(); }); resize();
   function setJourney(id) {
     snowy = id === 'snow';
     if (id === 'snow') {

@@ -12,7 +12,9 @@ export function createCar() {
   const body = new THREE.Group(); car.add(body);
   const paint = mat('#d96143'); const roof = mat('#f5e8c8'); const glass = mat('#36545a', { roughness: .3, metalness: .16 });
   const tires = mat('#303b36'); const chrome = mat('#c9cbb6', { metalness: .2 });
-  const nightLights = [];
+  const front = mat('#fff5cf', { emissive: '#e9cc84', emissiveIntensity: .24 });
+  const rear = mat('#8e3328', { emissive: '#b8220d', emissiveIntensity: .1 });
+  const nightLights = [{ material: front, day: .24, night: 2.2 }, { material: rear, day: .1, night: 2.5 }];
   box(body, [2.05, .64, 3.9], [0, .9, 0], paint);
   box(body, [1.96, .24, 1.12], [0, 1.3, -1.32], paint);
   box(body, [1.92, .22, .74], [0, 1.28, 1.51], paint);
@@ -23,11 +25,8 @@ export function createCar() {
     box(body, [.085, .16, 2], [side * .92, 1.24, .14], paint);
     box(body, [.09, .08, .27], [side * 1.03, 1.14, .52], chrome);
     box(body, [.23, .15, .29], [side * 1.1, 1.42, -.64], paint);
-    const front = mat('#fff5cf', { emissive: '#e9cc84', emissiveIntensity: .24 });
-    const rear = mat('#8e3328', { emissive: '#b8220d', emissiveIntensity: .1 });
     box(body, [.42, .25, .055], [side * .64, 1.03, -1.978], front);
     box(body, [.33, .18, .05], [side * .72, 1.03, 1.978], rear);
-    nightLights.push({ material: front, day: .24, night: 2.2 }, { material: rear, day: .1, night: 2.5 });
   }
   box(body, [1.98, .14, .17], [0, .64, -1.97], chrome);
   box(body, [1.98, .14, .17], [0, .64, 1.97], chrome);

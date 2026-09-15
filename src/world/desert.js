@@ -233,9 +233,9 @@ export class DesertChunk {
     }
     this.addMesh(geometry(positions, colors), groundMaterial, true).name = 'sandstone-mesas';
   }
-  ribbon(low, high, lift, material) {
+  ribbon(ranges, lift, material) {
     const vertices = [];
-    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
+    for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
       const at = (t, u) => desertPosition(t, u, roadHeight(t) + lift);
       const a = at(s, low), b = at(s + 2, low), c = at(s, high), d = at(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
@@ -243,10 +243,10 @@ export class DesertChunk {
     this.addMesh(geometry(vertices), material);
   }
   buildRoad() {
-    this.ribbon(-6.25, 6.25, .045, sandMaterial);
-    this.ribbon(-5.5, 5.5, .075, asphaltMaterial);
-    this.ribbon(-5.05, -4.89, .09, edgeMaterial); this.ribbon(4.89, 5.05, .09, edgeMaterial);
-    this.ribbon(-.15, -.055, .093, centerMaterial); this.ribbon(.055, .15, .093, centerMaterial);
+    this.ribbon([[-6.25, 6.25]], .045, sandMaterial);
+    this.ribbon([[-5.5, 5.5]], .075, asphaltMaterial);
+    this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, edgeMaterial);
+    this.ribbon([[-.15, -.055], [.055, .15]], .093, centerMaterial);
   }
   buildPlants() {
     const random = seededRandom(this.index + 64713);
