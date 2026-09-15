@@ -6,10 +6,34 @@
     <meta name="theme-color" content="#c2e7e8" />
     <meta name="description" content="A scenic driving game with coastal highways, desert canyons, and snowy mountain roads." />
     <title>Coastline — A scenic driving game</title>
+    <!-- Keep startup styles inline so the page is covered before the game module loads. -->
+    <style>
+      html, body { margin: 0; overflow: hidden; background: #d5e7d9; }
+      .loading {
+        position: fixed; inset: 0; z-index: 8;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        background: #d5e7d9; color: #25473e;
+        font: 12px 'Segoe UI', Arial, sans-serif; letter-spacing: .3px;
+        transition: opacity .25s, visibility 0s .25s;
+      }
+      .loading.loaded { opacity: 0; visibility: hidden; pointer-events: none; }
+      .loading-spinner {
+        box-sizing: border-box; width: 20px; height: 20px;
+        border: 2px solid #25473e26; border-top-color: #25473e; border-radius: 50%;
+        animation: loading-spin .9s linear infinite;
+      }
+      .loading.loaded .loading-spinner { animation: none; }
+      @keyframes loading-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .loading { transition: none; }
+        .loading-spinner { animation: none; }
+      }
+    </style>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
     <main id="app">
+      <div id="loading" class="loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading Coastline…</span></div>
       <canvas id="scene" aria-label="A low-poly coastal landscape. Drive with WASD or the arrow keys."></canvas>
       <div class="vignette" aria-hidden="true"></div>
       <header class="topbar">
@@ -64,7 +88,6 @@
         <p class="journey-note">Your position and mileage on each route are saved for this visit.</p>
       </dialog>
       <div id="journey-transition" aria-hidden="true"><span>Changing route…</span></div>
-      <div id="loading" class="loading"><span class="loading-road"></span><span>Loading Coastline…</span></div>
       <div id="error" class="error" hidden><h2>Unable to start the game</h2><p>This drive needs a browser with WebGL 2 enabled. Try an up-to-date Chrome, Edge, Firefox, or Safari.</p><button onclick="location.reload()">Try again</button></div>
     </main>
     <script type="module" src="/src/main.js"></script>
