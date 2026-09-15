@@ -37,6 +37,10 @@ npm run dev
 
 Open the local URL printed by Vite. For a production build, run `npm run build`, then `npm run preview`.
 
+## Desktop app
+
+Windows, Linux (including the Steam Deck), and macOS builds wrap this same web build in Electron; nothing in `src/` changes. `npm run electron:dev` opens the game in a desktop window with hot reload, `npm run electron:build` packages it for the current OS, and pushing a `v*` tag builds installers for all three platforms on GitHub Actions. `npm run test:electron` checks the desktop shell against the current web build. See [ELECTRON.md](ELECTRON.md) for options, Steam Deck setup, and how the wrapper stays in sync with the web app.
+
 ## Controls
 
 The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F). Driving physics and world geometry use meters internally; displayed measurements are converted to US units.
