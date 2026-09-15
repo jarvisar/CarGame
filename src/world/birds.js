@@ -11,7 +11,7 @@ geometry.setAttribute('position', new THREE.Float32BufferAttribute([
   -.13, 0, .2, .13, 0, .2, 0, 0, .68,
 ], 3));
 geometry.computeVertexNormals();
-const material = new THREE.MeshBasicMaterial({ color: '#fff5db', side: THREE.DoubleSide });
+const material = new THREE.MeshBasicMaterial({ color: '#fffaf0', side: THREE.DoubleSide, toneMapped: false });
 material.onBeforeCompile = shader => {
   shader.uniforms.birdTime = waterClock.time;
   shader.vertexShader = 'uniform float birdTime;\n' + shader.vertexShader;
@@ -28,6 +28,13 @@ const transform = new THREE.Object3D();
 export class CoastalBirds {
   constructor(chunk) {
     this.start = chunk.start; this.phase = randomAt(chunk.index, 1761) * Math.PI * 2;
+    // Pick a clear cruising height once, including tilted rocks and their crowns.
+    // The margin covers the gentle bobbing and wings without per-frame collisions.
+    this.flightHeight = 22;
+    for (const object of chunk.group.children) if (object.name === 'tidal-sea-stacks') {
+      if (!object.boundingBox) object.computeBoundingBox();
+      this.flightHeight = Math.max(this.flightHeight, object.boundingBox.max.y + 5);
+    }
     this.mesh = new THREE.InstancedMesh(geometry, material, 4);
     this.mesh.name = 'coastal-gulls';
     chunk.group.add(this.mesh); this.update(0);
@@ -37,11 +44,11 @@ export class CoastalBirds {
     const phase = this.phase + time * .105;
     for (let i = 0; i < 4; i++) {
       const s = this.start + 64 + Math.cos(phase) * 24 - i * 2.4;
-      const u = shorelineOffset(s) - 30 + Math.sin(phase) * 18 + (i % 2 ? 2 : -2);
-      const p = positionAt(s, u, 12 + Math.sin(phase * .7) * 2 + i * .35);
+      const u = shorelineOffset(s) - 30 + Math.sin(phase) * 10 + (i % 2 ? 2 : -2);
+      const p = positionAt(s, u, this.flightHeight + Math.sin(phase * .7) * 2 + i * .35);
       transform.position.set(p.x, p.y, p.z + this.start);
       transform.rotation.set(0, -phase + Math.PI / 2, Math.sin(phase) * .16);
-      transform.scale.setScalar(.62); transform.updateMatrix(); this.mesh.setMatrixAt(i, transform.matrix);
+      transform.scale.setScalar(.78); transform.updateMatrix(); this.mesh.setMatrixAt(i, transform.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;
   }
