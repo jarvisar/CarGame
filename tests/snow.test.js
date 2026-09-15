@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
-import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineRiver } from '../src/world/snow-route.js';
+import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineLake, LAKE_LEVEL, distantMountainHeight } from '../src/world/snow-route.js';
+import { lakeClock } from '../src/world/alpine-lake.js';
+import { alpineCabin } from '../src/world/alpine-cabins.js';
 import { SnowWorld } from '../src/world/snow.js';
 import { Snowfall } from '../src/world/snowfall.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -12,9 +14,9 @@ test('mountain ledges stay continuous, ordered and clear of the driving corridor
     const columns = snowColumns(s);
     for (let col = 1; col < columns.length; col++) assert.ok(columns[col] > columns[col - 1], `folded snow terrain at ${s}`);
     for (const u of [-7, 0, 7]) assert.equal(snowHeight(s, u), snowRoadHeight(s));
-    assert.ok(snowHeight(s, ledgeEdge(s) - 155) < snowRoadHeight(s) - 88);
-    const descent = snowHeight(s, ledgeEdge(s) - 15) - snowHeight(s, ledgeEdge(s) - 80);
-    assert.ok(descent > 40 && descent < 94, `excessively steep or missing slope at ${s}`);
+    assert.ok(snowRoadHeight(s) > LAKE_LEVEL + 45);
+    const descent = snowHeight(s, ledgeEdge(s)) - LAKE_LEVEL;
+    assert.ok(descent > 45 && descent < 95, `missing lake bluff at ${s}`);
     assert.ok(snowHeight(s, 75) > snowRoadHeight(s) + 5);
     for (const u of [-60, -25, 7, 25, 70]) assert.ok(Math.abs(snowHeight(s + .001, u) - snowHeight(s - .001, u)) < .02);
   }
@@ -34,22 +36,44 @@ test('alpine summits rise inland of the road and descend on the far side', () =>
   }
 });
 
-test('the narrow alpine river sits in a submerged channel with dry banks below the ledge', () => {
-  for (let s = -10000; s < 10000; s += 11) {
-    const river = alpineRiver(s);
-    assert.ok(river.halfWidth > 2 && river.halfWidth < 4.2);
-    assert.ok(river.y < snowRoadHeight(s) - 95);
-    for (const fraction of [-.8, 0, .8]) assert.ok(snowHeight(s, river.u + river.halfWidth * fraction) < river.y - .25);
-    for (const side of [-1, 1]) assert.ok(snowHeight(s, river.u + side * (river.halfWidth + 1.5)) > river.y + .5);
+test('distant ranges have substantial peaks and saddles without height jumps at generation boundaries', () => {
+  for (const s of [-10000, -1024, 0, 256, 1024, 10000]) {
+    const heights = Array.from({ length: 31 }, (_, i) => distantMountainHeight(s, 130 + i * 18));
+    assert.ok(Math.max(...heights) > 75);
+    assert.ok(Math.max(...heights) - Math.min(...heights) > 50);
+    assert.deepEqual(heights, Array.from({ length: 31 }, (_, i) => distantMountainHeight(s, 130 + i * 18)));
   }
-  // Check actual shared terrain samples, including the noise suppression at
-  // the waterline, so the rendered channel cannot randomly fill with snow.
+  for (let cell = -20; cell <= 20; cell++) for (const spacing of [240, 312, 384]) {
+    const s = cell * spacing;
+    for (const u of [110, 175, 250, 340, 510, 660])
+      assert.ok(Math.abs(distantMountainHeight(s - .001, u) - distantMountainHeight(s + .001, u)) < .02);
+  }
+});
+
+test('the alpine lake has a level open basin and continuous dry shores', () => {
+  for (let s = -10000; s < 10000; s += 11) {
+    const lake = alpineLake(s);
+    assert.equal(lake.y, LAKE_LEVEL); assert.ok(lake.near - lake.far > 160);
+    for (const fraction of [.1, .5, .9]) assert.ok(snowHeight(s, lake.far + (lake.near - lake.far) * fraction) < lake.y - 2);
+    assert.ok(snowHeight(s, lake.near + 5) > lake.y + .45);
+    assert.ok(snowHeight(s, lake.far - 5) > lake.y + .45);
+    for (const u of [lake.near, lake.far]) assert.ok(Math.abs(snowHeight(s, u - .001) - snowHeight(s, u + .001)) < .01);
+  }
+  // Rendered shoreline samples must also remain above the level surface.
   for (let row = -256; row <= 256; row++) {
-    const river = alpineRiver(row * SNOW_STEP), columns = snowColumns(row * SNOW_STEP);
-    const center = columns.indexOf(river.u), floor = snowVertex(row, center);
-    assert.ok(floor.y < river.y - 1);
-    assert.equal(floor.s, row * SNOW_STEP);
-    for (const col of [center - 2, center + 2]) assert.ok(Math.abs(snowVertex(row, col).y - river.y) < .0001);
+    const lake = alpineLake(row * SNOW_STEP), columns = snowColumns(row * SNOW_STEP);
+    for (const u of [lake.near, lake.far]) {
+      const vertex = snowVertex(row, columns.indexOf(u));
+      assert.equal(vertex.s, row * SNOW_STEP); assert.ok(Math.abs(vertex.y - lake.y - .45) < .0001);
+    }
+  }
+});
+
+test('lakeside cabins stay on dry land through positive and negative route cells', () => {
+  for (let i = -40; i < 40; i++) {
+    const cabin = alpineCabin(i);
+    assert.ok(cabin.y > LAKE_LEVEL + .5);
+    for (const ds of [-3, 3]) assert.ok(cabin.u - 2.5 > alpineLake(cabin.s + ds).near);
   }
 });
 
@@ -109,6 +133,7 @@ test('night effects remain bounded, animate deterministically and dispose on lea
   world.flakeGeometry.addEventListener('dispose', () => disposed++);
   for (const s of [24, 148, 1025, 10000, -300, -1100]) {
     world.update(s); car.s = s; car.reset(); car.car.position.z += world.origin; world.animate(12, car);
+    assert.equal(lakeClock.value, 12);
     assert.equal(world.chunks.size, 9); assert.equal(scene.children.length, 10); assert.equal(world.lights.length, 7);
     for (const light of world.lights) assert.ok(Math.abs(light.position.z) < 1300);
     assert.deepEqual(world.headlights.position.toArray(), car.car.position.toArray());

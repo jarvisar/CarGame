@@ -23,8 +23,8 @@ export const JOURNEYS = {
   snow: {
     title: 'Midnight Alpine', label: 'MIDNIGHT ALPINE', routeNumber: '3', World: SnowWorld, route: snowDrivingRoute,
     weather: 'Light snow', temperature: '21°F',
-    introduction: 'Follow a snowy mountain road under the night sky.',
+    introduction: 'Wind above a moonlit lake through snow-covered mountains.',
     sound: 'Mountain wind and engine sounds on',
-    canvas: 'A snowy mountain road at night, with moonlit cliffs, alpine pines, guardrails and warm lamps. Drive with WASD or the arrow keys.',
+    canvas: 'A snowy mountain road above a moonlit lake, with distant mountain ranges, snow-laden firs, shore cabins and warm lamps. Drive with WASD or the arrow keys.',
   },
 };

@@ -65,6 +65,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
 .journey-card { min-width: 0; }
 
 @media (any-pointer: coarse) {
+  #next-journey { display: none; }
   .bottom-bar { bottom: calc(var(--ui-bottom) + var(--stick-size) + 16px); }
   body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); }
   .controls { gap: 4px; }

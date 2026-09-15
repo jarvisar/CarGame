@@ -1,41 +1,26 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
-import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowHeight, snowRoadHeight, lampAt, summitForCell, terrainPocket, ledgeEdge, alpineRiver } from './snow-route.js';
+import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowHeight, snowRoadHeight, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
+import { alpinePines } from './alpine-pines.js';
+import { buildAlpineLake, lakeClock } from './alpine-lake.js';
+import { CABIN_SPACING, alpineCabin, nearCabin, buildAlpineCabin } from './alpine-cabins.js';
 import { Snowfall } from './snowfall.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
-const snowMaterial = material('#bbcbe1');
+const snowMaterial = material('#c7d2df');
 const rockMaterial = material('#4b5870');
 const stoneMaterial = material('#ffffff');
-const riverMaterial = material('#ffffff', { roughness: .32, metalness: .18, vertexColors: true,
-  emissive: '#224558', emissiveIntensity: .3 });
-const riverClock = { value: 0 };
-riverMaterial.onBeforeCompile = shader => {
-  shader.uniforms.riverTime = riverClock;
-  shader.vertexShader = 'attribute vec2 riverCoord; varying vec2 vRiverCoord;\n' + shader.vertexShader;
-  shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvRiverCoord = riverCoord;');
-  shader.fragmentShader = 'uniform float riverTime; varying vec2 vRiverCoord;\n' + shader.fragmentShader;
-  shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
-    #include <color_fragment>
-    float flow = sin(vRiverCoord.x * 2.6 + sin(vRiverCoord.y * 0.35 - riverTime * 0.5) * 1.8 + vRiverCoord.y * 0.65 - riverTime * 1.1);
-    float broken = smoothstep(0.15, 0.85, sin(vRiverCoord.y * 0.83 + vRiverCoord.x * 3.2 - riverTime * 0.35));
-    float glint = pow(max(0.0, flow), 18.0) * broken;
-    diffuseColor.rgb += vec3(0.12, 0.2, 0.23) * glint * 0.45;
-  `);
-};
-riverMaterial.customProgramCacheKey = () => 'alpine-stream-v1';
-const pineMaterial = material('#203c43');
+const pineMaterial = material('#ffffff', { side: THREE.DoubleSide });
 const metalMaterial = material('#687688', { metalness: .2 });
 const barkMaterial = material('#3a3e49');
-const roadMaterial = material('#343c4a');
+const roadMaterial = material('#414a53', { roughness: .72 });
 const lineMaterial = material('#b4ab84');
 const edgeMaterial = material('#b1becf');
 const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped: false });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
-const coneGeometry = new THREE.ConeGeometry(1, 1, 7);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 
@@ -64,7 +49,13 @@ function instances(group, geo, mat, items, name) {
 class SnowChunk {
   constructor(index) {
     this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `snow-chunk-${index}`; this.owned = [];
-    this.buildTerrain(); this.buildRiver(); this.buildRoad(); this.buildScenery(index);
+    this.buildTerrain();
+    for (const part of buildAlpineLake(this.start)) this.addMesh(part.geometry, part.material, part.name).castShadow = false;
+    this.buildRoad(); this.buildScenery(index);
+    for (let i = Math.floor(this.start / CABIN_SPACING); i <= Math.floor((this.start + CHUNK_LENGTH) / CABIN_SPACING); i++) {
+      const cabin = alpineCabin(i);
+      if (cabin.s >= this.start && cabin.s < this.start + CHUNK_LENGTH) this.group.add(buildAlpineCabin(i, this.start));
+    }
   }
   addMesh(g, mat, name) {
     const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.castShadow = true; mesh.receiveShadow = true;
@@ -89,7 +80,7 @@ class SnowChunk {
           const highSnow = tri.reduce((sum, p) => sum + p.y, 0) / 3 > snowRoadHeight(s) + 54;
           const exposure = .5 + .5 * Math.sin(s / 29 + u / 19);
           const snowy = Math.abs(cross.y) > (highSnow ? .5 : .66 + exposure * .07);
-          const color = new THREE.Color(snowy ? '#b4c4dc' : '#657186');
+          const color = new THREE.Color(snowy ? '#c4d1dd' : '#6a7883');
           // Broad tonal changes let the actual fracture planes describe the
           // mountain, with only a little variation between adjacent facets.
           color.multiplyScalar(snowy ? .94 + exposure * .09 + facet * .045 : .87 + exposure * .07 + facet * .17);
@@ -99,29 +90,6 @@ class SnowChunk {
       current = next;
     }
     this.addMesh(geometry(vertices, colors), terrainMaterial, 'snowy-mountain');
-  }
-  buildRiver() {
-    const vertices = [], colors = [], coords = [];
-    // Slightly overhang the submerged banks to cover the coarse terrain
-    // triangles. Snow and stones naturally hide the water's outer edge.
-    for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
-      const sample = (t, fraction) => {
-        const river = alpineRiver(t), offset = (river.halfWidth + .35) * fraction;
-        return { ...snowPosition(t, river.u + offset, river.y), t, offset };
-      };
-      for (const [low, high] of [[-1, -.55], [-.55, .55], [.55, 1]]) {
-        const a = sample(s, low), b = sample(s + 2, low), c = sample(s, high), d = sample(s + 2, high);
-        const shade = new THREE.Color(low === -.55 ? '#305364' : '#587d8e');
-        for (let tri of [[a, b, c], [b, d, c]]) {
-          if ((tri[1].z - tri[0].z) * (tri[2].x - tri[0].x) - (tri[1].x - tri[0].x) * (tri[2].z - tri[0].z) < 0) tri = [tri[0], tri[2], tri[1]];
-          for (const p of tri) { vertices.push(p.x, p.y, p.z + this.start); colors.push(shade.r, shade.g, shade.b); coords.push(p.offset, p.t); }
-        }
-      }
-    }
-    const g = geometry(vertices, colors);
-    // Route coordinates are independent of the floating rendering origin.
-    g.setAttribute('riverCoord', new THREE.Float32BufferAttribute(coords, 2));
-    this.addMesh(g, riverMaterial, 'alpine-river').castShadow = false;
   }
   ribbon(low, high, lift, mat, name) {
     const vertices = [];
@@ -138,16 +106,30 @@ class SnowChunk {
     this.ribbon(-4.98, -4.85, .094, edgeMaterial, 'road-edge');
     this.ribbon(4.85, 4.98, .094, edgeMaterial, 'road-edge');
     this.ribbon(-.08, .08, .096, lineMaterial, 'center-line');
+    const banks = [];
+    for (const side of [-1, 1]) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
+      const profile = [[5.55, .05], [6.1, .33], [6.65, .54], [7.45, .1]];
+      const at = (t, col) => {
+        const [u, lift] = profile[col], drift = 1 + .28 * Math.sin(t / 7 + side);
+        return snowPosition(t, side * u, Math.max(snowRoadHeight(t) + lift * drift, snowHeight(t, side * u) + .035));
+      };
+      for (let i = 0; i < profile.length - 1; i++) {
+        triangle(banks, null, at(s, i), at(s + 4, i), at(s, i + 1), null, this.start);
+        triangle(banks, null, at(s + 4, i), at(s + 4, i + 1), at(s, i + 1), null, this.start);
+      }
+    }
+    this.addMesh(geometry(banks), snowMaterial, 'roadside-snowbanks');
   }
   buildScenery(index) {
-    const random = seededRandom(index + 90241), trunks = [], pines = [], caps = [], metal = [], lamps = [];
+    const random = seededRandom(index + 90241), trunks = [], metal = [], lamps = [];
+    const pines = alpinePines.map(() => []), caps = alpinePines.map(() => []);
     const rocks = alpineRockVariants.map(() => []), rockCaps = alpineRockVariants.map(() => []);
     const point = (s, u, y) => { const p = snowPosition(s, u, y); return [p.x, p.y, p.z + this.start]; };
-    const besideRiver = (s, u, margin = 2) => Math.abs(u - alpineRiver(s).u) < alpineRiver(s).halfWidth + margin;
     const stone = (s, u, size, snowy = true, tall = false) => {
-      if (besideRiver(s, u, size + .8)) return;
+      if (onLake(s, u, size + .8) || nearCabin(s, u)) return;
       const variant = Math.floor(random() * rocks.length);
-      const item = { p: point(s, u, snowHeight(s, u) + size * .12),
+      const ground = Math.min(snowHeight(s, u), snowHeight(s, u - size * .45), snowHeight(s, u + size * .45));
+      const item = { p: point(s, u, ground - size * .04),
         scale: [size * (.8 + random() * .5), size * (tall ? 1.35 : .55 + random() * .5), size * (.65 + random() * .5)],
         angle: random() * Math.PI * 2 };
       rocks[variant].push({ ...item, color: ['#455166', '#515d70', '#596477', '#414c60'][Math.floor(random() * 4)] });
@@ -158,13 +140,12 @@ class SnowChunk {
       metal.push({ p: a.map((v, i) => (v + b[i]) / 2), scale: [width, direction.length(), depth], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
     };
     const pine = (s, u, y, height, angle) => {
-      trunks.push({ p: point(s, u, y + height * .26), scale: [.25, height * .6, .25] });
-      for (let tier = 0; tier < 3; tier++) {
-        const width = height * (.27 - tier * .062), coneHeight = height * .48;
-        const centerY = y + height * (.36 + tier * .22);
-        pines.push({ p: point(s, u, centerY), scale: [width, coneHeight, width], angle });
-        caps.push({ p: point(s, u, centerY + coneHeight * .12), scale: [width * .9, coneHeight * .83, width * .9], angle });
-      }
+      if (onLake(s, u, height * .18) || nearCabin(s, u)) return;
+      const variant = Math.floor(random() * alpinePines.length), width = height * (.85 + random() * .25);
+      trunks.push({ p: point(s, u, y + height * .36), scale: [height * .018, height * .85, height * .018] });
+      const item = { p: point(s, u, y - .2), scale: [width, height, width], angle };
+      pines[variant].push({ ...item, color: ['#29473e', '#36564b', '#203b35'][Math.floor(random() * 3)] });
+      caps[variant].push(item);
     };
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const y = snowRoadHeight(s), endY = snowRoadHeight(s + 4);
@@ -179,14 +160,25 @@ class SnowChunk {
       beam(point(lamp.s, lamp.u, ground + 7.5), point(lamp.s, 6.2, ground + 7.5), .14);
       lamps.push({ p: point(lamp.s, 6.2, ground + 7.38), scale: [.62, .18, .95] });
     }
-    for (let i = 0; i < 135; i++) {
+    for (let i = 0; i < 95; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
       const u = (random() > .48 ? 1 : -1) * (12 + random() ** 1.5 * 190);
       const slope = Math.abs(snowHeight(s, u + 1) - snowHeight(s, u - 1));
       const y = snowHeight(s, u);
-      if (slope > 1.65 || besideRiver(s, u, 4)) continue;
+      if (slope > 1.5 || onLake(s, u, 4)) continue;
       const height = 5 + random() * 8.5, angle = random() * Math.PI;
       pine(s, u, y, height, angle);
+    }
+    // Fir groves follow coves on both shores, framing open stretches of water.
+    for (let i = 0; i < 13; i++) {
+      const s = this.start + random() * CHUNK_LENGTH, lake = alpineLake(s);
+      const u = i % 4 === 0 ? lake.far - 9 - random() * 20 : lake.near + 5 + random() * 13;
+      for (let j = 0; j < 3; j++) {
+        const t = s + (random() - .5) * 11, v = u + (random() - .5) * 7;
+        if (t < this.start || t >= this.start + CHUNK_LENGTH || onLake(t, v, 3)) continue;
+        if (Math.abs(snowHeight(t, v + 1) - snowHeight(t, v - 1)) > 1.6) continue;
+        pine(t, v, snowHeight(t, v), 5 + random() * 7.5, random() * Math.PI * 2);
+      }
     }
     for (let cell = Math.floor(this.start / 80) - 1; cell <= Math.floor((this.start + CHUNK_LENGTH) / 80); cell++) {
       for (const side of [-1, 1]) {
@@ -201,13 +193,13 @@ class SnowChunk {
     // Loose angular debris gathers below the face and around the roadside toe.
     for (let i = 0; i < 105; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
-      const u = i % 3 ? ledgeEdge(s) - 90 - random() * 35 : 12 + random() * 10;
+      const u = i % 3 ? alpineLake(s).near + 3 + random() * 14 : 12 + random() * 10;
       const size = .35 + random() ** 1.6 * 1.9;
       stone(s, u, size, i % 4 === 0);
     }
     for (let i = 0; i < 115; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = (random() > .5 ? 1 : -1) * (12 + random() ** 1.8 * 160);
-      if (Math.abs(snowHeight(s, u + 1) - snowHeight(s, u - 1)) > 4) continue;
+      if (Math.abs(snowHeight(s, u + 1) - snowHeight(s, u - 1)) > 2.8) continue;
       const size = .8 + random() ** 2 * 4.6;
       stone(s, u, size, true, i % 5 === 0);
       // A few fragments around larger stones read as natural rockfall groups.
@@ -218,8 +210,10 @@ class SnowChunk {
       }
     }
     instances(this.group, poleGeometry, barkMaterial, trunks, 'alpine-trunks');
-    instances(this.group, coneGeometry, pineMaterial, pines, 'alpine-pines');
-    instances(this.group, coneGeometry, snowMaterial, caps, 'pine-snow');
+    alpinePines.forEach((variant, i) => {
+      instances(this.group, variant.needles, pineMaterial, pines[i], 'alpine-firs');
+      instances(this.group, variant.snow, snowMaterial, caps[i], 'fir-snow');
+    });
     alpineRockVariants.forEach((variant, i) => {
       instances(this.group, variant.rock, stoneMaterial, rocks[i], 'alpine-boulders');
       instances(this.group, variant.snow, snowMaterial, rockCaps[i], 'boulder-snow');
@@ -261,7 +255,25 @@ export class SnowWorld {
     this.scene = scene; this.chunks = new Map(); this.origin = 0; this.center = null;
     this.effects = new THREE.Group(); this.effects.name = 'snow-night-effects'; scene.add(this.effects);
     // A fixed pool lights only nearby lamps, with no additional shadow maps.
-    this.lights = Array.from({ length: 7 }, () => { const light = new THREE.PointLight('#ffb964', 240, 32, 2); this.effects.add(light); return light; });
+    this.lights = Array.from({ length: 7 }, () => { const light = new THREE.PointLight('#ffb76b', 340, 40, 2); this.effects.add(light); return light; });
+    this.cabinLights = Array.from({ length: 2 }, () => { const light = new THREE.PointLight('#ffc080', 110, 23, 2); this.effects.add(light); return light; });
+    this.glowGeometry = new THREE.BufferGeometry();
+    this.glowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(21), 3));
+    this.glowGeometry.setAttribute('strength', new THREE.Float32BufferAttribute(new Float32Array(7), 1));
+    this.glowMaterial = new THREE.PointsMaterial({ color: '#ffc37c', size: 26, transparent: true, opacity: .38,
+      depthWrite: false, sizeAttenuation: false, blending: THREE.AdditiveBlending, toneMapped: false });
+    this.glowMaterial.onBeforeCompile = shader => {
+      shader.vertexShader = 'attribute float strength; varying float vGlow;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = strength;');
+      shader.fragmentShader = 'varying float vGlow;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+        #include <color_fragment>
+        float radius = length(gl_PointCoord - vec2(0.5));
+        diffuseColor.a *= exp(-radius * radius * 22.0) * (1.0 - smoothstep(0.32, 0.5, radius)) * vGlow;
+      `);
+    };
+    this.lampGlows = new THREE.Points(this.glowGeometry, this.glowMaterial); this.lampGlows.name = 'lamp-halos';
+    this.lampGlows.frustumCulled = false; this.effects.add(this.lampGlows);
     this.headlights = new THREE.Group(); this.effects.add(this.headlights);
     this.headlight = new THREE.SpotLight('#ffce85', 850, 45, .48, .65, 1.5);
     this.headlight.position.set(0, 1.2, -1.8); this.headlight.target.position.set(0, -.3, -27);
@@ -283,11 +295,21 @@ export class SnowWorld {
     this.lights.forEach((light, i) => {
       const lamp = lampAt(lampIndex + i - 3), p = snowPosition(lamp.s, 6.2, lamp.y - .35);
       light.position.set(p.x, p.y, p.z + this.origin);
-      light.intensity = 240 * (1 - smoothstep(120, 174, Math.abs(lamp.s - s)));
+      const strength = 1 - smoothstep(120, 174, Math.abs(lamp.s - s));
+      light.intensity = 340 * strength;
+      this.glowGeometry.attributes.position.setXYZ(i, p.x, p.y + .2, p.z + this.origin);
+      this.glowGeometry.attributes.strength.setX(i, strength);
+    });
+    this.glowGeometry.attributes.position.needsUpdate = true; this.glowGeometry.attributes.strength.needsUpdate = true;
+    const cabinIndex = Math.floor((s - 76) / CABIN_SPACING);
+    this.cabinLights.forEach((light, i) => {
+      const cabin = alpineCabin(cabinIndex + i), p = snowPosition(cabin.s, cabin.u, cabin.y);
+      light.position.set(p.x - 3, p.y + 2, p.z + this.origin);
+      light.intensity = 110 * (1 - smoothstep(210, 340, Math.abs(cabin.s - s)));
     });
   }
   animate(time, vehicle) {
-    this.time = time; riverClock.value = time;
+    this.time = time; lakeClock.value = time;
     if (vehicle) { this.headlights.position.copy(vehicle.car.position); this.headlights.quaternion.copy(vehicle.car.quaternion); }
     const anchor = snowPosition(this.s, -35, snowRoadHeight(this.s));
     this.snowfall.update(time, anchor, this.origin);
@@ -295,5 +317,6 @@ export class SnowWorld {
   dispose() {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
     this.snowfall.dispose();
+    this.glowGeometry.dispose(); this.glowMaterial.dispose();
   }
 }

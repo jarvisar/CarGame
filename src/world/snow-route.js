@@ -1,17 +1,19 @@
-import { roadFrame, roadHeight, positionAt, randomAt, smoothstep } from './route.js';
+import { roadFrame, roadHeight, positionAt, randomAt, smoothstep, lerp } from './route.js';
 
-export const SNOW_STEP = 4;
+export const SNOW_STEP = 8;
 export const LAMP_SPACING = 52;
 export const snowRoadHeight = s => roadHeight(s) + 38 + 5 * Math.sin(s / 270);
 export const snowFrame = s => ({ ...roadFrame(s), y: snowRoadHeight(s) });
 export const ledgeEdge = s => -23 - 7 * Math.sin(s / 91 + .8) - 4 * Math.sin(s / 31 + .1);
 
-// The stream follows the foot of the cliff. Terrain and water share this
-// profile so banks, chunk boundaries and floating-origin shifts stay aligned.
-export function alpineRiver(s) {
-  return { u: ledgeEdge(s) - 114 + 5 * Math.sin(s / 65 + .5),
-    halfWidth: 3.1 + .65 * Math.sin(s / 43) + .35 * Math.sin(s / 17),
-    y: snowRoadHeight(s) - 100 + 2 * Math.sin(s / 160 + .3) };
+export const LAKE_LEVEL = -4;
+export function alpineLake(s) {
+  return { near: ledgeEdge(s) - 64 - 12 * Math.sin(s / 117 + .6) - 6 * Math.sin(s / 39),
+    far: -306 + 22 * Math.sin(s / 211 + 1) + 11 * Math.sin(s / 71), y: LAKE_LEVEL };
+}
+export function onLake(s, u, margin = 0) {
+  const lake = alpineLake(s);
+  return u > lake.far - margin && u < lake.near + margin;
 }
 
 export function summitForCell(index) {
@@ -41,6 +43,32 @@ export function alpineRelief(s, u) {
   return relief * mask;
 }
 
+export function distantMountainHeight(s, u) {
+  if (u <= 130) return 0;
+  let mountains = 0;
+  // Staggered ranges overlap across deep saddles. Skewed, unequal peak
+  // profiles avoid both a flat upland and rows of identical triangular cones.
+  for (let band = 0; band < 3; band++) {
+    const spacing = 240 + band * 72, cell = Math.floor(s / spacing);
+    for (let i = cell - 2; i <= cell + 2; i++) {
+      const seed = i * 7 + band * 937;
+      const center = i * spacing + 60 + randomAt(seed, 691) * spacing * .55;
+      const ridgeU = 174 + band * 165 + (randomAt(seed, 692) - .5) * 60;
+      const ds = (s - center) / (155 + band * 55 + randomAt(seed, 693) * 80);
+      const du = (u - ridgeU) / (72 + band * 33 + randomAt(seed, 694) * 32);
+      const tilted = du + ds * (randomAt(seed, 695) - .5) * .52;
+      const radius = Math.max(Math.abs(ds) * .75 + Math.abs(tilted) * .48,
+        Math.abs(tilted) + Math.abs(ds) * .18);
+      const peak = Math.max(0, 1 - radius);
+      const height = 54 + band * 39 + randomAt(seed, 696) * 49;
+      mountains = Math.max(mountains, height * peak ** .88);
+    }
+  }
+  const foothills = 14 + 12 * Math.sin(s / 151 + u / 111) ** 2;
+  const fractures = 3.3 * Math.sin(s / 23 + u / 17) + 2.1 * Math.sin(s / 39 - u / 26);
+  return (mountains + foothills + fractures) * smoothstep(130, 175, u);
+}
+
 export function mountainHeight(s, u) {
   let peak = 0;
   const cell = Math.floor((s - 76) / 280);
@@ -54,16 +82,17 @@ export function mountainHeight(s, u) {
   const apron = (6 + 5 * Math.sin(s / 94 + u / 67) ** 2) * smoothstep(11, 34, u);
   const rockFaces = (3.3 * Math.sin(s / 18 + u / 11) + 2.1 * Math.sin(s / 31 - u / 9))
     * smoothstep(16, 36, u) * (1 - smoothstep(125, 210, u));
-  return apron + peak * smoothstep(11, 26, u) + rockFaces;
+  return apron + peak * smoothstep(11, 26, u) + rockFaces + distantMountainHeight(s, u);
 }
 
-const valleyColumns = Array.from({ length: 12 }, (_, i) => -350 + i * 130 / 11);
-const uplandColumns = Array.from({ length: 26 }, (_, i) => 103 + i * 247 / 25);
+const uplandColumns = [103, 114, 127, 142, 159, 178, 199, 222, 247, 274, 304, 337, 373, 413, 456, 503, 554, 609, 668, 731];
 export function snowColumns(s) {
-  const edge = ledgeEdge(s), river = alpineRiver(s);
-  return [...valleyColumns, ...[175, 155, 142].map(d => edge - d),
-    ...[-16, -9, -river.halfWidth, -river.halfWidth * .65, 0, river.halfWidth * .65, river.halfWidth, 9, 16].map(d => river.u + d),
-    ...[85, 75, 66, 58, 51, 44, 38, 32, 26, 21, 16, 12, 8, 4, 0].map(d => edge - d), -10, -7, 0, 7, 11,
+  const edge = ledgeEdge(s), lake = alpineLake(s);
+  return [-520, -475, -430, -390, ...[-20, -8, 0, 4, 12].map(d => lake.far + d),
+    ...[.2, .4, .6, .8].map(t => lerp(lake.far + 12, lake.near - 12, t)),
+    ...[-12, -5, -1.5, 0, 2, 6, 12].map(d => lake.near + d),
+    ...[.2, .4, .6, .8, 1].map(t => lerp(lake.near + 12, edge - 10, t)),
+    edge - 5, edge, -10, -7, 0, 7, 11,
     16, 22, 28, 35, 43, 51, 60, 70, 80, 91, ...uplandColumns];
 }
 const initialColumns = snowColumns(0);
@@ -72,19 +101,23 @@ export function snowBaseHeight(s, u) {
   const h = snowRoadHeight(s);
   if (Math.abs(u) <= 7) return h;
   if (u < -7) {
-    const distance = ledgeEdge(s) - u;
-    // Broad spurs and recesses move the actual slope contours in and out.
-    const spur = (7 * Math.sin(s / 37 + .5) + 4 * Math.sin(s / 19 - .7))
-      * smoothstep(4, 28, distance) * (1 - smoothstep(85, 145, distance));
-    const d = distance - spur;
-    const drop = 89 * smoothstep(0, 78, d) ** .95 + 17 * smoothstep(60, 155, d);
-    const valley = smoothstep(75, 155, d) * (6 * Math.sin(s / 89 + u / 57) + 9 * Math.sin(s / 127 - u / 63) ** 2);
-    const fissure = (3.2 * (.5 + .5 * Math.sin(s / 6.7 + u / 47)) ** 8 + 1.3 * Math.sin(s / 11 + u / 19))
-      * smoothstep(1, 7, d) * (1 - smoothstep(29, 43, d));
-    const height = h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17)) - drop + valley - fissure + alpineRelief(s, u);
-    const river = alpineRiver(s), distanceToRiver = Math.abs(u - river.u);
-    const channel = river.y - 1.3 + 2.6 * smoothstep(river.halfWidth * .5, river.halfWidth * 1.5, distanceToRiver);
-    return channel + (height - channel) * smoothstep(river.halfWidth + 3.5, river.halfWidth + 13, distanceToRiver);
+    const lake = alpineLake(s);
+    if (u <= lake.far) {
+      const d = lake.far - u;
+      return lake.y + .45 + 20 * smoothstep(0, 75, d)
+        + (13 + 14 * Math.sin(s / 113 + u / 72) ** 2) * smoothstep(15, 100, d);
+    }
+    if (u < lake.near) {
+      const bankDistance = Math.min(u - lake.far, lake.near - u);
+      return lake.y + .45 - 5 * smoothstep(0, 9, bankDistance) - 6 * smoothstep(9, 65, bankDistance);
+    }
+    const edge = ledgeEdge(s), distance = edge - u, width = edge - lake.near;
+    const t = Math.max(0, Math.min(1, distance / width));
+    const warp = (Math.sin(s / 31 + .5) * .2 + Math.sin(s / 13 - .7) * .08) * Math.sin(t * Math.PI);
+    const shoulder = h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17));
+    const slope = lerp(shoulder, lake.y + .45, smoothstep(0, 1, t + warp));
+    const fissure = 2.3 * (.5 + .5 * Math.sin(s / 8.7 + u / 37)) ** 7 * smoothstep(0, 12, distance);
+    return slope + (alpineRelief(s, u) - fissure) * (1 - smoothstep(.45, .78, t));
   }
   const fissure = 2.8 * (.5 + .5 * Math.sin(s / 7.3 + u / 39)) ** 7
     * smoothstep(14, 25, u) * (1 - smoothstep(48, 73, u));
@@ -94,7 +127,8 @@ export function snowBaseHeight(s, u) {
 export function terrainPocket(index, side) {
   const seed = index * 2 + (side > 0 ? 1 : 0);
   const s = index * 80 + 14 + randomAt(seed, 730) * 48;
-  return { s, u: side < 0 ? ledgeEdge(s) - 18 - randomAt(seed, 731) * 48 : 22 + randomAt(seed, 731) * 25,
+  const slopeWidth = ledgeEdge(s) - alpineLake(s).near;
+  return { s, u: side < 0 ? ledgeEdge(s) - 12 - randomAt(seed, 731) * (slopeWidth - 38) : 22 + randomAt(seed, 731) * 25,
     rs: 14 + randomAt(seed, 732) * 10, ru: 9 + randomAt(seed, 733) * 4, side, seed };
 }
 
@@ -102,7 +136,7 @@ export function snowHeight(s, u) {
   let height = snowBaseHeight(s, u);
   if (u >= -10 && u <= 11) return height;
   const side = u < 0 ? -1 : 1, cell = Math.floor(s / 80);
-  const mask = side < 0 ? 1 : 1 - smoothstep(50, 62, u);
+  const mask = side < 0 ? smoothstep(7, 23, u - alpineLake(s).near) : 1 - smoothstep(50, 62, u);
   if (!mask || (side < 0 && (u < ledgeEdge(s) - 105 || u > ledgeEdge(s) - 4))) return height;
   for (let i = cell - 1; i <= cell + 1; i++) {
     const pocket = terrainPocket(i, side);
@@ -116,15 +150,16 @@ export function snowHeight(s, u) {
 export const snowPosition = (s, u, y = snowHeight(s, u)) => positionAt(s, u, y);
 export function snowVertex(row, column) {
   const road = Math.abs(initialColumns[column]) <= 7;
-  const baseS = row * SNOW_STEP, river = alpineRiver(baseS);
-  const bank = Math.abs(snowColumns(baseS)[column] - river.u) < 18;
+  const baseS = row * SNOW_STEP, lake = alpineLake(baseS);
+  const baseU = snowColumns(baseS)[column];
+  const bank = baseU > lake.far - 10 && baseU < lake.near + 13;
   const s = baseS + (road || bank ? 0 : (randomAt(row, column + 811) - .5) * 3.3);
   const columns = snowColumns(s);
   const gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 40), (columns[column + 1] ?? columns[column] + 40) - columns[column]);
   const u = columns[column] + (road || bank ? 0 : (randomAt(row, column + 912) - .5) * Math.min(8, gap * .5));
   const p = snowPosition(s, u);
-  const riverMask = smoothstep(river.halfWidth + 1, river.halfWidth + 13, Math.abs(u - river.u));
-  p.y += (randomAt(row, column + 177) - .5) * smoothstep(10, 35, Math.abs(u)) * 1.1 * riverMask;
+  const land = smoothstep(2, 15, Math.max(lake.far - u, u - lake.near));
+  p.y += (randomAt(row, column + 177) - .5) * smoothstep(10, 35, Math.abs(u)) * .85 * land;
   return { ...p, s, u };
 }
 export function lampAt(index) {

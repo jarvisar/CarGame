@@ -26,12 +26,12 @@ try {
     const result = await page.evaluate(() => {
       const a = window.__coastline, info = a.rendering.renderer.info;
       return { s: a.vehicle.s, chunks: a.world.chunks.size, geometry: info.memory.geometries, triangles: info.render.triangles, lights: a.world.lights.length, headlight: a.world.headlight.intensity, origin: a.world.origin, carZ: a.vehicle.car.position.z, rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(),
-        rivers: [...a.world.chunks.values()].filter(chunk => chunk.group.getObjectByName('alpine-river')).length,
+        lakes: [...a.world.chunks.values()].filter(chunk => chunk.group.getObjectByName('alpine-lake')).length,
         flakeSizes: new Set(a.world.flakeGeometry.attributes.flakeSize.array).size };
     });
     assert.equal(result.chunks, 9); assert.equal(result.lights, 7); assert.ok(result.headlight > 0);
     assert.ok(result.geometry < 150); assert.ok(Math.abs(result.carZ) < 1030);
-    assert.equal(result.rivers, 9); assert.ok(result.flakeSizes > 100);
+    assert.equal(result.lakes, 9); assert.ok(result.flakeSizes > 100);
     assert.deepEqual(result.scale, initial.scale); assert.equal(result.top, initial.top);
     result.rotation.forEach((v, i) => assert.ok(Math.abs(v - initial.rotation[i]) < 1e-10));
     records.push(result);
