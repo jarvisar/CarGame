@@ -6,7 +6,7 @@
   --ui-right: calc(var(--edge) + var(--safe-right));
   --ui-bottom: calc(var(--edge) + var(--safe-bottom));
   --header-clear: calc(var(--ui-top) + 60px);
-  --stick-size: 132px;
+  --stick-size: 145.2px;
 }
 .topbar { top: var(--ui-top); left: var(--ui-left); right: var(--ui-right); gap: 12px; }
 .top-actions { gap: 8px; }
@@ -49,7 +49,8 @@ body[data-controller=true] #app :is(.controls, #pause, #change-journey) { displa
 .speedometer > #speed { font-size: 40px; }
 .speed-unit span { min-width: 0; }
 .touch-controls { left: var(--ui-left); right: var(--ui-right); bottom: var(--ui-bottom); align-items: center; gap: 16px; }
-#touch-stick { width: var(--stick-size); height: var(--stick-size); }
+#touch-stick { width: var(--stick-size); height: var(--stick-size); opacity: .65; }
+.stick-thumb { width: 52.8px; height: 52.8px; left: calc(50% - 26.4px); top: calc(50% - 26.4px); }
 
 .pause-overlay { padding: var(--header-clear) var(--ui-right) var(--ui-bottom) var(--ui-left); justify-content: flex-start; overflow-y: auto; overscroll-behavior: contain; }
 .pause-overlay > * { flex-shrink: 0; max-width: 100%; }
@@ -97,7 +98,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
 
 /* Short landscape screens trade secondary readouts for a clear driving area. */
 @media (max-height: 560px) and (orientation: landscape) {
-  :root { --edge: 6px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 114.4px; }
+  :root { --edge: 6px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 125.84px; }
   .brand-caption, .location, #stick-help { display: none; }
   .brand-mark { width: 32px; height: 32px; }
   .wordmark { font-size: 23px; }

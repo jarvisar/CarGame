@@ -49,6 +49,11 @@ export function createRendering(canvas) {
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
+    // Place the car lower on touch screens to leave more scenery visible ahead.
+    for (const framedCamera of [camera, thirdPerson.camera]) {
+      if (window.matchMedia('(any-pointer: coarse)').matches) framedCamera.setViewOffset(width, height, 0, -height * .08, width, height);
+      else framedCamera.clearViewOffset();
+    }
     if (initialized) fitSunShadow(activeCamera(), sun);
   }
   function update(car, dt, origin, touchActive = false) {
