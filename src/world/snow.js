@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
+import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
 import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
@@ -85,6 +86,7 @@ export class SnowChunk {
       const cabin = alpineCabin(i);
       if (cabin.s >= this.start && cabin.s < this.start + CHUNK_LENGTH) this.group.add(buildAlpineCabin(i, this.start));
     }
+    finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name) {
     const mesh = new THREE.Mesh(g, mat); mesh.name = name; mesh.castShadow = true; mesh.receiveShadow = true;
@@ -401,21 +403,39 @@ export class SnowWorld {
     }
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
+    // Fixed fixtures only move when the light pool advances or the world rebases.
+    // Their fades still follow the car every frame.
+    if (lampIndex !== this.lampIndex || this.origin !== this.lightOrigin) {
+      this.lamps = this.lights.map((light, i) => {
+        const lamp = lampAt(lampIndex + i - 3), p = snowPosition(lamp.s, 6.2, lamp.y - .35);
+        light.position.set(p.x, p.y, p.z + this.origin);
+        this.glowGeometry.attributes.position.setXYZ(i, p.x, p.y + .2, p.z + this.origin);
+        return lamp;
+      });
+      this.lampIndex = lampIndex;
+      this.glowGeometry.attributes.position.needsUpdate = true;
+    }
     this.lights.forEach((light, i) => {
-      const lamp = lampAt(lampIndex + i - 3), p = snowPosition(lamp.s, 6.2, lamp.y - .35);
-      light.position.set(p.x, p.y, p.z + this.origin);
+      const lamp = this.lamps[i];
       const strength = lamp.hidden ? 0 : 1 - smoothstep(120, 174, Math.abs(lamp.s - s));
       light.intensity = 340 * strength;
-      this.glowGeometry.attributes.position.setXYZ(i, p.x, p.y + .2, p.z + this.origin);
       this.glowGeometry.attributes.strength.setX(i, strength);
     });
-    this.glowGeometry.attributes.position.needsUpdate = true; this.glowGeometry.attributes.strength.needsUpdate = true;
+    this.glowGeometry.attributes.strength.needsUpdate = true;
     const cabinIndex = Math.floor((s - 76) / CABIN_SPACING);
+    if (cabinIndex !== this.cabinIndex || this.origin !== this.lightOrigin) {
+      this.cabins = this.cabinLights.map((light, i) => {
+        const cabin = alpineCabin(cabinIndex + i), p = snowPosition(cabin.s, cabin.u, cabin.y);
+        light.position.set(p.x - 3, p.y + 2, p.z + this.origin);
+        return cabin;
+      });
+      this.cabinIndex = cabinIndex;
+    }
     this.cabinLights.forEach((light, i) => {
-      const cabin = alpineCabin(cabinIndex + i), p = snowPosition(cabin.s, cabin.u, cabin.y);
-      light.position.set(p.x - 3, p.y + 2, p.z + this.origin);
+      const cabin = this.cabins[i];
       light.intensity = 110 * (1 - smoothstep(210, 340, Math.abs(cabin.s - s)));
     });
+    this.lightOrigin = this.origin;
   }
   animate(time, vehicle) {
     this.time = time; lakeClock.value = time;

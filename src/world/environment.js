@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
+import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
@@ -110,6 +111,7 @@ export class CoastalChunk {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = [];
     this.buildTerrain(); this.buildWater(); this.buildRoad(); buildLandmarks(this); this.buildScenery();
     if (index % 3 === 0) this.birds = new CoastalBirds(this);
+    finalizeChunkTransforms(this.group);
   }
   addMesh(geometry, material, shadows = false) {
     const mesh = new THREE.Mesh(geometry, material); mesh.receiveShadow = true; mesh.castShadow = shadows; this.group.add(mesh); this.owned.push(geometry); return mesh;

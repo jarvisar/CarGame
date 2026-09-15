@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+const bounds = new THREE.Box3(), point = new THREE.Vector3(), direction = new THREE.Vector3();
+
 export function stabilizeShadowFiltering() {
   // Three's PCF filter rotates its taps per screen pixel. Without temporal
   // antialiasing that grain crawls across world surfaces when the camera moves.
@@ -26,8 +28,7 @@ export function fitSunShadow(camera, sun, heightOrigin = 0, worldOrigin = 0) {
   sun.target.updateMatrixWorld();
   sun.shadow.updateMatrices(sun);
   const lightCamera = sun.shadow.camera;
-  const bounds = new THREE.Box3();
-  const point = new THREE.Vector3();
+  bounds.makeEmpty();
   if (camera.isPerspectiveCamera) {
     // Enclose the nearby chase frustum in a sphere. Its size depends only on
     // the lens, so steering and pitching cannot stretch the shadow texels.
@@ -41,7 +42,7 @@ export function fitSunShadow(camera, sun, heightOrigin = 0, worldOrigin = 0) {
     bounds.min.copy(point).addScalar(-radius);
     bounds.max.copy(point).addScalar(radius);
   } else {
-    const direction = camera.getWorldDirection(new THREE.Vector3());
+    camera.getWorldDirection(direction);
     for (const x of [-1, 1]) for (const y of [-1, 1]) for (const height of [-40, 180]) {
       point.set(x, y, -1).unproject(camera);
       point.addScaledVector(direction, (heightOrigin + height - point.y) / direction.y);

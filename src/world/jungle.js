@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
+import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
 import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleColumns, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverLipOffset, riverRocks, riverTurbulence,
   onRiver, cutHeight, gorgeWall, jungleGuardrail, sideFalls, jungleZones, jungleCrags, jungleNoise } from './jungle-route.js';
@@ -107,6 +108,7 @@ export class JungleChunk {
     this.falls = sideFalls(this.start, this.start + CHUNK_LENGTH);
     this.features = { lips: this.lips.map(lip => lip.index) };
     this.buildTerrain(); this.buildWater(); this.buildMist(); this.buildRoad(); this.buildScenery();
+    finalizeChunkTransforms(this.group);
   }
   addMesh(geometry, mat, name, shadows = false) {
     const mesh = new THREE.Mesh(geometry, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;

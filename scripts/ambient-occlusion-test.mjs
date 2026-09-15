@@ -51,8 +51,27 @@ try {
         const strength = ao.material.uniforms.intensity.value;
         ao.material.uniforms.intensity.value = 0; r.render();
         const neutral = pixels();
-        ao.material.uniforms.intensity.value = strength; r.render();
+        ao.material.uniforms.intensity.value = strength;
+        let transformUpdates = 0;
+        const updateMatrices = r.scene.updateMatrixWorld;
+        r.scene.updateMatrixWorld = function (...args) { transformUpdates++; return updateMatrices.apply(this, args); };
+        try { r.render(); } finally { r.scene.updateMatrixWorld = updateMatrices; }
         const on = pixels(), onImage = canvas.toDataURL();
+        // Compare against automatic scenery transforms and a fresh AO traversal.
+        const frozen = [], renderAO = ao.pass.render;
+        r.scene.traverse(object => { if (!object.matrixAutoUpdate) { frozen.push(object); object.matrixAutoUpdate = true; } });
+        ao.pass.render = function (...args) {
+          const previous = r.scene.matrixWorldAutoUpdate;
+          r.scene.matrixWorldAutoUpdate = true;
+          try { return renderAO.apply(this, args); } finally { r.scene.matrixWorldAutoUpdate = previous; }
+        };
+        try { r.render(); } finally {
+          ao.pass.render = renderAO;
+          for (const object of frozen) object.matrixAutoUpdate = false;
+        }
+        const automatic = pixels();
+        let transformError = 0;
+        for (let i = 0; i < on.length; i++) transformError = Math.max(transformError, Math.abs(on[i] - automatic[i]));
         let darkened = 0, brightened = 0, difference = 0, offError = 0, neutralError = 0;
         for (let i = 0; i < off.length; i += 4) {
           const delta = (off[i] + off[i + 1] + off[i + 2] - on[i] - on[i + 1] - on[i + 2]) / 3;
@@ -70,6 +89,7 @@ try {
         const extension = gl.getExtension('WEBGL_debug_renderer_info');
         return {
           perspective, darkened, brightened, averageDarkening: difference / (off.length / 4), offError, neutralError,
+          transformUpdates, transformError, autoUpdateRestored: r.scene.matrixWorldAutoUpdate,
           textures, texturesAfter: r.renderer.info.memory.textures, aoSize: [ao.pass.width, ao.pass.height],
           gpu: extension ? gl.getParameter(extension.UNMASKED_RENDERER_WEBGL) : 'unknown',
           offImage, onImage,
@@ -79,6 +99,9 @@ try {
       assert.equal(result.brightened, 0, `${journey}: AO must only darken`);
       assert.ok(result.offError <= 1, 'disabled AO preserves original rendering within GPU rounding');
       assert.ok(result.neutralError <= 1, 'zero-strength AO preserves lighting, fog, sky and antialiasing within GPU rounding');
+      assert.equal(result.transformUpdates, 1, 'color and AO reuse the same scene transforms');
+      assert.ok(result.transformError <= 1, 'cached transforms preserve automatic rendering within GPU rounding');
+      assert.equal(result.autoUpdateRestored, true, 'the next frame must update moving objects');
       assert.ok(result.averageDarkening < 15, 'subtle AO does not dim the whole screen');
       assert.equal(result.texturesAfter, result.textures, 'toggling does not leak textures');
       assert.ok(Math.max(...result.aoSize) <= 640);

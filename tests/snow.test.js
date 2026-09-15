@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CHUNK_LENGTH } from '../src/world/route.js';
-import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowGroundHeight, snowRoadHeight, snowDrivingRoute, snowBridgeAt, BRIDGE_SPACING, SNOW_STEP, LAMP_SPACING, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineLake, LAKE_LEVEL, distantMountainHeight } from '../src/world/snow-route.js';
+import { CHUNK_LENGTH, smoothstep } from '../src/world/route.js';
+import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowGroundHeight, snowRoadHeight, snowDrivingRoute, snowBridgeAt, BRIDGE_SPACING, SNOW_STEP, LAMP_SPACING, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineLake, LAKE_LEVEL, distantMountainHeight, snowPosition } from '../src/world/snow-route.js';
 import { lakeClock } from '../src/world/alpine-lake.js';
-import { alpineCabin } from '../src/world/alpine-cabins.js';
+import { alpineCabin, CABIN_SPACING } from '../src/world/alpine-cabins.js';
 import { SnowWorld, SnowChunk } from '../src/world/snow.js';
 import { Snowfall } from '../src/world/snowfall.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -131,11 +131,29 @@ test('night effects remain bounded, animate deterministically and dispose on lea
   world.update(24);
   for (const chunk of world.chunks.values()) for (const g of chunk.owned) g.addEventListener('dispose', () => disposed++);
   world.flakeGeometry.addEventListener('dispose', () => disposed++);
-  for (const s of [24, 148, 1025, 10000, -300, -1100]) {
+  for (const s of [24, 24.5, 41.99, 42.01, 148, 1023.99, 1024.01, 1025, 10000, -300, -1100, -1099.5]) {
     world.update(s); car.s = s; car.reset(); car.car.position.z += world.origin; world.animate(12, car);
     assert.equal(lakeClock.value, 12);
     assert.equal(world.chunks.size, 9); assert.equal(scene.children.length, 10); assert.equal(world.lights.length, 7);
     for (const light of world.lights) assert.ok(Math.abs(light.position.z) < 1300);
+    world.lights.forEach((light, i) => {
+      const lamp = lampAt(Math.round((s - 16) / LAMP_SPACING) + i - 3);
+      const p = snowPosition(lamp.s, 6.2, lamp.y - .35);
+      const strength = lamp.hidden ? 0 : 1 - smoothstep(120, 174, Math.abs(lamp.s - s));
+      assert.deepEqual(light.position.toArray(), [p.x, p.y, p.z + world.origin]);
+      assert.equal(light.intensity, 340 * strength);
+      assert.deepEqual(Array.from(world.glowGeometry.attributes.position.array.slice(i * 3, i * 3 + 3)),
+        Array.from(new Float32Array([p.x, p.y + .2, p.z + world.origin])));
+      assert.equal(world.glowGeometry.attributes.strength.getX(i), Math.fround(strength));
+    });
+    world.cabinLights.forEach((light, i) => {
+      const cabin = alpineCabin(Math.floor((s - 76) / CABIN_SPACING) + i), p = snowPosition(cabin.s, cabin.u, cabin.y);
+      assert.deepEqual(light.position.toArray(), [p.x - 3, p.y + 2, p.z + world.origin]);
+      assert.equal(light.intensity, 110 * (1 - smoothstep(210, 340, Math.abs(cabin.s - s))));
+    });
+    const positionVersion = world.glowGeometry.attributes.position.version;
+    world.update(s);
+    assert.equal(world.glowGeometry.attributes.position.version, positionVersion, 'stationary halos need no repeated position upload');
     assert.deepEqual(world.headlights.position.toArray(), car.car.position.toArray());
     assert.ok(world.headlights.quaternion.angleTo(car.car.quaternion) < .0001);
     const first = Array.from(world.flakeGeometry.attributes.position.array);

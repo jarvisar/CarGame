@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
+import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, desertColumns, desertVertex, desertPosition, desertHeight, desertRowStep, desertBridgeAt, desertCreek, desertCreekDistance, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
@@ -117,6 +118,7 @@ export class DesertChunk {
     buildDesertCrossing(this, instances, { stoneGeometry, slabGeometry, bushGeometry, trunkGeometry, grassGeometry, rockMaterial, barkMaterial, plantMaterial });
     this.buildPlants(); this.buildReferenceDetails(); this.buildForeground();
     this.sampleColumns = desertColumns;
+    finalizeChunkTransforms(this.group);
   }
   addMesh(source, material, castShadow = false) {
     const mesh = new THREE.Mesh(source, material); mesh.castShadow = castShadow; mesh.receiveShadow = true;

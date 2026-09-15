@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { chunkResource, chunkResourceKey } from './chunk-resources.js';
+import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CoastalBirds } from './birds.js';
 
 const sphereData = sphere => sphere && [...sphere.center.toArray(), sphere.radius];
@@ -85,6 +86,7 @@ export function unpackChunk(data) {
       return result;
     }
     chunk.group = object(data.group);
+    finalizeChunkTransforms(chunk.group);
     return chunk;
   } catch (error) {
     for (const geometry of chunk.owned) geometry.dispose();

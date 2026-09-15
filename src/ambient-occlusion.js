@@ -122,6 +122,7 @@ export class AmbientOcclusion {
     if (autoReset) renderer.info.reset();
     const autoClear = renderer.autoClear;
     const shadowAutoUpdate = renderer.shadowMap.autoUpdate;
+    const matrixWorldAutoUpdate = scene.matrixWorldAutoUpdate;
     const target = renderer.getRenderTarget();
     try {
       renderer.render(scene, camera);
@@ -162,6 +163,8 @@ export class AmbientOcclusion {
         }
       });
       renderer.shadowMap.autoUpdate = false;
+      // The color pass already updated every transform. AO uses the same pose.
+      scene.matrixWorldAutoUpdate = false;
       pass.render(renderer, null, null);
       renderer.setRenderTarget(target);
       renderer.autoClear = false;
@@ -171,6 +174,7 @@ export class AmbientOcclusion {
       this.hidden.length = 0;
       renderer.setRenderTarget(target);
       renderer.shadowMap.autoUpdate = shadowAutoUpdate;
+      scene.matrixWorldAutoUpdate = matrixWorldAutoUpdate;
       renderer.autoClear = autoClear;
       renderer.info.autoReset = autoReset;
     }

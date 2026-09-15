@@ -58,6 +58,19 @@ test('transferred chunks retain geometry, transforms, shaders, bounds and animat
           assert.equal(after[i].material, object.material, 'shared shader callbacks must survive transfer');
           if (!expected.owned.includes(object.geometry)) assert.equal(after[i].geometry, object.geometry);
         });
+        // Both construction paths must preserve automatic transforms through rebases.
+        const automatic = expected.group.clone(true), reference = [];
+        automatic.traverse(object => { object.matrixAutoUpdate = true; if (object.isMesh) reference.push(object); });
+        for (const origin of [0, 1024, -1024, 32768]) {
+          for (const group of [expected.group, actual.group, automatic]) {
+            group.position.z = origin - expected.start;
+            group.updateMatrixWorld(true);
+          }
+          before.forEach((object, i) => {
+            assert.deepEqual(object.matrixWorld.elements, reference[i].matrixWorld.elements, 'built chunk keeps its world pose');
+            assert.deepEqual(after[i].matrixWorld.elements, reference[i].matrixWorld.elements, 'transferred chunk keeps its world pose');
+          });
+        }
         if (actual.birds) {
           for (const time of [0, 12, 87]) {
             expected.birds.update(time); actual.birds.update(time);

@@ -30,6 +30,7 @@ export class Traffic {
   constructor(scene, route, s, journey = 'coast') {
     this.group = new THREE.Group(); this.group.name = 'traffic'; scene.add(this.group);
     this.models = createTrafficModels();
+    this.poseRotation = new THREE.Euler(0, 0, 0, 'YXZ');
     // A small shared pool illuminates nearby traffic without shadow-map passes.
     this.headlightRigs = Array.from({ length: 3 }, () => {
       const rig = new THREE.Group();
@@ -86,7 +87,7 @@ export class Traffic {
     car.heading = frame.angle + (car.direction < 0 ? Math.PI : 0);
     const slope = (route.height(car.s + 1.5, car.u) - route.height(car.s - 1.5, car.u)) / (3 * frame.scale);
     const crossSlope = (route.height(car.s, car.u + .7) - route.height(car.s, car.u - .7)) / 1.4;
-    car.quaternion.setFromEuler(new THREE.Euler(Math.atan(slope * car.direction), -car.heading, Math.atan(crossSlope * car.direction), 'YXZ'));
+    car.quaternion.setFromEuler(this.poseRotation.set(Math.atan(slope * car.direction), -car.heading, Math.atan(crossSlope * car.direction)));
   }
   update(dt, player) {
     if (Math.abs(player.s - this.lastPlayerS) > 120) this.reset(this.route, player.s);
@@ -96,9 +97,11 @@ export class Traffic {
       car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
       let target = car.cruiseSpeed;
       const scale = this.route.frame(car.s).scale;
+      car.routeScale = scale;
       // Basic following/braking prevents the few cars from driving through a
       // stopped player or piling into one another. No passing or pathfinding.
-      for (const other of [...this.vehicles, player]) {
+      for (let i = 0; i <= this.vehicles.length; i++) {
+        const other = i < this.vehicles.length ? this.vehicles[i] : player;
         if (other === car || Math.abs(other.u - car.u) > 2.2) continue;
         const ahead = (other.s - car.s) * car.direction * scale;
         if (ahead <= 0 || ahead > 70) continue;
@@ -109,7 +112,7 @@ export class Traffic {
     }
     for (const car of this.vehicles) {
       car.speed += clamp(car.targetSpeed - car.speed, -14 * dt, 3 * dt);
-      car.s += car.direction * car.speed * dt / this.route.frame(car.s).scale;
+      car.s += car.direction * car.speed * dt / car.routeScale;
       this.pose(car);
     }
     this.collide(player);
