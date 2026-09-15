@@ -246,7 +246,11 @@ export function onRiver(s, u, margin = 0) {
 export function jungleColumns(s) {
   const rc = riverCenter(s), hw = riverHalfWidth(s), bankTop = rc + hw + 4, farTop = rc - hw - 4;
   const near = [-9.5, -12.5, lerp(-12.5, bankTop + 3, .4), lerp(-12.5, bankTop + 3, .75), bankTop + 3, bankTop, rc + hw + 1.3, rc + hw, rc + hw * .5, rc, rc - hw * .5, rc - hw, rc - hw - 1.3, farTop,
-    lerp(farTop, -95, .33), lerp(farTop, -95, .66), -95, -112, -132, -156, -184, -216, -252, -292, -336, -384, -436];
+    lerp(farTop, -95, .33), lerp(farTop, -95, .66), -95];
+  // The foreground is close to the camera even far from the road. Keep its
+  // facets compact instead of stretching them across ever-wider columns.
+  for (let u = -107; u > -436; u -= 12) near.push(u);
+  near.push(-436);
   const far = [9.5, 12.5, 15, 17.5, 21, 26, 32, 39, 47, 56, 66, 78, 92, 108, 126, 146, 168, 192, 218, 246, 276, 308, 342, 378, 416, 456, 500];
   return [...near.reverse(), -7, 0, 7, ...far];
 }
@@ -263,8 +267,9 @@ export function jungleVertex(row, column) {
   const u = columns[column] + (road || river ? 0 : (randomAt(row, column + 2262) - .5) * Math.min(7, gap * .42));
   const p = junglePosition(s, u);
   const cross = Math.abs(u);
-  // Small roughness on the forest floor; taller lumps far out read as treetops.
-  if (!river) p.y += (randomAt(row, column + 2263) - .5) * (.9 * smoothstep(12, 30, cross) * (1 - smoothstep(100, 130, cross)) + 4.6 * smoothstep(100, 140, cross));
+  // Softer ground relief on the camera side; the distant hills retain larger
+  // bumps that read as treetops.
+  if (!river) p.y += (randomAt(row, column + 2263) - .5) * (.9 * smoothstep(12, 30, cross) * (1 - smoothstep(100, 130, cross)) + (u < 0 ? 1.8 : 4.6) * smoothstep(100, 140, cross));
   return { ...p, s, u, column };
 }
 

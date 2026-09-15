@@ -136,6 +136,25 @@ test('jungle chunks keep scenery off the road, build the river and dispose clean
     for (const name of ['jungle-floor', 'jungle-river', 'river-mist', 'valley-mist', 'jungle-road', 'jungle-canopy', 'emergent-crowns', 'lianas', 'palm-fronds', 'banana-plants', 'ferns', 'mossy-boulders']) assert.ok(names.has(name), `${name} missing from chunk ${index}`);
     assert.equal(names.has('cascade-foam'), chunk.lips.some(lip => lip.drop >= .6) || chunk.falls.length > 0);
     assert.ok(chunk.terrain.geometry.attributes.position.count > 3000);
+    // Every interior edge must be shared, including where fine waterfall rows
+    // stitch into coarse hills. Also bound the size of foreground facets.
+    const terrain = chunk.terrain.geometry.attributes.position, edges = new Map(), boundary = new Set();
+    const key = p => [p.x, p.y, p.z].map(Math.fround).join(',');
+    const boundaryVertex = (s, col) => {
+      const p = jungleVertex(s / JUNGLE_STEP, col); p.z += chunk.start; boundary.add(key(p));
+    };
+    for (let col = 0; col < JUNGLE_COLUMN_COUNT; col++) for (const s of [chunk.start, chunk.start + CHUNK_LENGTH]) boundaryVertex(s, col);
+    for (let s = chunk.start; s <= chunk.start + CHUNK_LENGTH; s += JUNGLE_STEP) for (const col of [0, JUNGLE_COLUMN_COUNT - 1]) boundaryVertex(s, col);
+    for (let i = 0; i < terrain.count; i += 3) {
+      const points = [0, 1, 2].map(j => new THREE.Vector3().fromBufferAttribute(terrain, i + j));
+      for (let j = 0; j < 3; j++) {
+        const a = points[j], b = points[(j + 1) % 3], pair = [key(a), key(b)].sort(), id = pair.join('|');
+        const edge = edges.get(id) ?? { count: 0, pair }; edge.count++; edges.set(id, edge);
+        const s = chunk.start - (a.z + b.z) / 2;
+        if ((a.x + b.x) / 2 - roadX(s) < -140) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) < 24, 'stretched foreground facet');
+      }
+    }
+    for (const edge of edges.values()) assert.ok(edge.count === 2 || edge.count === 1 && edge.pair.every(p => boundary.has(p)), 'open edge inside jungle terrain');
     chunk.dispose();
   }
   const scene = new THREE.Scene(), world = new JungleWorld(scene);

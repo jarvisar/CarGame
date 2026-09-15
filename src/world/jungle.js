@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
-import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverLipOffset, riverRocks, riverTurbulence,
+import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleColumns, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverLipOffset, riverRocks, riverTurbulence,
   onRiver, cutHeight, gorgeWall, jungleGuardrail, sideFalls, jungleZones, jungleCrags, jungleNoise } from './jungle-route.js';
 import { riverMaterial, fallMaterial, foamMaterial, mistMaterial, valleyMistMaterial } from './jungle-water.js';
 import { animateWater } from './water.js';
@@ -114,7 +114,6 @@ export class JungleChunk {
   }
   buildTerrain() {
     const vertices = [], colors = [], ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3();
-    const sampleRow = row => Array.from({ length: JUNGLE_COLUMN_COUNT }, (_, col) => jungleVertex(row, col));
     const lips = riverLips(this.start - 24, this.start + CHUNK_LENGTH + 24), falls = sideFalls(this.start - 16, this.start + CHUNK_LENGTH + 16);
     const moss = new THREE.Color('#3d6f30'), brightMoss = new THREE.Color('#4c8238'), litter = new THREE.Color('#6b6541'), damp = new THREE.Color('#34602f');
     const dirt = new THREE.Color('#a89b6f'), verge = new THREE.Color('#6d7e46'), wetRock = new THREE.Color('#4f5550');
@@ -123,12 +122,23 @@ export class JungleChunk {
     const canopy = ['#2d6a2c', '#367a33', '#3f8a3a', '#28602b', '#4a9440'].map(c => new THREE.Color(c)), farHaze = new THREE.Color('#33604c');
     const light = new THREE.Vector3(-55, 245, 40).normalize();
     const stations = jungleRows(this.start, this.start + CHUNK_LENGTH);
-    let current = sampleRow(stations[0] / JUNGLE_STEP);
-    for (let station = 0; station < stations.length - 1; station++) {
-      const row = stations[station] / JUNGLE_STEP, next = sampleRow(stations[station + 1] / JUNGLE_STEP);
-      for (let col = 0; col < JUNGLE_COLUMN_COUNT - 1; col++) {
-        const a = current[col], b = next[col], c = current[col + 1], d = next[col + 1];
-        const tris = (row + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
+    const coarse = Array.from({ length: CHUNK_LENGTH / JUNGLE_STEP + 1 }, (_, i) => this.start + i * JUNGLE_STEP);
+    const columns = jungleColumns(0).map((u, col) => (u >= -95 && u <= -12.5 ? stations : coarse).map(s => jungleVertex(s / JUNGLE_STEP, col)));
+    // Each column owns its vertices. Stitch unequal row counts directly so
+    // the detailed river meets the coarse hills without cracks or thin strips
+    // running all the way to the edge of the scene.
+    for (let col = 0; col < JUNGLE_COLUMN_COUNT - 1; col++) {
+      const left = columns[col], right = columns[col + 1];
+      let li = 0, ri = 0;
+      while (li < left.length - 1 || ri < right.length - 1) {
+        const a = left[li], c = right[ri], b = left[li + 1], d = right[ri + 1];
+        const row = Math.floor(Math.min(a.s, c.s) / JUNGLE_STEP);
+        let tris;
+        if (b && d && b.s === d.s) {
+          tris = (row + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
+          li++; ri++;
+        } else if (b && (!d || b.s < d.s)) { tris = [[a, b, c]]; li++; }
+        else { tris = [[a, d, c]]; ri++; }
         tris.forEach((tri, i) => {
           ab.set(tri[1].x - tri[0].x, tri[1].y - tri[0].y, tri[1].z - tri[0].z); ac.set(tri[2].x - tri[0].x, tri[2].y - tri[0].y, tri[2].z - tri[0].z);
           normal.crossVectors(ab, ac).normalize(); if (normal.y < 0) normal.negate();
@@ -155,7 +165,10 @@ export class JungleChunk {
             if (u < 0) color.lerp(mossRock, smoothstep(.4, .8, jungleNoise(s, u, 11, 2390)) * .65);
           } else if (cross > (u < 0 ? 100 : 130)) {
             // Beyond the instanced trees the bumpy terrain itself reads as treetops.
-            color = canopy[Math.floor(facet * canopy.length)].clone().multiplyScalar(.8 + .25 * smoothstep(-2.5, 2.5, y - jungleHeight(s, u)));
+            // The visible foreground is forest floor: color it in cohesive
+            // patches so neighboring triangles do not form a bright/dark mosaic.
+            color = u < 0 ? canopy[1].clone().lerp(canopy[2], jungleNoise(s, u, 26, 2392))
+              : canopy[Math.floor(facet * canopy.length)].clone().multiplyScalar(.8 + .25 * smoothstep(-2.5, 2.5, y - jungleHeight(s, u)));
             if (u > 0) color.lerp(farHaze, smoothstep(190, 340, u) * .7);
           } else {
             const patch = jungleNoise(s, u, 23, 2386), fine = jungleNoise(s, u, 6, 2387);
@@ -167,7 +180,6 @@ export class JungleChunk {
           triangle(vertices, colors, ...tri, color, this.start);
         });
       }
-      current = next;
     }
     this.terrain = this.addMesh(geometryFrom(vertices, colors), terrainMaterial, 'jungle-floor', true);
     this.sampleGround = terrainSampler(this.terrain);
@@ -316,7 +328,7 @@ export class JungleChunk {
   buildScenery() {
     const random = seededRandom(this.index + 77113);
     const trunks = [], crowns = jungleCrowns.map(() => []), farCrowns = jungleCrowns.map(() => []), emergents = emergentTrunks.map(() => []), emergentTops = emergentCrowns.map(() => []), vines = [];
-    const palmTrunks = junglePalms.map(() => []), palmFronds = junglePalms.map(() => []), ferns = [], leaves = [], bananas = [], bamboos = [], shrubs = [], tufts = [], lumps = [], lilies = [];
+    const palmTrunks = junglePalms.map(() => []), palmFronds = junglePalms.map(() => []), ferns = [], leaves = [], bananas = [], bamboos = [], shrubs = [], forestShrubs = [], tufts = [], lumps = [], lilies = [];
     const boulders = jungleBoulders.map(() => []), cliffs = cliffBlocks.map(() => []), rails = [], railPosts = [], logs = [];
     const crownColors = ['#2c6429', '#33742f', '#3d8236', '#47903a', '#295c2a', '#529c40', '#397a33', '#3c8a3c'];
     const darkCrowns = ['#275727', '#2c642c', '#224f24', '#31692e'], sunlitCrowns = ['#4d9440', '#57a047', '#3f8a38', '#5aa64a'];
@@ -610,6 +622,44 @@ export class JungleChunk {
       const direction = new THREE.Vector3(Math.cos(angle), .04, Math.sin(angle)).normalize();
       logs.push({ p: [p.x, p.y + radius * .8, p.z], scale: [radius * 1.4, length, radius * 1.4], q: new THREE.Quaternion().setFromUnitVectors(up, direction), color: '#8ea36a' });
     }
+    // The foreground beyond the river is still rainforest, even where it is
+    // far from the road. Layer overlapping groves over a lower plant cover;
+    // jittered cells keep the coverage even without planting visible rows.
+    for (let row = 0; row < CHUNK_LENGTH / 8; row++) for (let band = 0; band < 23; band++) {
+      const s = this.start + row * 8 + 1 + random() * 6, u = -108 - band * 10 - random() * 8;
+      const grove = jungleNoise(s, u, 32, 2731), p = ground(s, u), steepness = slope(s, u);
+      if (steepness > 2.1) continue;
+      const density = (.55 + grove * .5) * (1 - smoothstep(300, 340, -u) * .45);
+      if (random() < density && clear(s, u, .8)) {
+        const height = Math.min(8 + random() * 7 + grove * 3, headroom(s, u, p.y));
+        if (random() < .16) palm(s, u, height * .85);
+        else tree(s, u, height, grove > .6 ? darkCrowns : crownColors);
+      }
+      // Understory sits between the trunks and reaches into small canopy gaps.
+      const t = Math.max(this.start + .2, Math.min(this.start + CHUNK_LENGTH - .2, s + (random() - .5) * 6));
+      const cross = u + (random() - .5) * 7, floor = ground(t, cross), kind = random();
+      if (kind < .28) plant(ferns, floor, 1.4 + random() * 1.3, fernColors);
+      else if (kind < .42) plant(bananas, floor, 2 + random() * 1.7, bananaColors);
+      else {
+        const size = 2 + random() * 2 + grove;
+        forestShrubs.push({ p: [floor.x, floor.y + size * .3, floor.z], scale: [size, size * .8, size], r: [0, random() * 6.28, 0], color: pick(shrubColors) });
+      }
+    }
+    // Fill the inland hillside with a lighter layer of overlapping trees and
+    // broad shrubs. Existing clearances preserve the creeks and rocky crags;
+    // crowns beyond the roadside forest already use the cheaper shadow-free batch.
+    for (let row = 0; row < CHUNK_LENGTH / 8; row++) for (let band = 0; band < 18; band++) {
+      const s = this.start + row * 8 + 1 + random() * 6, u = 52 + band * 12 + random() * 9;
+      const grove = jungleNoise(s, u, 37, 2732), steepness = slope(s, u);
+      if (steepness > 2 || !open(s, u, 2)) continue;
+      if (random() < .5 + grove * .4 && clear(s, u, 1)) {
+        tree(s, u, 8 + random() * 7 + grove * 2, grove > .65 ? darkCrowns : crownColors);
+      }
+      if (random() > .7 || inStream(s, u, 3)) continue;
+      const p = ground(s, u), size = 2.3 + random() * 2.2;
+      forestShrubs.push({ p: [p.x, p.y + size * .25, p.z], scale: [size, size * .85, size], r: [0, random() * 6.28, 0], color: pick(shrubColors) });
+      if (random() < .2) plant(ferns, ground(s, u + size), 1.4 + random(), fernColors);
+    }
     this.buildGuardrail(rails, railPosts);
     instances(this.group, trunkGeometry, barkMaterial, trunks, 'jungle-trunks');
     jungleCrowns.forEach((g, i) => { instances(this.group, g, canopyMaterial, crowns[i], 'jungle-canopy'); instances(this.group, g, canopyMaterial, farCrowns[i], 'jungle-canopy-far', false); });
@@ -625,6 +675,9 @@ export class JungleChunk {
     instances(this.group, bigLeafGeometry, frondMaterial, leaves, 'broad-leaves');
     instances(this.group, bananaGeometry, frondMaterial, bananas, 'banana-plants', false);
     instances(this.group, shrubGeometry, shrubMaterial, shrubs, 'undergrowth');
+    // Dense ground cover under the forest canopy receives shade but does not
+    // need hundreds of extra shadow casters on either hillside.
+    instances(this.group, shrubGeometry, shrubMaterial, forestShrubs, 'forest-undergrowth', false);
     instances(this.group, shrubGeometry, shrubMaterial, lumps, 'distant-canopy', false);
     instances(this.group, tuftGeometry, frondMaterial, tufts, 'grass-tufts', false);
     instances(this.group, lilyGeometry, frondMaterial, lilies, 'lily-pads', false);
