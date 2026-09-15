@@ -15,8 +15,9 @@ export function canyonProfile(s, side) {
   const foot = Math.max(44, (side < 0 ? 60 : 64) + 8 * Math.sin(s / 137 + phase)
     + 28 * (terraceNoise(s + side * 27, 48, side + 611) - .5)
     + 2.8 * Math.sin(s / 7.7 + phase));
-  const height = (side < 0 ? 23 : 28) + 3 * Math.sin(s / 193 + phase)
-    + (side < 0 ? 29 : 37) * terraceNoise(s + side * 51, 88, side + 612);
+  // Even when seeded terraces dip together, the lowest rim must clear the dunes.
+  const height = Math.max(27, (side < 0 ? 23 : 28) + 3 * Math.sin(s / 193 + phase)
+    + (side < 0 ? 29 : 37) * terraceNoise(s + side * 51, 88, side + 612));
   const shelfEnd = 27 + 8 * terraceNoise(s, 64, side + 613);
   const lowerShare = .43 + .12 * terraceNoise(s, 96, side + 614);
   const upperStrength = .25 + .75 * smoothstep(.22, .62, terraceNoise(s + side * 110, 144, side + 615));

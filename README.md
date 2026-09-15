@@ -2,7 +2,9 @@
 
 A small, endless coastal drive built with Three.js. The fixed orthographic camera, miniature car, turquoise water, faceted cliffs, and evergreen hills take their visual direction from the supplied reference.
 
-The scenery includes animated ocean swells, rolling shoreline breakers, sea-stack foam, broad sandy coves, occasional arched viaducts over tidal inlets, sheltered inland ponds, rocky mountain ridges, mixed pine and broadleaf groves, wildflowers, and small flocks of gliding gulls. The first bridge appears about 330 feet ahead of the starting point; the first pond lies just beyond it inland.
+The scenery includes animated ocean swells, rolling shoreline breakers, sea-stack foam, broad sandy coves, occasional arched viaducts over tidal inlets, sheltered inland ponds, rocky mountain ridges, mixed pine and broadleaf groves, wildflowers, and small flocks of gliding gulls.
+
+Every page load generates a fresh world seed, changing the road bends, elevations, terrain details, and scenery across all three journeys. Each journey starts on its own randomly chosen stretch of road with zero mileage. Driving back or switching journeys preserves the same scenery and session progress; Reset returns the car to the road locally. Reload to generate a new drive. To revisit or share a particular world, add an unsigned 32-bit seed to the URL, for example `?seed=4817`; that seed reproduces the world and starting locations.
 
 Small hillside scree clusters, grass tufts, and beach pebble drifts add detail between the larger trees and rocks; the additions stream with the Pacific Coast scenery. Ocean highlights form irregular, curved wavelets, with varied foam along the shoreline.
 
@@ -71,7 +73,7 @@ The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route butt
 
 ## Implementation
 
-- `src/world/route.js`: continuous road, coastline, height functions, and deterministic terrain samples.
+- `src/world/generation.js`, `src/world/route.js`: a fresh session seed (or explicit URL seed), seeded road curves and starting locations, continuous coastline and height functions, and deterministic terrain samples within each world.
 - `src/world/environment.js`: nine streamed 128 m chunks; faceted terrain and ocean, road ribbons, and instanced vegetation and rocks. Chunks work in either direction and dispose their unique GPU resources on removal. A floating origin keeps rendering coordinates small on long drives.
 - `src/world/coastal-assets.js`: shared faceted firs, cypress crowns and branches, sea-stack variants, and a spatially indexed sampler for grounding scenery on the terrain mesh.
 - `src/world/water.js`: shared GPU animation for swell, wave highlights, shoreline breakers, and rock wash. Global phases preserve wave continuity through chunk changes and floating-origin rebases.
@@ -90,6 +92,8 @@ The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route butt
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
 
 Run `npm test` for deterministic generation, continuity, driving, and streaming checks.
+
+With the development server running, `npm run test:generation` checks fresh worlds on reload, repeatable URL seeds across all three journeys, grounded spawns, regenerated chunk consistency, and saved progress. Reports and screenshots go to `.artifacts/generation/`. Set `TEST_URL` to override the development URL. The Node suite uses a repeatable seed by default; set `TEST_WORLD_SEED` to run it against another world.
 
 With the development server running, `npm run test:audio` checks sound activation, throttle response, pause/resume, rapid toggles, focus loss, route changes, and cleanup in Chrome. It also renders the actual audio graph offline to check headroom and fades, saving a report and three short WAV previews to `.artifacts/audio/`. Set `TEST_URL` to override the development URL. Browser emulation does not replace listening on physical phone speakers or headphones.
 

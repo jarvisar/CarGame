@@ -1,4 +1,6 @@
-export const SEED = 4817;
+import { resolveWorldSeed } from './generation.js';
+
+export const SEED = resolveWorldSeed(globalThis.location?.search);
 export const CHUNK_LENGTH = 128;
 export const TERRAIN_STEP = 8;
 export const ROAD_HALF_WIDTH = 5.5;
@@ -16,10 +18,19 @@ export function seededRandom(seed) {
   return () => randomAt(seed, i++);
 }
 
-// Several long wavelengths produce composed bends instead of point-to-point noise.
-export function roadX(s) { return 27 * Math.sin(s / 130) + 24 * Math.sin(s / 60 + .5) + 6 * Math.sin(s / 260 + 1.2); }
-export function roadDerivative(s) { return 27 / 130 * Math.cos(s / 130) + 24 / 60 * Math.cos(s / 60 + .5) + 6 / 260 * Math.cos(s / 260 + 1.2); }
-export function roadHeight(s) { return 24 + 6 * Math.sin(s / 173 + .5) + 3 * Math.sin(s / 83); }
+// Seed the phases and wavelengths as well as the scenery. Keep bends at least
+// as gentle as the original road so terrain normals and lane assistance stay safe.
+const bends = [130, 60, 260].map((span, i) => ({ span: span * (1 + randomAt(i, 1901) * .35), phase: randomAt(i, 1902) * Math.PI * 2 }));
+const hills = [173, 83].map((span, i) => ({ span: span * (1 + randomAt(i, 1903) * .35), phase: randomAt(i, 1904) * Math.PI * 2 }));
+export function roadX(s) { return 27 * Math.sin(s / bends[0].span + bends[0].phase) + 24 * Math.sin(s / bends[1].span + bends[1].phase) + 6 * Math.sin(s / bends[2].span + bends[2].phase); }
+export function roadDerivative(s) { return 27 / bends[0].span * Math.cos(s / bends[0].span + bends[0].phase) + 24 / bends[1].span * Math.cos(s / bends[1].span + bends[1].phase) + 6 / bends[2].span * Math.cos(s / bends[2].span + bends[2].phase); }
+export function roadHeight(s) { return 24 + 6 * Math.sin(s / hills[0].span + hills[0].phase) + 3 * Math.sin(s / hills[1].span + hills[1].phase); }
+
+export function journeyStart(routeNumber) {
+  // Each route gets its own stretch, in either direction from the world origin.
+  // Mileage tracks driving separately, so even a distant spawn starts at zero.
+  return { s: Math.floor((randomAt(routeNumber, 1910) - .5) * 40000), distance: 0 };
+}
 function drivingCoastOffset(s) { return -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2); }
 function coastNoise(s, span, salt) {
   const cell = Math.floor(s / span), t = smoothstep(0, 1, s / span - cell);

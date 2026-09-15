@@ -69,11 +69,11 @@ export function createCar() {
 }
 
 export class DrivingController {
-  constructor(route = coastalDrivingRoute) {
+  constructor(route = coastalDrivingRoute, state = {}) {
     this.route = route;
     const model = createCar(); Object.assign(this, model);
-    this.s = 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
-    this.distance = 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
+    this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
+    this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
     this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0 };
     const pose = () => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), bodyPitch: 0, bodyRoll: 0, wheelSpin: 0, steer: 0 });

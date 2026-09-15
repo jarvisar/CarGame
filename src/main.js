@@ -4,6 +4,7 @@ import './ui.css';
 import './layout.css';
 import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
+import { SEED, journeyStart } from './world/route.js';
 import { DrivingController } from './vehicle.js';
 import { Input } from './input.js';
 import { touchDrivingInput } from './touch-stick.js';
@@ -27,8 +28,8 @@ async function boot() {
     let journey = 'coast';
     let world = new JOURNEYS.coast.World(scene);
     let changingJourney = false, journeyWasPaused = false;
-    const savedJourneys = {};
-    const vehicle = new DrivingController(); const audio = new DriveAudio();
+    const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
+    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast); const audio = new DriveAudio();
     const journeyDialog = $('#journey-dialog');
     scene.add(vehicle.car); world.update(vehicle.s);
     function start() { if (paused) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
@@ -68,7 +69,7 @@ async function boot() {
       try {
         await new Promise(resolve => setTimeout(resolve, 320));
         nextWorld = new JOURNEYS[id].World(scene);
-        nextWorld.update(savedJourneys[id]?.s ?? 24);
+        nextWorld.update(savedJourneys[id].s);
         if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
         else renderer.compile(scene, camera);
         world.dispose(); world = nextWorld; journey = id;
@@ -223,7 +224,7 @@ async function boot() {
     else renderer.compile(scene, camera);
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { vehicle, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, vehicle, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();
