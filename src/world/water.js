@@ -86,11 +86,14 @@ export function createSurfMaterial(moving = false) {
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
       float foamPatch = waterNoise(vWaterCoord / 4.0 + vec2(-coastTime * 0.06, coastTime * 0.04));
-      float feather = smoothstep(0.0, 0.2, vSurfEdge) * (1.0 - smoothstep(0.35, 1.0, vSurfEdge));
-      diffuseColor.a *= ${moving ? 'vSurfFade *' : ''} feather * (0.3 + 0.7 * smoothstep(0.2, 0.72, foamPatch));
+      float grain = waterNoise(vWaterCoord * 1.35 + vec2(coastTime * 0.12, -coastTime * 0.08));
+      float edge = vSurfEdge + (foamPatch - 0.5) * 0.5 + (grain - 0.5) * 0.13;
+      float feather = smoothstep(0.0, 0.14, edge) * (1.0 - smoothstep(0.45, 0.96, edge));
+      float lace = smoothstep(0.24, 0.63, foamPatch * 0.65 + grain * 0.35);
+      diffuseColor.a *= ${moving ? 'vSurfFade *' : ''} feather * (0.34 + lace * 0.66);
     `);
   };
-  material.customProgramCacheKey = () => `coast-surf-${moving ? 'rolling' : 'wash'}-v4`;
+  material.customProgramCacheKey = () => `coast-surf-${moving ? 'rolling' : 'wash'}-v5`;
   return material;
 }
 

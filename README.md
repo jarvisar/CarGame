@@ -4,13 +4,15 @@ A small, endless coastal drive built with Three.js. The fixed orthographic camer
 
 The scenery includes animated ocean swells, rolling shoreline breakers, sea-stack foam, broad sandy coves, occasional arched viaducts over tidal inlets, sheltered inland ponds, rocky mountain ridges, mixed pine and broadleaf groves, wildflowers, and small flocks of gliding gulls.
 
-Every page load generates a fresh world seed, changing the road bends, elevations, terrain details, and scenery across all four journeys. Each journey starts on its own randomly chosen stretch of road with zero mileage. Driving back or switching journeys preserves the same scenery and session progress; Reset returns the car to the road locally. Reload to generate a new drive. To revisit or share a particular world, add an unsigned 32-bit seed to the URL, for example `?seed=4817`; that seed reproduces the world and starting locations.
+Every page load generates a fresh world seed, changing the road bends, elevations, terrain details, and scenery across all four journeys. Each journey starts on its own randomly chosen stretch of road with zero mileage. Driving back or switching journeys preserves the same scenery and session progress. Reset rebuilds the current scene on a fresh random stretch of the selected route, restarting the car, traffic, animations, and mileage while preserving the camera, sound, and pause settings. Other journeys keep their progress. Reload to generate a new world seed. To revisit or share a particular world, add an unsigned 32-bit seed to the URL, for example `?seed=4817`; that seed reproduces the world and initial starting locations.
 
-Small hillside scree clusters, grass tufts, and beach pebble drifts add detail between the larger trees and rocks; the additions stream with the Pacific Coast scenery. Ocean highlights form irregular, curved wavelets, with varied foam along the shoreline.
+Beach pebble drifts, half-buried outcrops, coastal scrub, and small gold and lavender flower patches add detail between the larger forms. Ocean highlights form irregular, curved wavelets, with broad, broken foam along the shoreline.
 
 Coastal gulls have slightly larger, brighter silhouettes. Their offshore loops cruise above the local sea-stack crowns with room for wingbeats and gentle bobbing.
 
-The Pacific scene takes its cliffs, hills, and mountains from the reference image. Warm sunlit slabs, cool shaded planes, and dark recessed fractures color the cliff walls, which carry deeper buttress relief, a damp band along the toe, and a dusty bare lip where the crown is exposed. Behind the road, a chain of overlapping peaks forms one ridge with summits and saddles; in some stretches the hillside rises straight behind the roadside terrace, in others it opens into rolling knolls before the ridge. Bare rock follows the summits and cohesive patches on the flanks, with half-buried outcrops breaking through the turf, straw-tinted sun-facing slopes, and dense fir groves on the uplands above a looser mix of firs and broadleaf crowns near the road. Ponds and viaduct inlets sit on sheltered shelves where the ridge eases off. Deeper blue water with stronger facets, taller warm and grey sea stacks, and the existing feathered breakers, gulls, and fallen slabs complete the scene. Terrain still uses 1,376 triangles per chunk, vegetation samples the visible terrain mesh so it sits on the ground, and these visual changes preserve the road, driving limits, and camera.
+The Pacific scene follows a Monterey-inspired palette of sage and olive grass, pale granite, deep blue ocean, and turquoise shallows. Projecting headlands alternate with recessed sandy coves. Connected cliff fractures, damp rock feet, and fallen slabs give the shoreline structure, while larger offshore stacks have smaller broken companions and animated foam at their bases. The hills open into meadows before rising to overlapping rocky peaks; sheltered valleys ease down to the viaduct inlets. A shared habitat field groups darker fir groves and their understory, with branching Monterey pines inland and broad wind-shaped cypresses on the bluffs. Warm sunlight and cool sky fill keep the terrain facets readable.
+
+The highway and its occasional ocean overlooks are asphalt, with double yellow center lines, narrow pale shoulders, selective metal guardrails, parking bays, and sea-facing benches. Turnout aprons flatten the actual terrain and keep planting clear of the pavement. Broad grassy bluffs use a two-dimensional mesh of smaller facets to avoid stretched, striped triangles between the cliff and road. Terrain uses 1,632 triangles per chunk; scenery samples the rendered mesh for grounding and streams within the same nine-chunk budget. Geometry and shared procedural materials add the details without downloaded assets or additional textures.
 
 Use **Change Route** in the top bar to choose **Pacific Coast**, **Red Rock Desert**, **Midnight Alpine**, or **Emerald Jungle**. The desert road winds along the bottom of a sandy canyon under warm early-evening light. Broad sandstone shelves, steep orange cliffs, recessed bays, lower saddles, and large flat-topped mesas frame the road. Fractured rock shoulders, rockfall slopes, eroded spires, and a shallow gravel wash complete the terrain. Joshua trees, yuccas, agaves, barrel cacti, and sparse scrub dot the valley. Both journeys use the same fixed camera angle, car scale, and zoom options. The chooser pauses driving, and each journey remembers your position and distance for the current page session; you return stationary on the road. Escape or the close button dismisses the chooser without changing journeys.
 
@@ -64,7 +66,7 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 - **A D / ← →:** steer
 - **Space:** strong brake
 - **V / View button:** cycle through medium (default), close, third-person, and scenic views. Third-person uses perspective and follows behind the car as you steer.
-- **R:** return to the road at the current location
+- **R:** reset the scene in a fresh area with zero mileage
 - **N:** switch to the next scene, cycling through all routes while preserving each route’s progress
 - **1–4:** jump straight to a route by its number
 - **P / Escape:** pause / resume
@@ -87,7 +89,7 @@ Basic support uses the browser's [Gamepad API](https://w3c.github.io/gamepad/) f
 - **Right face button (Xbox B / PlayStation Circle):** brake/reverse fallback.
 - **Start / Menu / Options:** pause or resume.
 - **Left face button (Xbox X / PlayStation Square):** change view.
-- **Top face button (Xbox Y / PlayStation Triangle):** reset to the road.
+- **Top face button (Xbox Y / PlayStation Triangle):** reset the scene in a fresh area.
 - **RB / R1 (right shoulder):** next scene, including while paused.
 - **Select / Back / View:** open the scenery chooser. Use the D-pad or stick to highlight a route, A / Cross to select, and B / Circle or Select to close.
 - **LB / L1 (left shoulder):** toggle fullscreen. Browsers may require a tap on the fullscreen icon or the F key to enter fullscreen; controller requests are handled without interrupting the game if denied.
@@ -143,6 +145,8 @@ With the development server running, `node scripts/us-units-test.mjs` checks spe
 `npm run test:controller` checks simulated controller detection, driving, pause/resume, modal isolation, disconnect/reconnect, and touch-control visibility in Chrome. Set `TEST_URL` to use a development server other than `http://127.0.0.1:5173`.
 
 With the development server running, `npm run test:browser` checks keyboard/touch controls and streaming in Chrome, and `npm run test:scenery` checks landmarks, bounded GPU resources, visible water animation, and frozen animation while paused. These browser scripts use the installed Windows Chrome executable. Screenshots and reports are written to `.artifacts/`.
+
+`node scripts/pacific-review.mjs after` captures the Pacific coves, viaduct, headlands, paved overlook, third-person view, reverse travel, and phone layout in `.artifacts/pacific/after/`. It also checks browser errors and bounded geometry/texture counts. Set `TEST_URL` for another development port and `TEST_WORLD_SEED` for another landscape. The coastal Node tests check that the bluff facets join without holes or folds and that the paved turnouts remain above the rendered ground across streaming seams.
 
 `npm run test:journeys` checks desktop/mobile selection, Escape dismissal, paused input, position restoration, unchanged camera settings, desert driving, and repeated switching without retained world geometry.
 

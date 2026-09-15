@@ -82,23 +82,36 @@ function pine(seed) {
   return geometry(vertices, colors);
 }
 
-function cypress() {
+function coastalTree(pine = false) {
   const bark = [], leaves = [], up = new THREE.Vector3(0, 1, 0);
   const branch = (from, to, width) => {
     const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to), direction = b.clone().sub(a);
-    const g = new THREE.CylinderGeometry(width * .58, width, direction.length(), 5);
+    const g = new THREE.CylinderGeometry(width * .58, width, direction.length(), 5, 1, true);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
     g.translate(...a.add(b).multiplyScalar(.5).toArray()); bark.push(g);
   };
-  branch([0, -.05, 0], [.1, .42, 0], .055);
-  branch([.1, .42, 0], [.3, .73, .02], .043);
-  for (let i = 0; i < 6; i++) {
-    const angle = i * 2.4, radius = .19 + randomAt(i, 910) * .24;
-    const crown = [.3 + Math.cos(angle) * radius, .72 + randomAt(i, 911) * .17, Math.sin(angle) * radius * .8];
-    branch([.1, .38 + i * .04, 0], crown, .026);
+  const lean = pine ? .13 : .32;
+  branch([0, -.09, 0], [lean * .3, .33, .04], .075);
+  branch([lean * .3, .33, .04], [lean, .65, -.02], .055);
+  branch([lean, .65, -.02], [lean + .06, pine ? 1 : .81, .01], .034);
+  for (let i = 0; i < (pine ? 5 : 6); i++) {
+    const angle = i * 2.4, radius = .18 + randomAt(i, 910) * (pine ? .21 : .4);
+    const height = pine ? .63 + i * .085 : .7 + randomAt(i, 911) * .16;
+    const crown = [lean + Math.cos(angle) * radius + (pine ? 0 : .12), height, Math.sin(angle) * radius * .8];
+    const fork = [crown[0] * .73, height - .13, crown[2] * .6];
+    branch([lean * .7, .36 + i * .042, 0], fork, .035 - i * .002);
+    branch(fork, crown, .019);
     const g = new THREE.IcosahedronGeometry(1, 1);
-    g.scale(.3 + randomAt(i, 912) * .14, .12 + randomAt(i, 913) * .055, .24 + randomAt(i, 914) * .1);
-    g.rotateY(angle); g.translate(...crown); leaves.push(g);
+    g.scale(.29 + randomAt(i, 912) * .14, .16 + randomAt(i, 913) * .08, .26 + randomAt(i, 914) * .12);
+    g.rotateY(angle); g.translate(...crown);
+    const colors = [], normals = g.attributes.normal;
+    for (let j = 0; j < normals.count; j += 3) {
+      const up = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+      const shade = .76 + Math.max(0, up) * .23 + randomAt(j, i + 916) * .04;
+      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .96);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    leaves.push(g);
   }
   const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
   for (const part of [...bark, ...leaves]) part.dispose();
@@ -107,7 +120,8 @@ function cypress() {
 
 export const coastalCrags = [crag(1), crag(2), crag(3)];
 export const coastalPines = [pine(1), pine(2)];
-export const coastalCypress = cypress();
+export const coastalCypress = coastalTree();
+export const coastalMontereyPine = coastalTree(true);
 
 // Bucket projected terrain triangles once; grounding hundreds of plants then
 // only visits a few nearby faces instead of raycasting the whole chunk.

@@ -89,14 +89,33 @@ try {
     await select(id === 'coast' ? 'desert' : 'coast');
     await select(id);
     assert.deepEqual(await snapshot(), saved);
-    await page.evaluate(() => window.__coastline.action('reset'));
-    assert.deepEqual(await snapshot(), saved);
+    const cleanup = await page.evaluate(async () => {
+      const a = window.__coastline, oldWorld = a.world;
+      const groups = [...oldWorld.chunks.values()].map(chunk => chunk.group);
+      const camera = a.rendering.camera, view = a.rendering.viewLabel;
+      const paused = a.paused, sound = a.audio.enabled;
+      await Promise.all([a.action('reset'), a.action('reset')]);
+      return { replaced: a.world !== oldWorld, disposed: oldWorld.chunks.size === 0 && oldWorld.chunkSource.disposed,
+        detached: groups.every(group => !group.parent), sources: a.chunkWorker.sources.size,
+        cameraKept: camera === a.rendering.camera && view === a.rendering.viewLabel,
+        settingsKept: paused === a.paused && sound === a.audio.enabled,
+        trafficReset: a.traffic.lastPlayerS === a.vehicle.s && a.traffic.vehicles.every(car => Math.abs(car.s - a.vehicle.s) >= 18) };
+    });
+    assert.deepEqual(cleanup, { replaced: true, disposed: true, detached: true, sources: 1,
+      cameraKept: true, settingsKept: true, trafficReset: true });
+    const reset = await snapshot(); checkSpawn(reset);
+    assert.equal(reset.journey, id); assert.equal(reset.seed, saved.seed);
+    assert.ok(Math.abs(reset.s - saved.s) >= 2048);
+    assert.notDeepEqual(reset.terrain, saved.terrain);
+    await select(id === 'coast' ? 'desert' : 'coast');
+    await select(id);
+    assert.deepEqual(await snapshot(), reset);
     // Keep later routes at their original start until their own check runs.
     await placeCar(pinned[id].s);
     await page.evaluate(() => { window.__coastline.vehicle.distance = 0; });
   }
   assert.deepEqual(errors, []);
-  const report = { passed: true, fresh, pinned, revisitedChunksMatch: true, savedProgressRestored: true, errors };
+  const report = { passed: true, fresh, pinned, revisitedChunksMatch: true, savedProgressRestored: true, sceneReset: true, errors };
   await writeFile('.artifacts/generation/report.json', JSON.stringify(report, null, 2));
-  console.log('Streaming in both directions, origin shifts, local reset and saved journey progress all pass.');
+  console.log('Streaming, origin shifts, full scene resets, resource cleanup and saved journey progress all pass.');
 } finally { await browser.close(); }

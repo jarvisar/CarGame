@@ -5,6 +5,7 @@ import './layout.css';
 import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
 import { SEED, journeyStart } from './world/route.js';
+import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic } from './traffic.js';
@@ -79,25 +80,28 @@ async function boot() {
       journeyDialog.showModal();
       journeyDialog.querySelector(`[data-journey="${journey}"]`).focus();
     }
-    async function changeJourney(id) {
+    async function changeJourney(id, { regenerate = false } = {}) {
       if (changingJourney || !JOURNEYS[id]) return;
-      if (id === journey) { journeyDialog.close(); return; }
+      if (id === journey && !regenerate) { journeyDialog.close(); return; }
       if (!journeyDialog.open) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
       audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close();
       $('#pause-overlay').hidden = true;
       savedJourneys[journey] = { s: vehicle.s, distance: vehicle.distance };
+      const nextState = regenerate ? freshSceneStart(vehicle.s) : savedJourneys[id];
       let nextWorld;
       try {
         await new Promise(resolve => setTimeout(resolve, 320));
         nextWorld = new JOURNEYS[id].World(scene, chunkWorker.source(id));
-        await nextWorld.chunkSource.prepare(savedJourneys[id].s);
-        nextWorld.update(savedJourneys[id].s);
+        await nextWorld.chunkSource.prepare(nextState.s);
+        nextWorld.update(nextState.s);
         if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
         else renderer.compile(scene, rendering.camera);
         world.dispose(); world = nextWorld; journey = id;
-        vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
+        savedJourneys[id] = nextState;
+        if (regenerate) { time = 0; hudTime = 0; vehicle.wheelSpin = 0; }
+        vehicle.setRoute(JOURNEYS[id].route, nextState);
         vehicle.setAppearance(id);
         vehicle.setNight(id === 'snow');
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
@@ -105,7 +109,7 @@ async function boot() {
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); rendering.render();
-        toast(`${JOURNEYS[id].title} selected`);
+        toast(regenerate ? 'Scene reset · Fresh area ready' : `${JOURNEYS[id].title} selected`);
       } catch (error) {
         if (nextWorld && nextWorld !== world) nextWorld.dispose();
         console.error('Could not change journey:', error); toast('That road is unavailable. Try again.');
@@ -146,7 +150,7 @@ async function boot() {
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { vehicle.reset(); traffic.clearNear(vehicle); traffic.render(1, world.origin); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); needsRender = true; toast('Car reset to the road'); }
+      if (name === 'reset') { await changeJourney(journey, { regenerate: true }); return; }
       if (name === 'view') {
         toast(rendering.toggleView()); updateViewUi();
         rendering.update(vehicle.car, 0, world.origin);

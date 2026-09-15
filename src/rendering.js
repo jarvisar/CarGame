@@ -122,8 +122,8 @@ export function createRendering(canvas) {
     // ocean cyan and separate warm rock faces from cool, deeper shadows.
     scene.background.set(desert ? '#dfb399' : '#b5dff5'); updateFog();
     sky.color.set(desert ? '#e5d8d0' : '#c4e5ff'); sky.groundColor.set(desert ? '#79635a' : '#365544');
-    sky.intensity = desert ? 1.27 : .85;
-    sun.color.set(desert ? '#ffe0bc' : '#fff7ec'); sun.intensity = desert ? 2.45 : 3.05;
+    sky.intensity = desert ? 1.27 : 1.12;
+    sun.color.set(desert ? '#ffe0bc' : '#fff4df'); sun.intensity = desert ? 2.45 : 2.85;
     sunOffset.set(...(desert ? [-170, 150, 120] : [-145, 230, 95]));
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }

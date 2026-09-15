@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CoastalWorld } from '../src/world/environment.js';
-import { coastalDrivingRoute, bridgeAt, terrainCell, terrainVertex } from '../src/world/route.js';
+import { CoastalChunk, CoastalWorld } from '../src/world/environment.js';
+import { coastalDrivingRoute, bridgeAt, terrainCell, terrainVertex, overlookAt, CHUNK_LENGTH } from '../src/world/route.js';
 import { coastalCrags } from '../src/world/coastal-assets.js';
 
 test('crag surfaces are closed and consistently wound, including their broken crowns', () => {
@@ -34,7 +34,7 @@ test('cliff joints remain connected to coarse beaches and meadows without open s
       }
     }
     for (let col = 5; col < 12; col++) for (const row of [start, start + 4]) {
-      const columns = col === 9 ? [9, 9.5, 10] : [col, col + 1];
+      const columns = col === 9 ? [9, 9.5, 10] : col === 10 ? [10, 10.2, 10.4, 10.6, 10.8, 11] : [col, col + 1];
       for (let i = 0; i < columns.length - 1; i++) {
         boundary.add(edgeKey(terrainVertex(row, columns[i]), terrainVertex(row, columns[i + 1])));
       }
@@ -82,4 +82,34 @@ test('coastal planting heights match raycast terrain, including negative chunks 
       assert.equal(chunk.sampleGround(10000, 10000), null);
     }
   } finally { world.dispose(); }
+});
+
+test('paved overlooks sit above the rendered terrain through entrances and streaming seams', () => {
+  let checked = 0;
+  for (let index = -5; index <= 5; index++) {
+    const overlook = overlookAt(index * 528 + 80);
+    if (!overlook.enabled) continue;
+    for (let chunkIndex = Math.floor((overlook.center - 28) / CHUNK_LENGTH); chunkIndex <= Math.floor((overlook.center + 28) / CHUNK_LENGTH); chunkIndex++) {
+      const chunk = new CoastalChunk(chunkIndex);
+      const neighbors = [chunk, new CoastalChunk(chunkIndex - 1), new CoastalChunk(chunkIndex + 1)];
+      try {
+        const mesh = chunk.group.getObjectByName('paved-ocean-overlook');
+        assert.ok(mesh, 'each part of a pullout must stream with its terrain');
+        const p = mesh.geometry.attributes.position;
+        for (let i = 0; i < p.count; i += 3) {
+          const center = new THREE.Vector3();
+          for (let j = 0; j < 3; j++) center.add(new THREE.Vector3().fromBufferAttribute(p, i + j));
+          center.multiplyScalar(1 / 3);
+          // The terrain boundary is intentionally jittered; a road triangle
+          // near that seam can sit over the neighboring streamed chunk.
+          const ground = neighbors.map(c => c.sampleGround(center.x, center.z - chunk.start + c.start)).find(y => y !== null);
+          assert.notEqual(ground, undefined);
+          assert.ok(center.y > ground + .01, `terrain covers pavement at ${chunkIndex}`);
+          assert.ok(center.y - ground < .2, `pavement floats at ${chunkIndex}`);
+          checked++;
+        }
+      } finally { for (const neighbor of neighbors) neighbor.dispose(); }
+    }
+  }
+  assert.ok(checked > 200);
 });

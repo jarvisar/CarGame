@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import { resolveWorldSeed } from '../src/world/generation.js';
+import { resolveWorldSeed, freshSceneStart } from '../src/world/generation.js';
 import { SEED, journeyStart, roadX, roadDerivative } from '../src/world/route.js';
 import { JOURNEYS } from '../src/journeys.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -20,6 +20,17 @@ test('world seeds use fresh entropy by default and accept reproducible unsigned 
   }
   const fresh = resolveWorldSeed();
   assert.ok(Number.isInteger(fresh) && fresh >= 0 && fresh <= 0xffffffff);
+});
+
+test('scene resets choose a fresh area beyond the loaded chunks and clear mileage', () => {
+  for (const currentS of [-100000, -20000, -1, 0, 1, 20000, 100000]) {
+    for (const random of [0, .00001, .25, .49999, .5, .50001, .75, .99999]) {
+      const state = freshSceneStart(currentS, () => random);
+      assert.equal(state.distance, 0);
+      assert.ok(Number.isInteger(state.s) && state.s >= -20000 && state.s < 20000);
+      assert.ok(Math.abs(state.s - currentS) >= 2048);
+    }
+  }
 });
 
 test('seeded road tangents match the actual bends, including distant and negative positions', () => {

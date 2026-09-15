@@ -46,7 +46,9 @@ export function desertCreek(s) {
   // Independent meanders and pool widths avoid parallel road/river/ledge
   // ribbons. The crossing itself retains its original alignment with the deck.
   const side = Math.sign(direction * crossing) || -1;
-  const desiredDistance = 21.8 + 3.7 * Math.sin(s / 81 + .4) + 1.7 * Math.sin(s / 35 + 1.6);
+  // Gently vary the bend spacing as well as the offset from the road.
+  const desiredDistance = 21.8 + 4.5 * Math.sin(s / 81 + .4 + .3 * Math.sin(s / 173))
+    + 2.1 * Math.sin(s / 35 + 1.6);
   const pool = smoothstep(-.65, .85, Math.sin(s / 47 + .6) + .45 * Math.sin(s / 19));
   const rockMargin = 3.8 + .6 * Math.sin(s / 57 + .5) ** 2;
   const outerBank = side < 0 ? Math.min(33, desertRiverRockEdge(s) - rockMargin) : 35.3;
