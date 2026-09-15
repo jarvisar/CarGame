@@ -69,7 +69,7 @@ export function createRendering(canvas) {
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
-    if (initialized) fitSunShadow(activeCamera(), sun);
+    if (initialized) fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0);
   }
   function update(car, dt, origin) {
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
@@ -90,7 +90,7 @@ export function createRendering(canvas) {
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
-    fitSunShadow(activeCamera(), sun);
+    fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0);
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
   window.addEventListener('resize', () => { density.reset(); resizeCanvas(); resize(); }); resize();

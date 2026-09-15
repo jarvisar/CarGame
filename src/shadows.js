@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
-// Enclose the visible terrain, from the valleys to the highest snowy peaks.
-// Projecting both height planes also covers elevated shadow receivers.
-export function fitSunShadow(camera, sun) {
+// Enclose the visible terrain, from valleys to peaks. Routes with a changing
+// elevation datum pass the local height so coverage travels with the landscape.
+// Translating both height planes preserves the shadow map's texel density.
+export function fitSunShadow(camera, sun, heightOrigin = 0) {
   camera.updateMatrixWorld();
   sun.updateMatrixWorld();
   sun.target.updateMatrixWorld();
@@ -22,7 +23,7 @@ export function fitSunShadow(camera, sun) {
     const direction = camera.getWorldDirection(new THREE.Vector3());
     for (const x of [-1, 1]) for (const y of [-1, 1]) for (const height of [-40, 180]) {
       point.set(x, y, -1).unproject(camera);
-      point.addScaledVector(direction, (height - point.y) / direction.y);
+      point.addScaledVector(direction, (heightOrigin + height - point.y) / direction.y);
       bounds.expandByPoint(point.applyMatrix4(lightCamera.matrixWorldInverse));
     }
   }
