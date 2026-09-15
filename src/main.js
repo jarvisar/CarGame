@@ -27,7 +27,7 @@ async function boot() {
   let chunkWorker;
   try {
     const rendering = createRendering($('#scene'));
-    const { renderer, scene, camera } = rendering;
+    const { renderer, scene } = rendering;
     let needsRender = true;
     window.addEventListener('resize', () => { needsRender = true; });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) needsRender = true; });
@@ -79,8 +79,8 @@ async function boot() {
         nextWorld = new JOURNEYS[id].World(scene, chunkWorker.source(id));
         await nextWorld.chunkSource.prepare(savedJourneys[id].s);
         nextWorld.update(savedJourneys[id].s);
-        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
-        else renderer.compile(scene, camera);
+        if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
+        else renderer.compile(scene, rendering.camera);
         world.dispose(); world = nextWorld; journey = id;
         vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
         vehicle.setAppearance(id);
@@ -89,7 +89,7 @@ async function boot() {
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
-        updateHud(); renderer.render(scene, camera);
+        updateHud(); renderer.render(scene, rendering.camera);
         toast(`${JOURNEYS[id].title} selected`);
       } catch (error) {
         if (nextWorld && nextWorld !== world) nextWorld.dispose();
@@ -122,7 +122,11 @@ async function boot() {
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
       if (name === 'reset') { vehicle.reset(); traffic.clearNear(vehicle); traffic.render(1, world.origin); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); needsRender = true; toast('Car reset to the road'); }
-      if (name === 'view') { toast(rendering.toggleView()); updateViewUi(); }
+      if (name === 'view') {
+        toast(rendering.toggleView()); updateViewUi();
+        rendering.update(vehicle.car, 0, world.origin, input.touchStick.pointer !== null);
+        needsRender = true;
+      }
       if (name === 'sound') {
         try {
           const enabled = await audio.toggle(); $('#sound').setAttribute('aria-pressed', String(enabled));
@@ -181,12 +185,12 @@ async function boot() {
     });
     document.querySelectorAll('button[data-journey]').forEach(button => button.addEventListener('click', () => changeJourney(button.dataset.journey)));
     for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', event => {
-      if (name === 'pause' && event.pointerType === 'touch') return;
+      if (['pause', 'view'].includes(name) && event.pointerType === 'touch') return;
       action(name);
     });
     // A secondary finger may not synthesize a click while the stick is held.
-    $('#pause').addEventListener('pointerup', event => {
-      if (event.pointerType === 'touch') { event.preventDefault(); action('pause'); }
+    for (const name of ['pause', 'view']) $(`#${name}`).addEventListener('pointerup', event => {
+      if (event.pointerType === 'touch') { event.preventDefault(); action(name); }
     });
     $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Drag the stick where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
@@ -217,7 +221,7 @@ async function boot() {
     }
     const simulate = dt => {
       const state = started ? input.state : {};
-      if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, camera, vehicle.route, vehicle.s, vehicle.u);
+      if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);
       vehicle.update(dt, state);
       traffic.update(dt, vehicle);
     };
@@ -229,7 +233,7 @@ async function boot() {
         time += dt;
         world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
-        rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
+        rendering.update(vehicle.car, dt, world.origin, input.touchStick.pointer !== null); world.animate(time, vehicle);
       }
       audio.update(vehicle.audioTelemetry, dt);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
@@ -237,7 +241,7 @@ async function boot() {
       // Paused water, traffic and shadows are unchanged. Keep polling input
       // and fading audio, but only redraw the frozen canvas when invalidated.
       if (!document.hidden && (!paused || needsRender)) {
-        renderer.render(scene, camera); needsRender = false;
+        renderer.render(scene, rendering.camera); needsRender = false;
         if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       }
       requestAnimationFrame(frame);
@@ -245,8 +249,8 @@ async function boot() {
     await world.chunkSource.prepare(vehicle.s);
     world.update(vehicle.s);
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();
-    if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
-    else renderer.compile(scene, camera);
+    if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
+    else renderer.compile(scene, rendering.camera);
     changingJourney = false;
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.

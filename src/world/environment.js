@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
-import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, mountainHeight, bridgeAt, clamp, lerp, smoothstep } from './route.js';
+import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
 import { CoastalBirds } from './birds.js';
@@ -134,9 +134,9 @@ export class CoastalChunk {
       return vertices.get(key);
     };
     const columns = terrainColumns(this.start).length;
-    const meadow = new THREE.Color('#a0b856'), fern = new THREE.Color('#6b963d');
-    const stone = new THREE.Color('#bdb4a0'), coolStone = new THREE.Color('#899394');
-    const cliffStone = new THREE.Color('#c9bda6'), coolCliff = new THREE.Color('#768995');
+    const meadow = new THREE.Color('#a3bb55'), fern = new THREE.Color('#68943c'), dryGrass = new THREE.Color('#bcbf66');
+    const stone = new THREE.Color('#c1b39a'), coolStone = new THREE.Color('#6f7a85'), fracture = new THREE.Color('#57534f');
+    const cliffStone = new THREE.Color('#d3bf9c'), coolCliff = new THREE.Color('#728290'), dust = new THREE.Color('#d1c096');
     const stoneLight = new THREE.Vector3(-145, 230, 95).normalize();
     for (let row = firstRow; row < firstRow + CHUNK_LENGTH / TERRAIN_STEP; row++) {
       for (let col = 0; col < columns - 1; col++) {
@@ -163,23 +163,35 @@ export class CoastalChunk {
           const grassyLedge = tri.rimTurf && normal.y > .5 && !(sliver && normal.y < .7) && ravineAmount(s, u) < .12;
           const coastalRock = col >= 7 && col <= 9 && !grassyLedge;
           const grassyShelf = col >= 10 && col <= 11 && ravineAmount(s, u) < .12;
-          const inlandRock = !grassyShelf && ((steep && u > coastOffset(s) - 10) || mountainHeight(s, u) > 22);
+          // Inland rock follows the summits and cohesive patches; only truly
+          // sheer facets break through the turf elsewhere.
+          const cover = col >= 12 ? rockCover(s, u) : 0;
+          const inlandRock = !grassyShelf && ((steep && u > coastOffset(s) - 10 && (normal.y < .44 || (ravineAmount(s, u) > .05 && normal.y < .55))) || cover + (r - .5) * .3 > .5);
+          const exposure = clamp(normal.dot(stoneLight), 0, 1);
           if (sandyFace) {
-            color = new THREE.Color('#e5d1a7').lerp(new THREE.Color('#b9b7a0'), 1 - smoothstep(-.3, 1.5, y));
+            color = new THREE.Color('#ead9b0').lerp(new THREE.Color('#bdb9a1'), 1 - smoothstep(-.3, 1.5, y));
           } else if (shoreFace || coastalRock || (!grassyLedge && (col <= 9 || inlandRock))) {
             if (col <= 10) {
-              const exposure = clamp(normal.dot(stoneLight), 0, 1);
+              // Warm sunlit slabs, cool shaded planes, and dark recessed
+              // fractures, with a damp, darker band along the toe.
               const weathering = randomAt(Math.floor((s + y * .2) / 14), 1641);
-              color = coolCliff.clone().lerp(cliffStone, smoothstep(.43, .88, exposure) * .78 + weathering * .18);
+              color = fracture.clone().lerp(coolCliff, smoothstep(.02, .3, exposure));
+              color.lerp(cliffStone, smoothstep(.4, .88, exposure) * .8 + weathering * .16);
+              color.multiplyScalar(lerp(.8, 1, smoothstep(1.2, 4.5, y)));
             } else {
-              const exposure = .5 + .5 * Math.sin(s / 34 + y / 13);
-              color = coolStone.clone().lerp(stone, smoothstep(2, 29, y) * .48 + exposure * .3 + r * .12);
-              color.multiplyScalar(.95 + .055 * Math.sin(y * .5 + s / 31));
+              const weathering = randomAt(Math.floor(s / 21) * 7 + Math.floor(u / 17), 1642);
+              color = fracture.clone().lerp(coolStone, smoothstep(.02, .32, exposure));
+              color.lerp(stone, smoothstep(.36, .9, exposure) * .78 + weathering * .12 + r * .1);
+              color.multiplyScalar(.96 + .06 * smoothstep(20, 70, cover * 60 + (y - 30)));
             }
           } else if (pondRadius(s, u) < 1.12) color = new THREE.Color('#a5b88d');
           else {
             meadowFace = true;
             color = fern.clone().lerp(meadow, clamp(meadowMix * .7 + r * .3, 0, 1));
+            // Sun-facing upland slopes dry to a straw tint; the rim turf wears
+            // through to bare dust on the exposed headland buttresses.
+            if (col >= 12) color.lerp(dryGrass, smoothstep(.62, .95, exposure) * smoothstep(28, 70, u) * .45 * (.5 + r * .5));
+            if (tri.rimTurf) color.lerp(dust, smoothstep(.45, .9, cliffRib(s, 1)) * (.35 + r * .4));
           }
           // Let broad meadow patches carry the color, with quieter random
           // variation so the flat-shaded slopes still define the facets.
@@ -206,8 +218,8 @@ export class CoastalChunk {
         const u = tri.reduce((sum, v) => sum + v.u, 0) / 3;
         const s = tri.reduce((sum, v) => sum + v.s, 0) / 3;
         const depth = clamp((shorelineOffset(s) - u) / 135, 0, 1);
-        const color = new THREE.Color('#55c8bd').lerp(new THREE.Color('#176880'), Math.pow(depth, .7));
-        color.multiplyScalar(.96 + randomAt(row * 2 + t, col + 819) * .08);
+        const color = new THREE.Color('#5accbf').lerp(new THREE.Color('#1c5d8a'), Math.pow(depth, .68));
+        color.multiplyScalar(.93 + randomAt(row * 2 + t, col + 819) * .13);
         addTriangle(positions, colors, ...tri, color, this.start);
       });
     }
@@ -260,32 +272,39 @@ export class CoastalChunk {
     const trunks = [], foliage = [[], []], shrubs = [], rocks = [], posts = [], caps = [], grasses = [], cypresses = [], stacks = [[], [], []];
     const rockWashVertices = [], rockWashCoords = [];
     const canGrow = (s, u) => pondRadius(s, u) > 1.15 && ravineAmount(s, u) < .13 && groundHeight(s, u) > 2;
+    const hillSlope = (s, u) => Math.hypot(groundHeight(s, u + 1) - groundHeight(s, u - 1), groundHeight(s + 1, u) - groundHeight(s - 1, u)) / 2;
     const green = ['#315b4c', '#3b6850', '#436c4e', '#285343', '#527952', '#38604a'];
+    const uplandGreen = ['#2b5347', '#2f5c4a', '#3a6650', '#264a3f'];
     const bushColors = ['#668c4b', '#7d9b54', '#587d4c', '#8ba65e'];
-    const rockColors = ['#b9b9ad', '#c9bda8', '#aab6b4', '#c1bcac'];
+    const rockColors = ['#c3b391', '#b3b3a8', '#cdb994', '#a6aba8', '#bfb39a'];
+    const outcropColors = ['#a8a79c', '#b6b0a1', '#979da0', '#aea89a'];
     const planted = (s, u) => {
       const p = positionAt(s, u);
       p.y = this.sampleGround(p.x, p.z + this.start) ?? p.y;
       return p;
     };
-    for (let i = 0; i < 340; i++) {
+    for (let i = 0; i < 430; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
-      let u = 12 + random() ** .8 * 162;
+      let u = 12 + random() ** .8 * 170;
       if (i < 13) u = lerp(coastOffset(s) + 4, -10, random());
+      // Firs crowd into groves on the upland flanks and ridges; the low
+      // terrace by the road keeps a looser mix with broadleaf crowns.
       const grove = .5 + .3 * Math.sin(s / 30 + u / 26) + .2 * Math.sin(s / 71 - u / 19);
-      if ((grove < .35 || random() > .12 + grove) && i >= 13) continue;
-      if (!canGrow(s, u) || mountainHeight(s, u) > 24) continue;
+      const upland = smoothstep(45, 85, u);
+      if (i >= 13 && (grove < lerp(.35, .47, upland) || random() > .12 + grove * (1 + upland * .6))) continue;
+      if (!canGrow(s, u) || rockCover(s, u) > .42 || hillSlope(s, u) > 1.35) continue;
       const p = planted(s, u); const size = (4.8 + random() * 6.3) * (u < 0 ? .72 : 1);
       const y = p.y - .25; const rotation = random() * Math.PI;
       trunks.push({ p: [p.x, y + size * .29, p.z + this.start], scale: [size * .35, size * .6, size * .35] });
-      if (i % 4 === 0 && u < 105) {
+      if (i % 4 === 0 && u < 62) {
         for (let crown = 0; crown < 3; crown++) {
           const angle = crown * 2.1 + rotation;
           shrubs.push({ p: [p.x + Math.cos(angle) * size * .2, y + size * (.48 + crown * .06), p.z + this.start + Math.sin(angle) * size * .19], scale: [size * .33, size * .32, size * .35], r: [0, angle, .1], color: bushColors[i % bushColors.length] });
         }
         continue;
       }
-      const color = green[Math.floor(random() * green.length)];
+      const palette = upland > .5 ? uplandGreen : green;
+      const color = palette[Math.floor(random() * palette.length)];
       foliage[i % 2].push({ p: [p.x, y, p.z + this.start], scale: [size, size, size], r: [0, rotation, 0], color });
     }
     for (let i = 0; i < 86; i++) {
@@ -306,7 +325,7 @@ export class CoastalChunk {
       if (!sea && !canGrow(s, u)) continue;
       const p = planted(s, u);
       const size = sea ? (i % 6 === 0 ? 4.4 + random() * 3.2 : .8 + random() * 2.2) : .7 + random() * 3.1;
-      const height = size * (1.1 + random() * .9);
+      const height = size * (sea && i % 6 === 0 ? 1.35 + random() * 1.05 : 1.1 + random() * .9);
       const rock = { p: [p.x, sea ? -.8 + height * .3 : p.y + height * .28, p.z + this.start], scale: [size, height, size * (.6 + random() * .6)], r: [random() * .25, random() * 6, random() * .4], color: rockColors[Math.floor(random() * rockColors.length)] };
       if (sea) {
         const variant = Math.floor(i / 3) % 3;
@@ -326,6 +345,26 @@ export class CoastalChunk {
           addRockWash(satellite, angle, rockWashVertices, rockWashCoords, coastalCrags[shape]);
         }
       } else rocks.push(rock);
+    }
+    // Weathered outcrops break through the hillside turf where the rock
+    // patches and summits are, half buried so they read as bedrock.
+    const outcropRandom = seededRandom(this.index + 51377);
+    for (let cluster = 0; cluster < 7; cluster++) {
+      const s = this.start + 6 + outcropRandom() * (CHUNK_LENGTH - 12);
+      const u = 34 + outcropRandom() ** .7 * 130;
+      if (!canGrow(s, u) || rockCover(s, u) < .3 || hillSlope(s, u) > 1.6) continue;
+      const lean = outcropRandom() * Math.PI * 2, tint = outcropColors[cluster % outcropColors.length];
+      const pieces = 3 + Math.floor(outcropRandom() * 3);
+      for (let piece = 0; piece < pieces; piece++) {
+        const t = s + (outcropRandom() - .5) * 11, v = u + (outcropRandom() - .5) * 9;
+        if (!canGrow(t, v)) continue;
+        const p = planted(t, v);
+        const size = piece === 0 ? 2.6 + outcropRandom() * 2.6 : 1.1 + outcropRandom() * 2;
+        const height = size * (.7 + outcropRandom() * .6);
+        stacks[(cluster + piece) % coastalCrags.length].push({ p: [p.x, p.y + height * .05, p.z + this.start],
+          scale: [size, height, size * (.7 + outcropRandom() * .5)],
+          r: [(outcropRandom() - .5) * .5, lean + piece * .4, (outcropRandom() - .5) * .5], color: tint });
+      }
     }
     // Substantial slabs collect beneath eroded sections, with smaller fragments
     // spreading toward the beach. Their buried bases merge into the cliff toe.

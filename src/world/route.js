@@ -68,10 +68,10 @@ export function shorelineOffset(s) { return coastOffset(s) - 10 - beachWidth(s) 
 function coastalShoulder(s) {
   // A headland can rise above, or dip below, the roadside shelf. This changes
   // the silhouette in broad masses instead of adding small surface noise.
-  return (coastNoise(s, 83, 1611) * 12 - 7) * smoothstep(-18, -29, coastOffset(s));
+  return (coastNoise(s, 83, 1611) * 14 - 5) * smoothstep(-18, -29, coastOffset(s));
 }
 
-function cliffRib(s, height = 0) {
+export function cliffRib(s, height = 0) {
   // Broad, tilted joints run from the cliff toe to its crown. Sampling one
   // field at different heights creates connected buttresses and recesses.
   const cell = Math.floor(s / 38);
@@ -107,7 +107,7 @@ export function bridgeAt(s) {
 }
 export function ravineAmount(s, u) {
   const bridge = bridgeAt(s);
-  const along = 1 - smoothstep(24, 46, Math.abs(s - bridge.center));
+  const along = 1 - smoothstep(22, 54, Math.abs(s - bridge.center));
   return along * (1 - smoothstep(24, 112, u));
 }
 export function pondAt(s) {
@@ -120,16 +120,41 @@ export function pondRadius(s, u, pond = pondAt(s)) {
   const angle = Math.atan2(y, x);
   return Math.hypot(x, y) / (1 + .09 * Math.sin(angle * 3 + pond.index) + .045 * Math.sin(angle * 5));
 }
+function fieldNoise(s, u, span, salt) {
+  // Smooth two-dimensional value noise for cohesive patches on the hillsides.
+  const cs = Math.floor(s / span), cu = Math.floor(u / span);
+  const ts = smoothstep(0, 1, s / span - cs), tu = smoothstep(0, 1, u / span - cu);
+  const at = (i, j) => randomAt(i * 1031 + j, salt);
+  return lerp(lerp(at(cs, cu), at(cs + 1, cu), ts), lerp(at(cs, cu + 1), at(cs + 1, cu + 1), ts), tu);
+}
 export function mountainHeight(s, u) {
-  const cell = Math.floor(s / 256);
+  // A chain of overlapping peaks forms one ridge with summits and saddles,
+  // close enough behind the road that its seaward flanks fill the view.
+  const cell = Math.floor(s / 192);
   let height = 0;
   for (let index = cell - 1; index <= cell + 1; index++) {
-    const center = 120 + index * 256 + (randomAt(index, 715) - .5) * 54;
-    const cross = 142 + randomAt(index, 716) * 49;
-    const ridge = Math.max(0, 1 - Math.abs(s - center) / 140 - Math.abs(u - cross) / 100);
-    height += (27 + randomAt(index, 717) * 25) * ridge * ridge;
+    const center = index * 192 + 96 + (randomAt(index, 715) - .5) * 60;
+    const cross = 98 + randomAt(index, 716) * 48;
+    const along = 58 + randomAt(index, 718) * 34, across = 62 + randomAt(index, 719) * 30;
+    const ds = (s - center) / along, du = (u - cross) / across;
+    const cone = Math.max(0, 1 - Math.hypot(ds, du * (du < 0 ? 1 : .8)));
+    height += (34 + randomAt(index, 717) * 30) * Math.pow(cone, 1.35);
   }
+  const spine = 122 + 24 * Math.sin(s / 233 + 1.3);
+  height += 12 * Math.max(0, 1 - Math.abs(u - spine) / 95) * smoothstep(.2, .8, coastNoise(s, 131, 1723));
   return height;
+}
+export function hillsideSteepness(s) {
+  // Some stretches of hill rise straight behind the roadside terrace; others
+  // open into gradual meadow before the ridge.
+  return smoothstep(.35, .8, coastNoise(s, 230, 1721));
+}
+export function rockCover(s, u) {
+  // Bare rock on the summits and in cohesive patches across the hill flanks,
+  // rather than on isolated steep facets.
+  const summit = smoothstep(24, 40, mountainHeight(s, u));
+  const patches = smoothstep(.63, .78, fieldNoise(s, u, 37, 1701) * .7 + fieldNoise(s, u, 13, 1702) * .3) * smoothstep(30, 60, u);
+  return clamp(summit + patches, 0, 1);
 }
 export function roadFrame(s) {
   const dx = roadDerivative(s);
@@ -144,7 +169,7 @@ export function positionAt(s, u, height) {
   return { x: f.x + u + offset * (f.nx - 1), y: height ?? terrainHeight(s, u), z: f.z + offset * f.nz };
 }
 
-function baseTerrainHeight(s, u) {
+function baseTerrainHeight(s, u, radius) {
   const h = roadHeight(s);
   const coast = coastOffset(s);
   const ripple = Math.sin(s * .095 + u * .11) * .7 + Math.sin(s * .043 - u * .18) * .6;
@@ -156,13 +181,20 @@ function baseTerrainHeight(s, u) {
   if (u < -7) return h + (1.2 + ripple) * smoothstep(-7, coast, u)
     + (u < -18 ? coastalShoulder(s) * smoothstep(-18, Math.min(-18.01, coast), u) : 0);
   if (u < 7) return h;
-  const inland = smoothstep(8, 96, u);
+  // Ponds sit on a sheltered shelf: the mountain, steep hillsides, and knolls
+  // all ease off around them so the water does not lie in a crater.
+  const shelter = smoothstep(1.35, 2.1, radius);
+  // The ridge also stands back from each viaduct, so the inlet stays a rocky
+  // gorge instead of a chasm between two summits.
+  const gorge = 1 - .65 * (1 - smoothstep(46, 110, Math.abs(s - bridgeAt(s).center)));
+  const inland = Math.max(smoothstep(8, 96, u), hillsideSteepness(s) * shelter * smoothstep(14, 58, u));
   const hill = 17 + 24 * Math.sin(s / 112 + u / 87) ** 2 + 25 * Math.sin(s / 63 - u / 69) ** 2;
-  return h + inland * hill + ripple * smoothstep(7, 26, u) + mountainHeight(s, u) * inland;
+  const knolls = (Math.sin(s / 41 + u / 23) * Math.sin(s / 19 - u / 31) * 4 + Math.sin(s / 13 + u / 17) * 1.2) * smoothstep(16, 50, u) * shelter;
+  return h + inland * hill + ripple * smoothstep(7, 26, u) + knolls + mountainHeight(s, u) * inland * shelter * gorge;
 }
 export function groundHeight(s, u) {
-  let height = baseTerrainHeight(s, u);
   const pond = pondAt(s), radius = pondRadius(s, u, pond);
+  let height = baseTerrainHeight(s, u, radius);
   if (radius < 1.6) {
     const basin = pond.level - 2.2 + 3.5 * smoothstep(.45, 1.12, radius);
     height = lerp(basin, height, smoothstep(1.12, 1.6, radius));
@@ -184,9 +216,9 @@ export function terrainColumns(s) {
   // Keep the established rock-foot shape independent of the wider sand coves.
   const toeSpread = Math.min(4.5, 1.2 + 8 * smoothstep(-.15, .85, Math.sin(s / 137 + 1.1)) * (1 - headlandAmount(s) / 44));
   const foot = c - 10 - toeSpread * cliffRib(s);
-  const crown = c - cliffRib(s, 1) * 4.8;
-  const lower = lerp(foot, crown, .18 + (1 - cliffJoint(s, .3)) * .24);
-  const upper = lerp(foot, crown, .49 + (1 - cliffJoint(s, .75)) * .29);
+  const crown = c - cliffRib(s, 1) * 3.6;
+  const lower = lerp(foot, crown, .16 + (1 - cliffJoint(s, .3)) * .22);
+  const upper = lerp(foot, crown, .56 + (1 - cliffJoint(s, .75)) * .24);
   return [-300, -220, -160, b - 35, b - 17, b - 7, b, foot, lower, upper, crown, (c - 7) / 2, -7, 0, 7, ...Array.from({ length: 23 }, (_, i) => 14 + i * 12)];
 }
 export function terrainVertex(row, column) {
@@ -214,7 +246,7 @@ export function terrainVertex(row, column) {
   const s = baseS + ((column > 2 && (column < 12 || column > 14)) ? jitter : 0);
   const columns = terrainColumns(s);
   let u = columns[column];
-  if (column >= 7 && column <= 10) u += (randomAt(seedRow + 218, seedColumn) - .5) * (column === 10 ? .8 : .4);
+  if (column >= 7 && column <= 10) u += (randomAt(seedRow + 218, seedColumn) - .5) * (column === 10 ? .8 : column === 7 ? .4 : .9);
   if (column >= 15) u += (randomAt(seedRow + 991, seedColumn) - .5) * Math.min(8, (u - 7) * .26);
   const p = positionAt(s, u, groundHeight(s, u));
   const detail = smoothstep(1.05, 1.65, pondRadius(s, u)) * (1 - ravineAmount(s, u));
@@ -229,7 +261,7 @@ export function terrainVertex(row, column) {
     const upper = Math.max(lower + .13, .58 + randomAt(seedRow, 1633) * .35);
     const fraction = column === 7 ? 0 : column === 8 ? lower : column === 9 ? upper : 1;
     p.y = lerp(p.y, lerp(1.2, crown, fraction), detail);
-    p.y += (randomAt(seedRow, seedColumn + 500) - .5) * (column === 7 ? .6 : 2.3) * detail;
+    p.y += (randomAt(seedRow, seedColumn + 500) - .5) * (column === 7 ? .6 : 3.1) * detail;
     if (column === 10) {
       const hollow = (1 - rib) * smoothstep(.2, .8, coastNoise(s, 29, 1693));
       p.y -= hollow * 2.6 * detail;

@@ -10,11 +10,21 @@ export function fitSunShadow(camera, sun) {
   const lightCamera = sun.shadow.camera;
   const bounds = new THREE.Box3();
   const point = new THREE.Vector3();
-  const direction = camera.getWorldDirection(new THREE.Vector3());
-  for (const x of [-1, 1]) for (const y of [-1, 1]) for (const height of [-40, 180]) {
-    point.set(x, y, -1).unproject(camera);
-    point.addScaledVector(direction, (height - point.y) / direction.y);
-    bounds.expandByPoint(point.applyMatrix4(lightCamera.matrixWorldInverse));
+  if (camera.isPerspectiveCamera) {
+    // A chase view includes the horizon. Fit nearby shadows to a bounded
+    // frustum instead of projecting parallel rays onto distant height planes.
+    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const depth of [camera.near, Math.min(100, camera.far)]) {
+      point.set(x, y, 1).unproject(camera);
+      point.sub(camera.position).multiplyScalar(depth / camera.far).add(camera.position);
+      bounds.expandByPoint(point.applyMatrix4(lightCamera.matrixWorldInverse));
+    }
+  } else {
+    const direction = camera.getWorldDirection(new THREE.Vector3());
+    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const height of [-40, 180]) {
+      point.set(x, y, -1).unproject(camera);
+      point.addScaledVector(direction, (height - point.y) / direction.y);
+      bounds.expandByPoint(point.applyMatrix4(lightCamera.matrixWorldInverse));
+    }
   }
   // Leave a border for filtering and depth room for offscreen casters.
   const padding = 24;
