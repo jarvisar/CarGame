@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight } from './route.js';
+import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight, roadFrame } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, desertColumns, desertVertex, desertPosition, desertHeight, desertRowStep, desertBridgeAt, desertCreek, desertCreekDistance, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
+import { desertDiscoveries, desertDiscoveryClears, desertFuelApronWidth } from './desert-discoveries.js';
+import { buildDesertDiscoveries } from './desert-discovery-scenery.js';
 
 const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
@@ -107,6 +109,7 @@ export class DesertChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = []; this.vertices = new Map();
     this.group.name = `desert-chunk-${index}`;
+    this.discoveries = desertDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     // A row uses only two column profiles (road and jittered terrain), shared
     // by all its vertices. Keep this cache local to the chunk's construction.
     const columns = new Map();
@@ -117,12 +120,49 @@ export class DesertChunk {
     this.buildGround(); this.buildMesas(); this.buildRoad();
     buildDesertCrossing(this, instances, { stoneGeometry, slabGeometry, bushGeometry, trunkGeometry, grassGeometry, rockMaterial, barkMaterial, plantMaterial });
     this.buildPlants(); this.buildReferenceDetails(); this.buildForeground();
+    this.clearDiscoveryFootprints();
+    buildDesertDiscoveries(this, this.discoveries);
     this.sampleColumns = desertColumns;
     finalizeChunkTransforms(this.group);
   }
   addMesh(source, material, castShadow = false) {
     const mesh = new THREE.Mesh(source, material); mesh.castShadow = castShadow; mesh.receiveShadow = true;
     this.group.add(mesh); this.owned.push(source); return mesh;
+  }
+  clearDiscoveryFootprints() {
+    if (!this.discoveries.length) return;
+    // Filter existing instances after generation so unrelated scenery retains
+    // exactly the same seeded sequence. Neighboring chunks clear the same site.
+    const position = new THREE.Vector3(), scale = new THREE.Vector3(), rotation = new THREE.Quaternion();
+    const matrix = new THREE.Matrix4(), color = new THREE.Color();
+    const footprints = this.discoveries.map(site => {
+      const p = this.groundPosition(site.s,site.u), road = this.groundPosition(site.s,0),frame=roadFrame(site.s);
+      return {...site,x:p.x,z:p.z+this.start,roadX:road.x,roadZ:road.z+this.start,frame};
+    });
+    this.group.traverse(object => {
+      if (!object.isInstancedMesh) return;
+      let kept=0;
+      for (let i=0;i<object.count;i++) {
+        object.getMatrixAt(i,matrix); matrix.decompose(position,rotation,scale);
+        const radius = Math.min(5,Math.max(scale.x,scale.z)*1.3);
+        const blocked = footprints.some(site => {
+          if (Math.hypot(position.x-site.x,position.z-site.z) < Math.hypot(site.halfS,site.halfU)+radius) return true;
+          if (site.kind!=='fuel-stop') return false;
+          const dx=position.x-site.roadX,dz=position.z-site.roadZ,{nx,nz,scale}=site.frame;
+          const s=site.s+(dx*nz-dz*nx)/scale,u=dx*nx+dz*nz;
+          return !desertDiscoveryClears(s,u,[site],radius+2);
+        });
+        if (blocked) continue;
+        if (kept!==i) {
+          object.setMatrixAt(kept,matrix);
+          if (object.instanceColor) {object.getColorAt(i,color);object.setColorAt(kept,color);}
+        }
+        kept++;
+      }
+      object.count=kept; object.instanceMatrix.needsUpdate=true;
+      if (object.instanceColor) object.instanceColor.needsUpdate=true;
+      if (kept) object.computeBoundingSphere();
+    });
   }
   vertex(row, column) {
     const key = `${row},${column}`;
@@ -249,21 +289,23 @@ export class DesertChunk {
     }
     this.addMesh(geometry(positions, colors), groundMaterial, true).name = 'sandstone-mesas';
   }
-  ribbon(ranges, lift, material) {
+  ribbon(ranges, lift, material, skip) {
     const vertices = [];
     for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
       const bridge = desertBridgeAt(s + 1);
       if (s >= bridge.start && s < bridge.end) continue;
+      if (skip?.(s,low)) continue;
       const at = (t, u) => desertPosition(t, u, roadHeight(t) + lift);
       const a = at(s, low), b = at(s + 2, low), c = at(s, high), d = at(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
     }
-    this.addMesh(geometry(vertices), material);
+    return this.addMesh(geometry(vertices), material);
   }
   buildRoad() {
     this.ribbon([[-6.25, 6.25]], .045, sandMaterial);
     this.ribbon([[-5.5, 5.5]], .075, asphaltMaterial);
-    this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, edgeMaterial);
+    this.ribbon([[-5.05, -4.89], [4.89, 5.05]], .09, edgeMaterial,(s,u)=>this.discoveries.some(site=>
+      site.kind==='fuel-stop' && Math.sign(u)===site.side && desertFuelApronWidth(site,s+1)>7)).name='desert-road-edge-lines';
     this.ribbon([[-.15, -.055], [.055, .15]], .093, centerMaterial);
   }
   buildPlants() {
@@ -272,7 +314,7 @@ export class DesertChunk {
     const stoneColors = ['#c67a48', '#af643d', '#db9858', '#c28650', '#dbab74'];
     const greens = ['#6c753f', '#8e8546', '#626d44', '#959255'];
     const sample = () => ({ s: this.start + random() * CHUNK_LENGTH, u: (random() > .5 ? 1 : -1) * (10 + random() ** 1.5 * 210) });
-    const canGrow = (s, u) => desertCreekDistance(s, u) > 4 && !insideMesa(s, u) && Math.abs(desertHeight(s, u + .6) - desertHeight(s, u - .6)) < .9 && Math.abs(u - dryWashCenter(s)) > 2;
+    const canGrow = (s, u) => desertDiscoveryClears(s, u, this.discoveries, 7) && desertCreekDistance(s, u) > 4 && !insideMesa(s, u) && Math.abs(desertHeight(s, u + .6) - desertHeight(s, u - .6)) < .9 && Math.abs(u - dryWashCenter(s)) > 2;
     for (let i = 0; i < 155; i++) {
       const { s, u } = sample(); if (insideMesa(s, u, .98) || desertCreekDistance(s, u) < 5.5) continue;
       const p = this.groundPosition(s, u); const size = .35 + random() ** 2 * 3.5;
@@ -377,6 +419,7 @@ export class DesertChunk {
     const greens = ['#7e8645', '#8e934d', '#a0a35a', '#727d47'];
     const stoneColors = ['#d79c69', '#c3895e', '#e1af7c', '#b97851'];
     const clear = (s, u, radius = 1) => Math.abs(u) - radius > 9
+      && desertDiscoveryClears(s, u, this.discoveries, radius + 5)
       && desertCreekDistance(s, u) > radius + 3.5
       && Math.abs(u - dryWashCenter(s)) > radius + 2
       && !insideMesa(s, u, 1.5)
