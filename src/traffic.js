@@ -4,7 +4,7 @@ import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-m
 
 const LANE = 2.4;
 const BEHIND = 380, AHEAD = 620;
-const DENSITY = { coast: 1, snow: .75, desert: .5 };
+const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6 };
 
 // Four separating axes give a forgiving rectangular footprint even when the
 // player is sideways. All collision coordinates are independent of render origin.
@@ -48,7 +48,7 @@ export class Traffic {
   }
   random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
   reset(route, s, journey = this.journey) {
-    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300 }[journey];
+    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400 }[journey];
     this.spacing = 1 / (DENSITY[journey] ?? 1);
     for (const { rig } of this.headlightRigs) {
       rig.removeFromParent();

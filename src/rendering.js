@@ -47,6 +47,7 @@ export function createRendering(canvas) {
     coast: { color: '#bbd9de', near: 540, far: 1050, thirdNear: 170, thirdFar: 300 },
     desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
+    jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -101,6 +102,15 @@ export function createRendering(canvas) {
       sky.color.set('#91afca'); sky.groundColor.set('#2b3b4c'); sky.intensity = .72;
       sun.color.set('#bbd1ea'); sun.intensity = 1.16; sunOffset.set(-170, 190, -80);
       renderer.toneMappingExposure = .91;
+      return;
+    }
+    if (id === 'jungle') {
+      // Light filtered through a canopy: a weak, green-tinted sun almost
+      // overhead, so the emergent crowns shade the road, and a strong green bounce.
+      scene.background.set('#a9c4a2'); updateFog();
+      sky.color.set('#c4dcb0'); sky.groundColor.set('#2f4d28'); sky.intensity = 1.75;
+      sun.color.set('#eef2c4'); sun.intensity = 1.35; sunOffset.set(-55, 245, 40);
+      renderer.toneMappingExposure = .9;
       return;
     }
     const desert = id === 'desert';

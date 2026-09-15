@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#c2e7e8" />
-    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, and snowy mountain roads." />
+    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, snowy mountain roads, and a misty jungle river valley." />
     <title>Coastline — A scenic driving game</title>
     <!-- Keep startup styles inline so the page is covered before the game module loads. -->
     <style>
@@ -48,7 +48,7 @@
         </div>
         <div class="drive-actions" role="group" aria-label="Driving actions">
           <button id="view" title="Change camera (V)"><kbd>V</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="m8 6 2-3h4l2 3" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="13" r="3" stroke="currentColor" stroke-width="1.5"/></svg> <span class="control-label">view</span></button>
-          <button id="change-journey" class="journey-button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Change Route</button>
+          <button id="change-journey" class="journey-button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="control-label">Change Route</span></button>
           <button id="reset" title="Return to the road (R)" aria-label="Return to the road"><kbd>R</kbd><svg class="touch-utility-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 7M4 4v6h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="control-label">reset</span></button>
         </div>
       </header>
@@ -57,7 +57,7 @@
         <h1>Pick a road.<br><em>Start driving.</em></h1>
         <p>Drive the Pacific Coast through green hills and ocean views.</p>
         <button id="start" class="start-button">Let’s drive <span aria-hidden="true">↗</span></button>
-        <span class="start-hint">W / ↑ to drive · N: next scene · F: fullscreen</span>
+        <span class="start-hint">W / ↑ to drive · 1–4: select route · N: next scene · F: fullscreen</span>
         <span class="touch-hint">Drag the stick toward where you want to go on screen. Push farther to speed up; release to stop.</span>
         <span class="controller-hint">Left stick / D-pad: steer · RT / R2: gas<br>LT / L2: brake or reverse · Start / Menu: pause<br>Left face button: view · Top face button: reset<br>RB / R1: next scene · LB / L1: fullscreen<br>Select / View: choose scenery</span>
       </section>
@@ -73,7 +73,7 @@
       <dialog id="journey-dialog" aria-labelledby="journey-heading" aria-describedby="journey-description">
         <div class="journey-dialog-heading"><span class="eyebrow">ROUTES</span><button id="close-journeys" class="icon-button" aria-label="Close route chooser"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
         <h2 id="journey-heading">Choose a route</h2>
-        <p id="journey-description">Coast, desert, or mountains. Choose where to drive.</p>
+        <p id="journey-description">Coast, desert, mountains, or jungle. Choose where to drive.</p>
         <span class="controller-hint">D-pad / stick: choose · A / Cross: select · B / Circle: close</span>
         <div class="journey-options">
           <button class="journey-card" data-journey="coast" aria-label="Pacific Coast" aria-current="true">
@@ -87,6 +87,10 @@
           <button class="journey-card" data-journey="snow" aria-label="Midnight Alpine" aria-current="false">
             <svg class="journey-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#152238"/><path d="m0 145 47-71 53 9 46-58 37 11L220 5l60 47v98Z" fill="#364965"/><path d="m146 25 37 11 37-31 60 47-37-16-16 14-19-17-26 30-19-13-27 20-31 33-19-6Z" fill="#9cb3d5"/><path d="m0 145 47-71 16 15-28 19Z" fill="#778eaf"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#b2c4dc" stroke-width="16"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#354355" stroke-width="11"/><path d="M176 0c-63 45-69 62-14 79s48 43-47 71" fill="none" stroke="#b9b299" stroke-width="1"/><g fill="#172f3c"><path d="m207 62-10 27h20Zm38-15-8 23h16Zm-27 58-12 33h24Zm-143 9-10 26h20Z"/></g><g fill="#afc2dd"><path d="m207 62-7 17h14Zm38-15-5 15h10Zm-27 58-8 22h16Zm-143 9-7 17h14Z"/></g><g stroke="#8592a3" stroke-width="2"><path d="M121 60V42h7m60 65V89h-7m-43 56v-17h7"/></g><g fill="#ffdda0"><circle cx="128" cy="43" r="2.5"/><circle cx="181" cy="90" r="2.5"/><circle cx="145" cy="129" r="2.5"/></g><g fill="#bdcce5"><circle cx="24" cy="21" r="1"/><circle cx="61" cy="37" r="1"/><circle cx="100" cy="13" r="1"/></g></svg>
             <span class="journey-card-copy"><span class="journey-card-title">Midnight Alpine <span aria-hidden="true">↗</span></span><span class="journey-card-description">Moonlit peaks &amp; snow-covered pines.</span><span class="journey-current">CURRENT ROUTE</span></span>
+          </button>
+          <button class="journey-card" data-journey="jungle" aria-label="Emerald Jungle" aria-current="false">
+            <svg class="journey-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#b4cfaa"/><path d="m132 46 46-30 42 22 38-16 22 18v40H132Z" fill="#7fa48e"/><path d="M0 150V88l36-26 44 18 48-30 58 24 40-20 54 28v68Z" fill="#2c6035"/><path d="M0 128c26-4 40-16 56-28s28-10 40-2c14 8 16 22 34 24" fill="none" stroke="#5fc4b3" stroke-width="13"/><path d="M0 128c26-4 40-16 56-28s28-10 40-2c14 8 16 22 34 24" fill="none" stroke="#8fe0cf" stroke-width="3" stroke-dasharray="7 11"/><path d="m56 100 6-11 8 9" fill="#eafff5"/><path d="m50 112 9-6 7 5-5 5Z" fill="#dff8ec"/><g fill="#7b8a80"><path d="m44 92 7-8 8 3-3 8-9 1Z"/><path d="m92 92 8-7 9 4-2 9-10 1Z"/><path d="m104 118 6-6 8 3-2 7Z"/></g><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#c9b98a" stroke-width="13"/><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#525a5c" stroke-width="9"/><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#e0bd47" stroke-width="1.2"/><g fill="#3c8a3b"><circle cx="24" cy="70" r="15"/><circle cx="76" cy="58" r="13"/><circle cx="160" cy="112" r="17"/><circle cx="238" cy="96" r="16"/><circle cx="112" cy="40" r="12"/></g><g fill="#5aa244"><circle cx="40" cy="60" r="10"/><circle cx="196" cy="126" r="12"/><circle cx="256" cy="72" r="11"/><circle cx="152" cy="26" r="9"/><circle cx="222" cy="120" r="9"/></g><g fill="#2a5a2c"><circle cx="8" cy="96" r="11"/><circle cx="120" cy="66" r="9"/><circle cx="182" cy="90" r="11"/><circle cx="264" cy="130" r="13"/><circle cx="92" cy="78" r="8"/></g><g fill="none" stroke="#6fb34f" stroke-width="3" stroke-linecap="round"><path d="M172 74v-16m0 0-9-7m9 7 9-6m-9 6-6 9m6-9 7 9"/><path d="M60 136v-14m0 0-8-6m8 6 8-5m-8 5-5 8m5-8 6 8"/></g><g stroke="#3a6a30" stroke-width="1.5" fill="none"><path d="M236 84v26m10-28v18m-20-14v14"/></g></svg>
+            <span class="journey-card-copy"><span class="journey-card-title">Emerald Jungle <span aria-hidden="true">↗</span></span><span class="journey-card-description">Dense canopy, waterfalls &amp; hanging vines.</span><span class="journey-current">CURRENT ROUTE</span></span>
           </button>
         </div>
         <p class="journey-note">Your position and mileage on each route are saved for this visit.</p>

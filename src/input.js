@@ -17,6 +17,12 @@ export class Input {
         if (!e.repeat) onAction('fullscreen');
         return;
       }
+      const routeKey = /^(?:Digit|Numpad)([1-4])$/.exec(e.code);
+      if (routeKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        if (!e.repeat) onAction('selectJourney', routeKey[1]);
+        return;
+      }
       if (document.querySelector('dialog[open]')) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);

@@ -30,7 +30,7 @@
 .journey-dialog-heading .icon-button { width: 31px; height: 31px; background: transparent; border-color: #25473e25; }
 #journey-heading { font-family: Georgia, serif; font-size: 42px; font-weight: 400; letter-spacing: -1.5px; margin: 8px 0 5px; }
 #journey-description { margin: 0 0 23px; opacity: .74; }
-.journey-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+.journey-options { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
 .journey-card { display: block; padding: 0; text-align: left; border: 1px solid #25473e28; border-radius: 11px; background: #fff8; overflow: hidden; transition: border-color .2s, transform .2s; }
 .journey-card:hover { transform: translateY(-3px); border-color: var(--ink); }
 .journey-card[aria-current=true] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
@@ -69,6 +69,22 @@ body[data-journey=snow] .pause-overlay { background: #111e3266; }
 body[data-journey=snow] .eyebrow>span { background: #e4c68e; }
 body[data-journey=snow] .start-button:hover { background: #b8cde6; }
 body[data-journey=snow] .touch-controls button.active { background: #dce5f3; }
+body[data-journey=jungle] { --ink: #e4efd8; --cream: #1b3320; color: var(--ink); background: #22402a; }
+body[data-journey=jungle] .vignette { background: linear-gradient(180deg,#0f221455,transparent 22%,transparent 80%,#0f221466); }
+body[data-journey=jungle] .welcome, body[data-journey=jungle] .brand, body[data-journey=jungle] .location { text-shadow: 0 2px 12px #0b1a0f; }
+body[data-journey=jungle] :is(.icon-button,.journey-button,.controls,.speedometer,.touch-controls button) { background: #1c3423d1; border-color: #9cbf8f4a; }
+body[data-journey=jungle] :is(.icon-button,.journey-button,.touch-controls button):hover { background: #2f5136e0; }
+body[data-journey=jungle] :is(kbd,.weather-divider,.control-separator,.speed-track) { border-color: #b8d6a84a; }
+body[data-journey=jungle] #toast { background: #1c3423ed; }
+body[data-journey=jungle] #journey-dialog { background: #203a27fa; }
+body[data-journey=jungle] #journey-dialog::backdrop { background: #0a180e66; }
+body[data-journey=jungle] .journey-card { background: #2a4a31; border-color: #8fb58442; }
+body[data-journey=jungle] .journey-card[aria-current=true] { border-color: var(--ink); }
+body[data-journey=jungle] #journey-transition { background: #1f3a26; }
+body[data-journey=jungle] .pause-overlay { background: #16301c66; }
+body[data-journey=jungle] .eyebrow>span { background: #c9dd7e; }
+body[data-journey=jungle] .start-button:hover { background: #cfe3bf; }
+body[data-journey=jungle] .touch-controls button.active { background: #e4efd8; }
 @media(max-width:1000px) { .weather { display: none; } }
 @media(max-width:600px) {
   .journey-button { position: absolute; right: 0; top: 53px; padding: 9px 13px; font-size: 10px; }

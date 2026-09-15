@@ -18,6 +18,7 @@
     "test:scenery": "node scripts/scenery-test.mjs",
     "test:journeys": "node scripts/journey-test.mjs",
     "test:snow": "node scripts/snow-test.mjs",
+    "test:jungle": "node scripts/jungle-test.mjs",
     "test:generation": "node scripts/generation-test.mjs",
     "test:worker": "node scripts/worker-test.mjs",
     "electron:web": "vite build --outDir dist-electron",

@@ -1,10 +1,11 @@
 import { CoastalChunk } from './environment.js';
 import { DesertChunk } from './desert.js';
 import { SnowChunk } from './snow.js';
+import { JungleChunk } from './jungle.js';
 import { packChunk } from './chunk-transfer.js';
 export { SEED } from './route.js';
 
-const builders = { coast: CoastalChunk, desert: DesertChunk, snow: SnowChunk };
+const builders = { coast: CoastalChunk, desert: DesertChunk, snow: SnowChunk, jungle: JungleChunk };
 export function buildChunk(journey, index) {
   const Builder = builders[journey];
   if (!Builder || !Number.isSafeInteger(index)) throw new Error('Invalid chunk request');

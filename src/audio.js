@@ -5,6 +5,7 @@ const AMBIENCE = {
   coast: { low: 440, high: 2400, bed: .14, swell: .16, air: .025, wash: .14 },
   desert: { low: 620, high: 1350, bed: .07, swell: .09, air: .015, wash: .05 },
   snow: { low: 350, high: 2200, bed: .055, swell: .065, air: .02, wash: .075 },
+  jungle: { low: 300, high: 3600, bed: .06, swell: .05, air: .03, wash: .06 },
 };
 
 // One lazily created graph, controlled by smoothed parameters. No sound assets
@@ -86,12 +87,14 @@ export class DriveAudio {
     set(g.combustion.level, .02 + state.load * .045); set(g.combustion.frequency, 430 + state.load * 600);
     set(g.road.level, state.roadLevel); set(g.road.frequency, 380 + state.motion * 900, .25);
     set(g.rough.level, state.roughLevel); set(g.roughPulse, state.roughLevel * .2); set(g.roughMod.frequency, 12 + state.motion * 31);
-    set(g.rough.frequency, this.journey === 'snow' ? 650 : this.journey === 'desert' ? 1350 : 1000, .8);
+    set(g.rough.frequency, this.journey === 'snow' ? 650 : this.journey === 'desert' ? 1350 : this.journey === 'jungle' ? 820 : 1000, .8);
     set(g.wind.level, state.windLevel, .4); set(g.wind.frequency, 900 + state.motion * 1700, .4);
     // Unequal, overlapping cycles give surf and gusts a less repetitive rhythm.
     const swell = Math.pow(.5 + .5 * Math.sin(now * .47 + .6 * Math.sin(now * .113)), 2);
     const gust = .5 + .3 * Math.sin(now * .23) + .2 * Math.sin(now * .61 + 2);
-    const envelope = this.journey === 'coast' ? swell : gust, profile = AMBIENCE[this.journey];
+    // Insects and birdsong pulse faster than surf or gusts.
+    const chirr = .5 + .35 * Math.sin(now * 1.9) + .15 * Math.sin(now * 5.3 + 1);
+    const envelope = this.journey === 'coast' ? swell : this.journey === 'jungle' ? chirr : gust, profile = AMBIENCE[this.journey];
     set(g.bed.level, profile.bed + envelope * profile.swell, .8);
     set(g.bed.frequency, profile.low, .8);
     set(g.air.level, profile.air + Math.pow(envelope, 1.5) * profile.wash, 1);

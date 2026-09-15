@@ -46,6 +46,7 @@ body[data-controller=true] .controller-hint { display: block; }
   .location-title { font-size: 10px; }
   .location-sub { font-size: 12px; }
   body[data-journey=snow] .welcome { background: #17273ee8; border-color: #93acc64a; }
+  body[data-journey=jungle] .welcome { background: #1c3423e8; border-color: #9cbf8f4a; }
 }
 @media (min-width: 761px) and (max-height: 560px) {
   .welcome { top: 76px; transform: none; max-height: calc(100% - 168px); padding: 18px; }
@@ -101,6 +102,7 @@ body[data-controller=true] .controller-hint { display: block; }
   .pause-overlay p { font-size: 14px; }
   .pause-overlay .start-button { min-height: 48px; font-size: 14px; }
   body[data-journey=snow] .welcome { background: #17273ee8; border-color: #93acc64a; }
+  body[data-journey=jungle] .welcome { background: #1c3423e8; border-color: #9cbf8f4a; }
   #journey-dialog { width: calc(100% - 24px - var(--safe-left) - var(--safe-right)); max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); padding: 16px; overscroll-behavior: contain; }
   #journey-description { font-size: 13px; margin-bottom: 18px; }
   .journey-options { grid-template-columns: 1fr; gap: 12px; }
@@ -131,6 +133,10 @@ body[data-journey=snow] :is(#touch-stick, #stick-help) { background: #17273ee8; 
 body[data-journey=snow] .stick-guide { border-color: #93acc680; }
 body[data-journey=snow] .stick-thumb { background: #dce5f3; }
 body[data-journey=snow] #touch-stick.active .stick-thumb { background: #9fbde8; }
+body[data-journey=jungle] :is(#touch-stick, #stick-help) { background: #1c3423e8; border-color: #9cbf8f4a; }
+body[data-journey=jungle] .stick-guide { border-color: #9cbf8f80; }
+body[data-journey=jungle] .stick-thumb { background: #e4efd8; }
+body[data-journey=jungle] #touch-stick.active .stick-thumb { background: #a9d48f; }
 @media (any-pointer: coarse) {
   .bottom-bar { bottom: calc(160px + var(--safe-bottom)); }
 }
@@ -150,6 +156,7 @@ body[data-journey=snow] #touch-stick.active .stick-thumb { background: #9fbde8; 
   .brand-caption { display: none; }
   .welcome { top: calc(66px + var(--safe-top)); bottom: auto; left: calc(16px + var(--safe-left)); width: 340px; max-width: 48%; max-height: calc(100% - 190px - var(--safe-top) - var(--safe-bottom)); transform: none; padding: 16px; overflow-y: auto; pointer-events: auto; border-radius: 14px; background: #f9f8eedb; backdrop-filter: blur(12px); }
   body[data-journey=snow] .welcome { background: #17273ee8; }
+  body[data-journey=jungle] .welcome { background: #1c3423e8; }
   .welcome h1 { font-size: 32px; margin: 10px 0; }
   .welcome p { font-size: 12px; margin-bottom: 12px; }
   .welcome .start-button { min-height: 44px; }
@@ -163,7 +170,7 @@ body[data-journey=snow] #touch-stick.active .stick-thumb { background: #9fbde8; 
   .pause-overlay h2 { font-size: 32px; margin-top: 10px; }
   .pause-overlay p { margin: 8px 0 14px; }
   #journey-dialog { max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); }
-  .journey-options { grid-template-columns: repeat(3, 1fr); }
+  .journey-options { grid-template-columns: repeat(4, 1fr); }
   .journey-card { display: block; }
   .journey-art { height: 70px; min-height: 0; }
   .journey-card-copy { padding: 10px; }

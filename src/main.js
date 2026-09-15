@@ -55,7 +55,7 @@ async function boot() {
       $('#welcome .eyebrow').lastChild.textContent = ` ${data.label}`;
       $('#welcome p').textContent = data.introduction; $('#pause-overlay .eyebrow').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function openJourneys() {
@@ -100,9 +100,14 @@ async function boot() {
         $('#journey-transition').classList.remove('active');
       }
     }
-    async function action(name) {
+    async function action(name, routeNumber) {
       if (name === 'fullscreen') { await toggleFullscreen(); return; }
       if (changingJourney) return;
+      if (name === 'selectJourney') {
+        const id = Object.keys(JOURNEYS).find(id => JOURNEYS[id].routeNumber === routeNumber);
+        await changeJourney(id);
+        return;
+      }
       if (journeyDialog.open) {
         if (name === 'menuClose') journeyDialog.close();
         if (name === 'menuNext' || name === 'menuPrevious') {

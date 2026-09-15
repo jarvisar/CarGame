@@ -12,7 +12,7 @@ try {
   await page.waitForFunction(() => window.__coastline);
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure }; });
   await page.getByRole('button', { name: 'Change Route', exact: true }).click();
-  assert.equal(await page.locator('.journey-card').count(), 3);
+  assert.equal(await page.locator('.journey-card').count(), 4);
   await page.screenshot({ path: '.artifacts/three-journeys.png' });
   await page.getByRole('button', { name: 'Midnight Alpine', exact: true }).click();
   await page.waitForFunction(() => window.__coastline.journey === 'snow' && !window.__coastline.changingJourney);

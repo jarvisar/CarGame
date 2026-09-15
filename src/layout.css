@@ -65,7 +65,8 @@ body[data-controller=true] #app :is(.controls, #pause, #change-journey) { displa
 .journey-dialog-heading { position: sticky; top: -20px; z-index: 1; padding: 4px 0; background: #f6f5ea; }
 body[data-journey=desert] .journey-dialog-heading { background: #fff2dd; }
 body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
-.journey-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+body[data-journey=jungle] .journey-dialog-heading { background: #203a27; }
+.journey-options { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .journey-card { min-width: 0; }
 
 @media (any-pointer: coarse) {
@@ -113,7 +114,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
   .speedometer > #speed { font-size: 30px; }
   .pause-overlay h2 { font-size: 32px; margin-top: 8px; }
   .pause-overlay p { margin: 8px 0 12px; }
-  .journey-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .journey-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .journey-card { display: block; }
   .journey-art, .journey-note { display: none; }
   #journey-description { margin-bottom: 12px; font-size: 12px; }
@@ -149,6 +150,8 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
 .location .speed-track, .location .speed-unit span { display: none; }
 body[data-journey=snow] .location { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] .location .speedometer { background: none; }
+body[data-journey=jungle] .location { background: #1c3423d1; border-color: #9cbf8f4a; }
+body[data-journey=jungle] .location .speedometer { background: none; }
 @media (min-width: 761px) {
   .controls { position: fixed; left: 50%; bottom: var(--ui-bottom); top: auto; transform: translateX(-50%); }
 }
@@ -219,6 +222,9 @@ body[data-controller=true] .top-actions { top: 0; }
 body[data-journey=snow] .drive-actions { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] .drive-actions button { background: transparent; }
 body[data-journey=snow] .drive-actions button:hover { background: #304663e0; }
+body[data-journey=jungle] .drive-actions { background: #1c3423d1; border-color: #9cbf8f4a; }
+body[data-journey=jungle] .drive-actions button { background: transparent; }
+body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
 @media (any-pointer: coarse), (max-width: 1100px) {
   .controls { display: none; }
 }
@@ -234,4 +240,9 @@ body[data-journey=snow] .drive-actions button:hover { background: #304663e0; }
   .welcome h1 br { display: none; }
   .welcome h1 em::before { content: ' '; white-space: pre; }
   .welcome p { margin-bottom: 8px; }
+}
+
+/* Four route cards: two columns on mid-width screens before the single mobile column. */
+@media (min-width: 761px) and (max-width: 960px) {
+  .journey-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

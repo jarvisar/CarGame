@@ -66,6 +66,11 @@ export function createCar() {
   box(roofBox, [1.24, .3, 1.86], [0, 2.4, .13], tires);
   box(roofBox, [1.16, .12, 1.72], [0, 2.61, .13], mat('#536774'));
   for (const x of [-.4, .4]) box(roofBox, [.07, .025, 1.74], [x, 2.68, .13], chrome);
+  const cargo = new THREE.Group(); cargo.name = 'jungle-cargo'; body.add(cargo);
+  const olive = mat('#5f6b3f'), canvas = mat('#c9b48b');
+  for (const x of [-.52, .52]) box(cargo, [.44, .34, .3], [x, 2.42, -.55], olive);
+  const roll = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, 1.5, 8), canvas);
+  roll.rotation.z = Math.PI / 2; roll.position.set(0, 2.44, .55); roll.castShadow = true; cargo.add(roll);
   const wheels = [];
   for (const x of [-1.02, 1.02]) for (const z of [-1.18, 1.21]) {
     const pivot = new THREE.Group(); pivot.position.set(x, .49, z); car.add(pivot);
@@ -75,9 +80,9 @@ export function createCar() {
   }
   // Reuse the model and its materials so repeated route changes stay bounded.
   function setAppearance(journey) {
-    paint.color.set({ coast: '#d96143', desert: '#78977b', snow: '#9fc4d5' }[journey] ?? '#d96143');
-    surfboard.visible = journey === 'coast'; spare.visible = journey === 'desert'; roofBox.visible = journey === 'snow';
-    rack.visible = surfboard.visible || roofBox.visible;
+    paint.color.set({ coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a' }[journey] ?? '#d96143');
+    surfboard.visible = journey === 'coast'; spare.visible = journey === 'desert'; roofBox.visible = journey === 'snow'; cargo.visible = journey === 'jungle';
+    rack.visible = surfboard.visible || roofBox.visible || cargo.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
   setAppearance('coast');

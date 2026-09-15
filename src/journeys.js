@@ -4,6 +4,8 @@ import { DesertWorld } from './world/desert.js';
 import { desertDrivingRoute } from './world/desert-route.js';
 import { SnowWorld } from './world/snow.js';
 import { snowDrivingRoute } from './world/snow-route.js';
+import { JungleWorld } from './world/jungle.js';
+import { jungleDrivingRoute } from './world/jungle-route.js';
 
 export const JOURNEYS = {
   coast: {
@@ -23,5 +25,11 @@ export const JOURNEYS = {
     introduction: 'Wind above a moonlit lake through snow-covered mountains.',
     sound: 'Mountain wind and engine sounds on',
     canvas: 'A snowy mountain road above a moonlit lake, with distant mountain ranges, snow-laden firs, shore cabins and warm lamps. Drive with WASD or the arrow keys.',
+  },
+  jungle: {
+    title: 'Emerald Jungle', label: 'EMERALD JUNGLE', routeNumber: '4', World: JungleWorld, route: jungleDrivingRoute,
+    introduction: 'Follow a turquoise river through dense, dripping jungle beneath the canopy.',
+    sound: 'Jungle insects, birdsong and engine sounds on',
+    canvas: 'A humid jungle road beneath tall emergent trees, beside a turquoise river with cascades and mossy boulders, with misty green mountains beyond. Drive with WASD or the arrow keys.',
   },
 };

@@ -33,7 +33,7 @@ try {
     assert.equal(await page.locator('#gear').textContent(), status);
     assert.ok(Math.abs(await page.locator('#speed-fill').evaluate(el => parseFloat(el.style.width)) - fill) < .01);
   }
-  for (const id of ['desert', 'snow', 'coast']) {
+  for (const id of ['desert', 'snow', 'jungle', 'coast']) {
     await page.locator('#change-journey').click();
     await page.locator(`[data-journey="${id}"]`).click();
     await page.waitForFunction(id => window.__coastline.journey === id && !window.__coastline.changingJourney, id);
