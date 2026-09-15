@@ -42,6 +42,24 @@ export function createRendering(canvas) {
   const activeCamera = () => view === 3 ? thirdPerson.camera : camera;
   let initialized = false; let view = 1; let viewHeight = views[view].height; let previousOrigin = 0;
   let snowy = false;
+  let journey = 'coast';
+  const fogProfiles = {
+    coast: { color: '#bbd9de', near: 540, far: 1050, thirdNear: 170, thirdFar: 300 },
+    desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
+    snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
+  };
+  function updateFog() {
+    const profile = fogProfiles[journey];
+    // Keep the miniature views' atmosphere; fade only distant third-person scenery.
+    // Matching the sky exactly lets fully faded terrain disappear without a seam.
+    if (view === 3) {
+      scene.fog.color.copy(scene.background);
+      scene.fog.near = profile.thirdNear; scene.fog.far = profile.thirdFar;
+    } else {
+      scene.fog.color.set(profile.color);
+      scene.fog.near = profile.near; scene.fog.far = profile.far;
+    }
+  }
   const lookAhead = new THREE.Vector3(-24, 0, -46);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function resize() {
@@ -76,17 +94,17 @@ export function createRendering(canvas) {
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
   window.addEventListener('resize', () => { density.reset(); resizeCanvas(); resize(); }); resize();
   function setJourney(id) {
+    journey = fogProfiles[id] ? id : 'coast';
     snowy = id === 'snow';
     if (id === 'snow') {
-      scene.background.set('#111f2b'); scene.fog.color.set('#243949'); scene.fog.near = 340; scene.fog.far = 760;
+      scene.background.set('#111f2b'); updateFog();
       sky.color.set('#91afca'); sky.groundColor.set('#2b3b4c'); sky.intensity = .72;
       sun.color.set('#bbd1ea'); sun.intensity = 1.16; sunOffset.set(-170, 190, -80);
       renderer.toneMappingExposure = .91;
       return;
     }
     const desert = id === 'desert';
-    scene.fog.near = desert ? 460 : 540; scene.fog.far = desert ? 860 : 1050;
-    scene.background.set(desert ? '#dfb399' : '#b4dbe7'); scene.fog.color.set(desert ? '#dab49b' : '#bbd9de');
+    scene.background.set(desert ? '#dfb399' : '#b4dbe7'); updateFog();
     sky.color.set(desert ? '#e5d8d0' : '#d3eaf6'); sky.groundColor.set(desert ? '#79635a' : '#405e52');
     sky.intensity = desert ? 1.27 : 1.12;
     sun.color.set(desert ? '#ffe0bc' : '#fff0d5'); sun.intensity = desert ? 2.45 : 2.7;
@@ -94,5 +112,5 @@ export function createRendering(canvas) {
     renderer.toneMappingExposure = desert ? .92 : .97;
   }
   setJourney('coast');
-  return { renderer, scene, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
+  return { renderer, scene, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
 }
