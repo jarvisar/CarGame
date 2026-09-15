@@ -1,0 +1,126 @@
+import * as THREE from 'three';
+import { clamp, randomAt } from './world/route.js';
+import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-models.js';
+
+const LANE = 2.4;
+const BEHIND = 380, AHEAD = 620;
+
+// Four separating axes give a forgiving rectangular footprint even when the
+// player is sideways. All collision coordinates are independent of render origin.
+export function trafficContact(a, b) {
+  const axes = car => [{ x: Math.cos(car.heading), z: Math.sin(car.heading) }, { x: Math.sin(car.heading), z: -Math.cos(car.heading) }];
+  const aa = axes(a), ba = axes(b), dx = a.x - b.x, dz = a.z - b.z;
+  const dot = (u, v) => u.x * v.x + u.z * v.z;
+  const radius = (car, basis, axis) => car.halfWidth * Math.abs(dot(basis[0], axis)) + car.halfLength * Math.abs(dot(basis[1], axis));
+  let contact = null;
+  for (const axis of [...aa, ...ba]) {
+    const distance = dx * axis.x + dz * axis.z;
+    const depth = radius(a, aa, axis) + radius(b, ba, axis) - Math.abs(distance);
+    if (depth <= 0) return null;
+    if (!contact || depth < contact.depth) {
+      const sign = distance < 0 ? -1 : 1;
+      contact = { x: axis.x * sign, z: axis.z * sign, depth };
+    }
+  }
+  return contact;
+}
+
+export class Traffic {
+  constructor(scene, route, s, journey = 'coast') {
+    this.group = new THREE.Group(); this.group.name = 'traffic'; scene.add(this.group);
+    this.models = createTrafficModels();
+    // Three cars in each direction over a kilometer: usually one or two in view.
+    this.vehicles = Array.from({ length: 6 }, (_, index) => {
+      const model = this.models.create(index % TRAFFIC_MODELS.length, TRAFFIC_COLORS[0]);
+      this.group.add(model.car);
+      return { ...model, index, direction: index % 2 ? -1 : 1, position: new THREE.Vector3(), previousPosition: new THREE.Vector3(), quaternion: new THREE.Quaternion(), previousQuaternion: new THREE.Quaternion() };
+    });
+    this.reset(route, s, journey);
+  }
+  random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
+  reset(route, s, journey = this.journey) {
+    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300 }[journey];
+    this.lastPlayerS = s; this.models.setNight(journey === 'snow');
+    for (const car of this.vehicles) {
+      car.generation = 0; car.u = car.direction * LANE;
+      car.s = s - 280 + Math.floor(car.index / 2) * 360 + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35;
+      this.respawn(car, car.s);
+    }
+  }
+  respawn(car, s) {
+    car.s = s; car.generation++;
+    car.cruiseSpeed = car.direction > 0 ? 16 : 20; car.speed = car.cruiseSpeed;
+    car.paint.color.set(TRAFFIC_COLORS[Math.floor(this.random(car, 2) * TRAFFIC_COLORS.length)]);
+    this.pose(car); car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
+  }
+  recycle(car, playerS) {
+    // Pick a clear spot outside the camera, including when reversing or resetting.
+    let bestS = playerS + AHEAD - 30, bestGap = -Infinity;
+    for (const offset of [-360, -300, 460, 530, 600]) {
+      const s = playerS + offset + this.random(car, 3) * 12;
+      const gap = Math.min(...this.vehicles.filter(other => other !== car && other.direction === car.direction).map(other => Math.abs(other.s - s)));
+      if (gap > bestGap) { bestGap = gap; bestS = s; }
+    }
+    this.respawn(car, bestS);
+  }
+  clearNear(player) {
+    for (const car of this.vehicles) if (Math.abs(car.s - player.s) < 18) this.recycle(car, player.s);
+  }
+  pose(car) {
+    const route = this.route, frame = route.frame(car.s), p = route.position(car.s, car.u);
+    car.position.set(p.x, p.y + .13, p.z);
+    car.heading = frame.angle + (car.direction < 0 ? Math.PI : 0);
+    const slope = (route.height(car.s + 1.5, car.u) - route.height(car.s - 1.5, car.u)) / (3 * frame.scale);
+    const crossSlope = (route.height(car.s, car.u + .7) - route.height(car.s, car.u - .7)) / 1.4;
+    car.quaternion.setFromEuler(new THREE.Euler(Math.atan(slope * car.direction), -car.heading, Math.atan(crossSlope * car.direction), 'YXZ'));
+  }
+  update(dt, player) {
+    if (Math.abs(player.s - this.lastPlayerS) > 120) this.reset(this.route, player.s);
+    this.lastPlayerS = player.s;
+    for (const car of this.vehicles) {
+      if (car.s < player.s - BEHIND || car.s > player.s + AHEAD) this.recycle(car, player.s);
+      car.previousPosition.copy(car.position); car.previousQuaternion.copy(car.quaternion);
+      let target = car.cruiseSpeed;
+      const scale = this.route.frame(car.s).scale;
+      // Basic following/braking prevents the few cars from driving through a
+      // stopped player or piling into one another. No passing or pathfinding.
+      for (const other of [...this.vehicles, player]) {
+        if (other === car || Math.abs(other.u - car.u) > 2.2) continue;
+        const ahead = (other.s - car.s) * car.direction * scale;
+        if (ahead <= 0 || ahead > 70) continue;
+        const gap = ahead - (car.spec.length + (other.spec?.length ?? 4)) / 2;
+        target = Math.min(target, Math.sqrt(2 * 7 * Math.max(0, gap - 6)));
+      }
+      car.targetSpeed = target;
+    }
+    for (const car of this.vehicles) {
+      car.speed += clamp(car.targetSpeed - car.speed, -14 * dt, 3 * dt);
+      car.s += car.direction * car.speed * dt / this.route.frame(car.s).scale;
+      this.pose(car);
+    }
+    this.collide(player);
+  }
+  collide(player) {
+    for (const car of this.vehicles) {
+      if (Math.abs(car.s - player.s) > 9) continue;
+      const p = player.groundedPosition;
+      const contact = trafficContact({ x: p.x, z: p.z, heading: player.heading, halfWidth: 1, halfLength: 1.96 },
+        { x: car.position.x, z: car.position.z, heading: car.heading, halfWidth: car.spec.width / 2, halfLength: car.spec.length / 2 });
+      if (!contact) continue;
+      const vx = Math.sin(player.heading) * player.speed - Math.sin(car.heading) * car.speed;
+      const vz = -Math.cos(player.heading) * player.speed + Math.cos(car.heading) * car.speed;
+      const closing = vx * contact.x + vz * contact.z < 0;
+      // Arcade response: separate the bodies and scrub speed on impact.
+      player.resolveTrafficCollision(contact.x * (contact.depth + .025), contact.z * (contact.depth + .025), closing ? player.speed * .22 : player.speed);
+      if (closing) car.speed *= .22;
+    }
+  }
+  render(alpha, origin = 0) {
+    this.group.position.z = origin;
+    for (const car of this.vehicles) {
+      car.car.position.lerpVectors(car.previousPosition, car.position, clamp(alpha, 0, 1));
+      car.car.quaternion.slerpQuaternions(car.previousQuaternion, car.quaternion, clamp(alpha, 0, 1));
+    }
+  }
+  dispose() { this.group.removeFromParent(); this.models.dispose(); }
+}

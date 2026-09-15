@@ -90,6 +90,18 @@ export class DrivingController {
     target.position.copy(source.position); target.quaternion.copy(source.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) target[key] = source[key];
   }
+  resolveTrafficCollision(dx, dz, speed) {
+    const frame = this.route.frame(this.s);
+    this.s += (dx * Math.sin(frame.angle) - dz * Math.cos(frame.angle)) / frame.scale;
+    this.u += dx * Math.cos(frame.angle) + dz * Math.sin(frame.angle);
+    this.u = clamp(this.u, ...this.route.bounds(this.s));
+    this.bodyPitch = clamp(this.bodyPitch + (this.speed - speed) * .003, -.09, .09);
+    this.speed = speed; this.audioTelemetry.speed = speed;
+    const p = this.route.position(this.s, this.u);
+    this.groundedPosition.set(p.x, p.y + .13, p.z);
+    this.currentPose.position.copy(this.groundedPosition); this.currentPose.bodyPitch = this.bodyPitch;
+    this.render(1);
+  }
   render(alpha, origin = 0) {
     const a = this.previousPose, b = this.currentPose;
     alpha = clamp(alpha, 0, 1);

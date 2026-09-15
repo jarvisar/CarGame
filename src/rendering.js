@@ -17,6 +17,8 @@ export function createRendering(canvas) {
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
   const follow = new THREE.Vector3(); const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
+  const cameraRight = new THREE.Vector3(cameraOffset.z, 0, -cameraOffset.x).normalize();
+  const framingOffset = new THREE.Vector3();
   const sunOffset = new THREE.Vector3(-110, 240, 100);
   const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }];
   let initialized = false; let view = 1; let viewHeight = views[view].height; let previousOrigin = 0;
@@ -40,7 +42,12 @@ export function createRendering(canvas) {
     const framing = Math.min(1, viewHeight / 165);
     target.copy(follow).addScaledVector(lookAhead, framing);
     if (snowy) { target.y -= 14 * framing; target.z += 18 * framing; }
-    if (window.innerWidth < window.innerHeight) target.x += 16 * framing;
+    if (window.innerWidth < window.innerHeight) {
+      // Keep the car just right of center at every portrait zoom, preserving vertical look-ahead.
+      const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
+      const portraitOffset = -.08 * (camera.right - camera.left);
+      target.addScaledVector(cameraRight, portraitOffset - lateralOffset);
+    }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);

@@ -6,6 +6,7 @@ import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
 import { SEED, journeyStart } from './world/route.js';
 import { DrivingController } from './vehicle.js';
+import { Traffic } from './traffic.js';
 import { Input } from './input.js';
 import { touchDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
@@ -32,6 +33,7 @@ async function boot() {
     const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast); const audio = new DriveAudio();
     const journeyDialog = $('#journey-dialog');
     scene.add(vehicle.car); world.update(vehicle.s);
+    const traffic = new Traffic(scene, vehicle.route, vehicle.s);
     function start() { if (paused) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
@@ -76,6 +78,7 @@ async function boot() {
         vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
         vehicle.setAppearance(id);
         vehicle.setNight(id === 'snow');
+        traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
@@ -111,7 +114,7 @@ async function boot() {
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { vehicle.reset(); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Car reset to the road'); }
+      if (name === 'reset') { vehicle.reset(); traffic.clearNear(vehicle); traffic.render(1, world.origin); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Car reset to the road'); }
       if (name === 'view') { toast(rendering.toggleView()); updateViewUi(); }
       if (name === 'sound') {
         try {
@@ -203,6 +206,7 @@ async function boot() {
       const state = started ? input.state : {};
       if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, camera, vehicle.route, vehicle.s, vehicle.u);
       vehicle.update(dt, state);
+      traffic.update(dt, vehicle);
     };
     function frame(timestamp) {
       input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: journeyDialog.open });
@@ -211,6 +215,7 @@ async function boot() {
       if (!paused) {
         time += dt;
         world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
+        traffic.render(frameClock.alpha, world.origin);
         rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }
       audio.update(vehicle.audioTelemetry, dt);
@@ -219,12 +224,12 @@ async function boot() {
       if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       requestAnimationFrame(frame);
     }
-    vehicle.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();
+    vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
     else renderer.compile(scene, camera);
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, vehicle, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, vehicle, traffic, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();
