@@ -93,14 +93,22 @@ try {
   assert.match(await page.locator('#view').getAttribute('aria-label'), /Third-person view/);
   assert.ok(await page.evaluate(() => window.__coastline.input.touchStick.pointer !== null));
   const cameraRotation = await page.evaluate(() => window.__coastline.rendering.camera.quaternion.toArray());
+  const startHeading = await page.evaluate(() => window.__coastline.vehicle.heading);
+  assert.match(await page.locator('#touch-stick').getAttribute('aria-label'), /left and right to steer/);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, x: center.x + 25, y: center.y - 25 }] });
+  await page.waitForFunction(heading => window.__coastline.vehicle.heading - heading > .2, startHeading);
+  const turnRotation = await page.evaluate(() => window.__coastline.rendering.camera.quaternion.toArray());
+  assert.ok(Math.abs(turnRotation.reduce((dot, value, index) => dot + value * cameraRotation[index], 0)) < .999, 'camera follows while steering with the joystick held');
+  const forwardSpeed = await page.evaluate(() => window.__coastline.vehicle.speed);
+  const turnHeading = await page.evaluate(() => window.__coastline.vehicle.heading);
   await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y + 30 }] });
-  await page.waitForTimeout(450);
-  const heldRotation = await page.evaluate(() => window.__coastline.rendering.camera.quaternion.toArray());
-  assert.ok(heldRotation.every((value, index) => Math.abs(value - cameraRotation[index]) < 1e-8), 'camera does not spin when dragging down');
+  await page.waitForFunction(speed => window.__coastline.vehicle.speed < speed, forwardSpeed);
+  await page.waitForFunction(() => window.__coastline.vehicle.speed < -.5);
+  assert.ok(await page.evaluate(heading => Math.cos(window.__coastline.vehicle.heading - heading) > .98, turnHeading), 'down brakes and reverses without flipping the car');
   assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y < -.5));
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
-  checks.push('second-finger view change preserves joystick; third-person drag stays stable and release stops');
+  checks.push('second-finger view change preserves joystick; third-person steering follows smoothly, down brakes/reverses, and release stops');
   for (const [width, height] of [[390, 844], [320, 568], [667, 375], [844, 390]]) {
     await page.setViewportSize({ width, height });
     await checkLayout(`driving ${width}x${height}`);

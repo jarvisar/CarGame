@@ -60,7 +60,7 @@ On touch devices, tap **Let’s drive**, then drag the right-side virtual joysti
 
 Driving controls and the combined area/distance/speed readout stay hidden on menus and pause screens. During a drive, the three-line readout sits in the bottom-left corner and the joystick sits at the bottom right. Short landscape screens hide repeated control help and compact the toolbar. Safe-area insets and available viewport height govern panel sizing; long menu and installation content scrolls inside its panel.
 
-In third-person view, the camera holds its orientation while a finger is on the joystick so screen directions stay consistent. Release the stick to stop and let the camera settle behind the car again. A second finger can tap View while driving.
+Third-person view uses car-style touch controls: push up to accelerate, left/right to steer, and down to brake or reverse. Release to stop. The camera follows turns smoothly while driving and softens terrain bumps; the other views retain screen-direction joystick controls. A second finger can tap View while driving.
 
 ### Controllers
 

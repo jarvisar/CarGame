@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { ThirdPersonCamera } from '../src/third-person-camera.js';
-import { touchDrivingInput, TouchDrivingFrame } from '../src/touch-stick.js';
+import { touchDrivingInput, thirdPersonDrivingInput } from '../src/touch-stick.js';
 import { DrivingController } from '../src/vehicle.js';
 import { coastalDrivingRoute } from '../src/world/route.js';
 import { desertDrivingRoute } from '../src/world/desert-route.js';
@@ -46,25 +46,22 @@ test('perspective joystick follows all screen directions on every route and afte
   }
 });
 
-test('camera follows during a held joystick drag without rotating the input frame', () => {
+test('third-person joystick steers gradually while the camera follows, and release stops', () => {
   const car = new DrivingController();
   const rig = new ThirdPersonCamera(); rig.resize(390 / 844); rig.update(car.car, 0);
-  const rotation = rig.camera.quaternion.clone();
-  const frame = new TouchDrivingFrame();
-  for (let i = 0; i < 60; i++) {
-    const camera = frame.update(rig.camera, car.car.position, 1);
-    car.update(1 / 60, { touchDrive: touchDrivingInput({ x: 0, y: -1 }, camera, car.route, car.s, car.u) });
+  const heading = car.heading;
+  for (let i = 0; i < 90; i++) {
+    const before = car.heading;
+    car.update(1 / 60, thirdPersonDrivingInput({ x: .6, y: .8 }));
     rig.update(car.car, 1 / 60);
-    assert.ok(1 - Math.abs(camera.quaternion.dot(rotation)) < 1e-10);
+    assert.ok(Math.abs(car.heading - before) < .04, 'steering must not snap the car to a new heading');
   }
   assert.ok(car.speed > 1);
-  assert.ok(Math.abs(rig.camera.quaternion.dot(rotation)) < .1);
-  assert.ok(Math.cos(rig.heading - car.heading) > .999);
-  assert.equal(frame.update(rig.camera, car.car.position, null), rig.camera);
-  const nextDrag = frame.update(rig.camera, car.car.position, 1);
-  assert.ok(1 - Math.abs(nextDrag.quaternion.dot(rig.camera.quaternion)) < 1e-10);
+  assert.ok(car.heading - heading > .2, 'right turns the car right');
+  assert.ok(rig.heading - heading > .1, 'camera follows before the stick is released');
   for (let i = 0; i < 120; i++) {
-    car.update(1 / 60, { touchDrive: { amount: 0 } }); rig.update(car.car, 1 / 60);
+    car.update(1 / 60, thirdPersonDrivingInput({ x: 0, y: 0 })); rig.update(car.car, 1 / 60);
+    assert.ok(car.speed >= 0);
   }
   assert.equal(car.speed, 0);
   assert.ok(Math.cos(rig.heading - car.heading) > .999);
@@ -72,20 +69,64 @@ test('camera follows during a held joystick drag without rotating the input fram
   assert.ok(Math.abs(rig.heading - car.heading) < 1e-9);
 });
 
-test('held touch frame tracks translation and origin shifts and resets outside third person', () => {
-  const car = new DrivingController(), rig = new ThirdPersonCamera(), frame = new TouchDrivingFrame();
-  rig.update(car.car, 0);
-  const camera = frame.update(rig.camera, car.car.position, 4);
-  const projected = car.car.position.clone().project(camera);
-  car.car.position.add(new THREE.Vector3(12, 3, 20000));
-  rig.update(car.car, 1 / 60);
-  frame.update(rig.camera, car.car.position, 4);
-  assert.ok(projected.distanceTo(car.car.position.clone().project(camera)) < 1e-9);
-  const scenic = new THREE.OrthographicCamera();
-  assert.equal(frame.update(scenic, car.car.position, 4), scenic);
-  car.car.rotation.y = -1;
-  rig.snap(); rig.update(car.car, 0);
-  assert.ok(frame.update(rig.camera, car.car.position, 4).quaternion.angleTo(rig.camera.quaternion) < 1e-7);
+test('third-person down brakes before reversing without turning the car around', () => {
+  for (const route of [coastalDrivingRoute, desertDrivingRoute, snowDrivingRoute]) {
+    const car = new DrivingController(route);
+    car.speed = 5;
+    const heading = car.heading;
+    car.update(1 / 60, thirdPersonDrivingInput({ x: 0, y: -1 }));
+    assert.ok(car.speed > 0 && car.speed < 5);
+    for (let i = 0; i < 60; i++) car.update(1 / 60, thirdPersonDrivingInput({ x: 0, y: -1 }));
+    assert.ok(car.speed < -1);
+    assert.ok(Math.cos(car.heading - heading) > .99);
+    for (let i = 0; i < 60; i++) {
+      car.update(1 / 60, thirdPersonDrivingInput({ x: 0, y: 0 }));
+      assert.ok(car.speed <= 0);
+    }
+    assert.equal(car.speed, 0);
+  }
+});
+
+test('camera eases through U-turns at a bounded speed across frame rates', () => {
+  const samples = [];
+  for (const fps of [30, 60, 120]) {
+    const car = new THREE.Object3D(), rig = new ThirdPersonCamera();
+    rig.update(car, 0); car.rotation.y = -Math.PI;
+    let previousStep = 0;
+    for (let i = 0; i < fps * 4; i++) {
+      const before = rig.heading;
+      rig.update(car, 1 / fps);
+      const step = rig.heading - before;
+      assert.ok(step >= 0 && step * fps < 2.2, 'no whip-around or overshoot');
+      if (i === 0) assert.ok(step < .02, 'ease into the orbit');
+      assert.ok(Math.abs(step - previousStep) * fps < 1, 'smooth changes in angular speed');
+      previousStep = step;
+      if (i === fps - 1) samples.push(rig.heading);
+    }
+    assert.ok(Math.abs(rig.heading - Math.PI) < .001);
+    // Cross the angle seam by the short path, then reset during a turn.
+    car.rotation.y = Math.PI - .1;
+    rig.update(car, 1 / fps);
+    assert.ok(rig.heading > Math.PI - .001);
+    rig.snap(); rig.update(car, 0);
+    const snapped = rig.heading;
+    rig.update(car, 1 / fps);
+    assert.equal(rig.heading, snapped);
+  }
+  assert.ok(Math.max(...samples) - Math.min(...samples) < .04);
+});
+
+test('third-person camera softens terrain bumps and keeps the horizon level', () => {
+  const car = new THREE.Object3D(), rig = new ThirdPersonCamera();
+  rig.update(car, 0);
+  const height = rig.camera.position.y;
+  car.position.y = .5; car.rotation.x = .4; car.rotation.z = .3;
+  rig.update(car, 1 / 60);
+  assert.ok(Math.abs(rig.camera.position.y - height) < .1);
+  assert.ok(Math.abs(rig.pitch) < .01);
+  for (let i = 0; i < 240; i++) rig.update(car, 1 / 60);
+  assert.ok(Math.abs(rig.pitch - .18) < .001);
+  assert.ok(Math.abs(rig.camera.matrixWorld.elements[1]) < 1e-9, 'car roll does not tilt the horizon');
 });
 
 test('perspective shadows cover nearby receivers without changing the camera projection', () => {

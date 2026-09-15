@@ -9,7 +9,7 @@ import { ChunkWorker } from './world/chunk-source.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic } from './traffic.js';
 import { Input } from './input.js';
-import { touchDrivingInput, TouchDrivingFrame } from './touch-stick.js';
+import { touchDrivingInput, thirdPersonDrivingInput } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
 import { FrameClock } from './timing.js';
 import { setupControlHelp, controlHelpDismissed } from './control-help.js';
@@ -124,7 +124,7 @@ async function boot() {
       if (name === 'reset') { vehicle.reset(); traffic.clearNear(vehicle); traffic.render(1, world.origin); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); needsRender = true; toast('Car reset to the road'); }
       if (name === 'view') {
         toast(rendering.toggleView()); updateViewUi();
-        rendering.update(vehicle.car, 0, world.origin, input.touchStick.pointer !== null);
+        rendering.update(vehicle.car, 0, world.origin);
         needsRender = true;
       }
       if (name === 'sound') {
@@ -218,12 +218,20 @@ async function boot() {
     function updateViewUi() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
       $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
+      const thirdPerson = rendering.camera.isPerspectiveCamera;
+      $('#stick-help').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag to drive';
+      $('#stick-help > span').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
+      $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
+      $('.touch-hint').firstChild.textContent = thirdPerson
+        ? 'Push up to accelerate, left or right to steer, and down to brake or reverse. Release to stop.'
+        : 'Drag the stick toward where you want to go on screen. Push farther to speed up; release to stop.';
     }
-    const touchFrame = new TouchDrivingFrame();
     const simulate = dt => {
       const state = started ? input.state : {};
-      const touchCamera = touchFrame.update(rendering.camera, vehicle.car.position, input.touchStick.pointer);
-      if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, touchCamera, vehicle.route, vehicle.s, vehicle.u, world.origin);
+      if (state.touchStick) {
+        if (rendering.camera.isPerspectiveCamera) Object.assign(state, thirdPersonDrivingInput(state.touchStick));
+        else state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);
+      }
       vehicle.update(dt, state);
       traffic.update(dt, vehicle);
     };

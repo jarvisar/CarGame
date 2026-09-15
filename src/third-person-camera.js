@@ -5,7 +5,9 @@ export class ThirdPersonCamera {
     this.camera = new THREE.PerspectiveCamera(45, 1, .1, 1200);
     this.initialized = false;
     this.heading = 0;
+    this.headingVelocity = 0;
     this.pitch = 0;
+    this.height = 0;
     this.forward = new THREE.Vector3();
     this.target = new THREE.Vector3();
   }
@@ -18,18 +20,33 @@ export class ThirdPersonCamera {
   snap() { this.initialized = false; }
   update(car, dt) {
     const heading = -car.rotation.y;
+    // Let the horizon suggest the slope without copying every chassis movement.
+    const pitch = THREE.MathUtils.clamp(car.rotation.x * .45, -.18, .18);
     if (!this.initialized) {
-      this.heading = heading; this.pitch = car.rotation.x; this.initialized = true;
+      this.heading = heading; this.headingVelocity = 0;
+      this.pitch = pitch; this.height = car.position.y; this.initialized = true;
     } else {
-      const difference = Math.atan2(Math.sin(heading - this.heading), Math.cos(heading - this.heading));
-      this.heading += difference * (1 - Math.exp(-dt * 5));
-      this.pitch = THREE.MathUtils.damp(this.pitch, car.rotation.x, 5, dt);
+      // A critically damped spring eases into and out of turns. Limit its error
+      // so even a sudden U-turn produces a controlled orbit (about 125 deg/s).
+      // Small steps keep the speed limit consistent across display refresh rates.
+      for (let remaining = dt; remaining > 1e-8;) {
+        const step = Math.min(remaining, 1 / 120);
+        const difference = Math.atan2(Math.sin(heading - this.heading), Math.cos(heading - this.heading));
+        const frequency = 7, change = THREE.MathUtils.clamp(difference, -.62, .62);
+        const spring = this.headingVelocity - frequency * change;
+        const decay = Math.exp(-frequency * step);
+        this.heading += change + (-change + spring * step) * decay;
+        this.headingVelocity = (this.headingVelocity - frequency * spring * step) * decay;
+        remaining -= step;
+      }
+      this.pitch = THREE.MathUtils.damp(this.pitch, pitch, 2.5, dt);
+      this.height = THREE.MathUtils.damp(this.height, car.position.y, 9, dt);
     }
     this.forward.set(Math.sin(this.heading), 0, -Math.cos(this.heading));
     this.camera.position.copy(car.position).addScaledVector(this.forward, -14);
-    this.camera.position.y += 8 - Math.sin(this.pitch) * 14;
+    this.camera.position.y = this.height + 8 - Math.sin(this.pitch) * 14;
     this.target.copy(car.position).addScaledVector(this.forward, 5);
-    this.target.y += 1 + Math.sin(this.pitch) * 5;
+    this.target.y = this.height + 1 + Math.sin(this.pitch) * 5;
     this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
   }
