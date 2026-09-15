@@ -35,6 +35,9 @@ export class AmbientOcclusion {
       uniforms: {
         tAO: { value: this.pass.gtaoMap },
         tDepth: { value: this.pass.depthTexture },
+        tNormal: { value: this.pass.normalTexture },
+        aoSize: { value: new THREE.Vector2(1, 1) },
+        inverseProjection: { value: new THREE.Matrix4() },
         intensity: { value: .48 },
         cameraNear: { value: camera.near },
         cameraFar: { value: camera.far },
@@ -53,12 +56,44 @@ export class AmbientOcclusion {
         #include <packing>
         uniform sampler2D tAO;
         uniform sampler2D tDepth;
+        uniform sampler2D tNormal;
+        uniform vec2 aoSize;
+        uniform mat4 inverseProjection;
         uniform float intensity;
         uniform float cameraNear;
         uniform float cameraFar;
         uniform float fogNear;
         uniform float fogFar;
         varying vec2 vUv;
+        vec3 viewPosition(vec2 uv, float depth) {
+          vec4 position = inverseProjection * vec4(vec3(uv, depth) * 2.0 - 1.0, 1.0);
+          return position.xyz / position.w;
+        }
+        float surfaceAO(float depth) {
+          vec3 center = viewPosition(vUv, depth);
+          vec3 normal = unpackRGBToNormal(texture2D(tNormal, vUv).rgb);
+          vec2 pixel = vUv * aoSize - 0.5;
+          vec2 base = floor(pixel), fraction = fract(pixel);
+          float shade = 0.0, weightSum = 0.0;
+          // Upscale using only samples on this surface. Ordinary bilinear
+          // filtering drags dark background pixels over moving silhouettes.
+          for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) {
+            vec2 offset = vec2(float(x), float(y));
+            vec2 uv = (clamp(base + offset, vec2(0.0), aoSize - 1.0) + 0.5) / aoSize;
+            float sampleDepth = texture2D(tDepth, uv).r;
+            vec3 sampleNormal = unpackRGBToNormal(texture2D(tNormal, uv).rgb);
+            float planeDistance = abs(dot(viewPosition(uv, sampleDepth) - center, normal));
+            float sameSurface = (1.0 - smoothstep(0.05, 0.3, planeDistance))
+              * smoothstep(0.8, 0.98, dot(normal, sampleNormal)) * (1.0 - step(1.0, sampleDepth));
+            vec2 weights = mix(1.0 - fraction, fraction, offset);
+            float weight = weights.x * weights.y * sameSurface;
+            shade += (texture2D(tAO, uv).r - 1.0) * weight;
+            weightSum += weight;
+          }
+          // Thin features with no matching coarse sample stay unoccluded;
+          // fade weak support smoothly instead of popping to a dark neighbor.
+          return 1.0 + shade / max(weightSum, 0.2);
+        }
         void main() {
           float depth = texture2D(tDepth, vUv).r;
           #if PERSPECTIVE_CAMERA == 1
@@ -67,7 +102,7 @@ export class AmbientOcclusion {
             float distance = -orthographicDepthToViewZ(depth, cameraNear, cameraFar);
           #endif
           float visibility = 1.0 - smoothstep(fogNear, fogFar, distance);
-          float ao = texture2D(tAO, vUv).r;
+          float ao = depth >= 1.0 ? 1.0 : surfaceAO(depth);
           // Preserve the sky and fade shading with the scene's existing fog.
           float shade = depth >= 1.0 ? 1.0 : mix(1.0, ao, intensity * visibility);
           gl_FragColor = vec4(vec3(shade), 1.0);
@@ -112,6 +147,8 @@ export class AmbientOcclusion {
         }
       }
       this.material.uniforms.cameraNear.value = camera.near;
+      this.material.uniforms.aoSize.value.set(width, height);
+      this.material.uniforms.inverseProjection.value.copy(camera.projectionMatrixInverse);
       this.material.uniforms.cameraFar.value = camera.far;
       this.material.uniforms.fogNear.value = scene.fog.near;
       this.material.uniforms.fogFar.value = scene.fog.far;

@@ -49,7 +49,11 @@ Windows, Linux (including the Steam Deck), and macOS builds wrap this same web b
 
 ## Experimental shading
 
-Experimental ambient occlusion is enabled by default. AO sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge. Fixed sampling directions and finer depth/normal coverage (up to 1280 pixels) reduce shimmer during camera motion. Open with `?ao=0` for the original rendering. `npm run test:ao` checks image comparisons, camera modes, route changes, display density, and buffer reuse against a running dev server (`TEST_URL` can override its address). `node scripts/ao-motion-test.mjs` compares shading stability against the original settings during a controlled camera pan.
+Experimental ambient occlusion is enabled by default. AO sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge. Fixed sampling directions and finer depth/normal coverage (up to 1280 pixels) reduce shimmer during camera motion. Upscaling uses surface depth and normals to keep background shading off foreground edges. Open with `?ao=0` to disable AO.
+
+Sunlight shadows use a fixed soft filter and a world-aligned texel grid, including after floating-origin shifts. The chase camera uses constant shadow coverage while turning, so shadow pixels do not stretch with the camera angle.
+
+`npm run test:ao` checks image comparisons, camera modes, route changes, display density, and buffer reuse against a running dev server (`TEST_URL` can override its address). `node scripts/ao-motion-test.mjs` compares AO stability during a controlled camera pan. `node scripts/ao-edge-test.mjs` checks moving silhouettes for background shading leaks, and `node scripts/shadow-motion-test.mjs` checks sunlight-shadow stability with AO disabled.
 
 ## Controls
 
