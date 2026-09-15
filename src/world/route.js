@@ -52,7 +52,7 @@ export function coastOffset(s) { return drivingCoastOffset(s) - headlandAmount(s
 export function overlookAt(s) {
   const index = Math.round((s - 80) / 1936);
   const center = headlandCenter(index * 11 + Math.floor(randomAt(index, 1861) * 3) - 1);
-  return { index, center, enabled: randomAt(index, 1862) > .16 && Math.abs(center - bridgeAt(center).center) > 105 };
+  return { index, center, enabled: randomAt(index, 1862) > .244 && Math.abs(center - bridgeAt(center).center) > 105 };
 }
 export function overlookWidth(s) {
   const overlook = overlookAt(s);

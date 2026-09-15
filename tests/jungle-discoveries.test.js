@@ -1,21 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { jungleDiscoveries } from '../src/world/jungle-discoveries.js';
+import { jungleDiscoveries, JUNGLE_PARROT_SPACING } from '../src/world/jungle-discoveries.js';
 import { riverLips, sideFalls, riverCenter, riverHalfWidth, onRiver, poolAt } from '../src/world/jungle-route.js';
 import { JungleChunk, JungleWorld } from '../src/world/jungle.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 import { waterClock } from '../src/world/water.js';
 
-test('jungle discoveries remain rare, varied, and stable when streamed in either direction',()=>{
+test('jungle landmarks stay rare while parrots match Pacific flock spacing in both directions',()=>{
   const sites=jungleDiscoveries(-100000,100000);
-  assert.ok(sites.length>8 && sites.length<34);
+  const landmarks=sites.filter(site=>site.kind!=='parrots'),flocks=sites.filter(site=>site.kind==='parrots');
+  assert.ok(landmarks.length>5 && landmarks.length<34);
+  assert.equal(JUNGLE_PARROT_SPACING,384);
+  assert.ok(Math.abs(flocks.length-200000/384)<1);
+  for(let i=1;i<flocks.length;i++) assert.equal(flocks[i].s-flocks[i-1].s,384);
   assert.deepEqual([...new Set(sites.map(site=>site.kind))].sort(),['parrots','rainbow','rope-bridge']);
   assert.deepEqual(jungleDiscoveries(-100000,0).concat(jungleDiscoveries(0,100000)),sites);
-  for(let i=1;i<sites.length;i++) assert.ok(sites[i].s-sites[i-1].s>4000,'leave several kilometers between encounters');
+  for(let i=1;i<landmarks.length;i++) assert.ok(landmarks[i].s-landmarks[i-1].s>4000,'leave several kilometers between landmarks');
   for(const site of [...sites].reverse()) {
     const start=Math.floor(site.s/128)*128;
-    assert.deepEqual(jungleDiscoveries(start,start+128),[site]);
+    assert.deepEqual(jungleDiscoveries(start,start+128),sites.filter(candidate=>candidate.s>=start&&candidate.s<start+128));
     if(site.kind==='rainbow') {
       const falls=site.source==='side-fall'?sideFalls(site.s,site.s+1):riverLips(site.s,site.s+1);
       assert.equal(falls.length,1,'rainbows must belong to an actual waterfall');
@@ -38,7 +42,7 @@ test('rope bridges reach both rendered banks with grounded posts and a dry suspe
   for(const site of sites) {
     const chunk=new JungleChunk(Math.floor(site.s/128));chunk.group.updateMatrixWorld(true);
     try {
-      const feature=chunk.features.discoveries[0],bridge=chunk.group.getObjectByName('jungle-rope-bridge');
+      const feature=chunk.features.discoveries.find(feature=>feature.kind==='rope-bridge'),bridge=chunk.group.getObjectByName('jungle-rope-bridge');
       assert.ok(bridge && feature.minimumDeckClearance>.8);
       for(const post of feature.posts) {
         ray.ray.origin.set(post.x,post.top+5,post.z+chunk.start);

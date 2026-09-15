@@ -74,6 +74,10 @@ test('lakeside cabins stay on dry land through positive and negative route cells
     const cabin = alpineCabin(i);
     assert.ok(cabin.y > LAKE_LEVEL + .5);
     for (const ds of [-3, 3]) assert.ok(cabin.u - 2.5 > alpineLake(cabin.s + ds).near);
+    // Cabins sit on shore benches, never pitched on the face of the bluff.
+    assert.ok(cabin.slope < .9, `cabin ${i} perches on a ${cabin.slope.toFixed(1)} slope`);
+    assert.ok(cabin.s > i * CABIN_SPACING && cabin.s < (i + 1) * CABIN_SPACING, 'each cabin keeps to its own stretch');
+    assert.deepEqual(alpineCabin(i), cabin);
   }
 });
 

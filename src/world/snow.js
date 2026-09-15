@@ -8,6 +8,8 @@ import { alpinePines } from './alpine-pines.js';
 import { buildAlpineLake, lakeClock } from './alpine-lake.js';
 import { CABIN_SPACING, alpineCabin, nearCabin, buildAlpineCabin } from './alpine-cabins.js';
 import { Snowfall } from './snowfall.js';
+import { snowDiscoveries, snowDiscoveryClears } from './snow-discoveries.js';
+import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-scenery.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -79,6 +81,7 @@ function instances(group, geo, mat, items, name) {
 export class SnowChunk {
   constructor(index) {
     this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `snow-chunk-${index}`; this.owned = [];
+    this.discoveries = snowDiscoveries(this.start - 40, this.start + CHUNK_LENGTH + 40);
     this.buildTerrain();
     for (const part of buildAlpineLake(this.start)) this.addMesh(part.geometry, part.material, part.name).castShadow = false;
     this.buildRoad(); this.buildScenery(index);
@@ -86,6 +89,7 @@ export class SnowChunk {
       const cabin = alpineCabin(i);
       if (cabin.s >= this.start && cabin.s < this.start + CHUNK_LENGTH) this.group.add(buildAlpineCabin(i, this.start));
     }
+    buildSnowDiscoveries(this, this.discoveries);
     finalizeChunkTransforms(this.group);
   }
   addMesh(g, mat, name) {
@@ -121,7 +125,7 @@ export class SnowChunk {
       }
       current = next;
     }
-    this.addMesh(geometry(vertices, colors), terrainMaterial, 'snowy-mountain');
+    this.terrain = this.addMesh(geometry(vertices, colors), terrainMaterial, 'snowy-mountain');
   }
   ribbon(ranges, lift, mat, name) {
     const vertices = [];
@@ -157,8 +161,9 @@ export class SnowChunk {
     const pines = alpinePines.map(() => []), caps = alpinePines.map(() => []);
     const rocks = alpineRockVariants.map(() => []), rockCaps = alpineRockVariants.map(() => []);
     const point = (s, u, y) => { const p = snowPosition(s, u, y); return [p.x, p.y, p.z + this.start]; };
+    const clearOfDiscoveries = (s, u, radius) => snowDiscoveryClears(s, u, this.discoveries, radius);
     const stone = (s, u, size, snowy = true, tall = false) => {
-      if (onLake(s, u, size + .8) || nearCabin(s, u)) return;
+      if (onLake(s, u, size + .8) || nearCabin(s, u) || !clearOfDiscoveries(s, u, size)) return;
       const variant = Math.floor(random() * rocks.length);
       const ground = Math.min(snowGroundHeight(s, u), snowGroundHeight(s, u - size * .45), snowGroundHeight(s, u + size * .45));
       const item = { p: point(s, u, ground - size * .04),
@@ -172,7 +177,7 @@ export class SnowChunk {
       metal.push({ p: a.map((v, i) => (v + b[i]) / 2), scale: [width, direction.length(), depth], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
     };
     const pine = (s, u, y, height, angle) => {
-      if (onLake(s, u, height * .18) || nearCabin(s, u)) return;
+      if (onLake(s, u, height * .18) || nearCabin(s, u) || !clearOfDiscoveries(s, u, height * .2)) return;
       const variant = Math.floor(random() * alpinePines.length), width = height * (.85 + random() * .25);
       trunks.push({ p: point(s, u, y + height * .36), scale: [height * .018, height * .85, height * .018] });
       const item = { p: point(s, u, y - .2), scale: [width, height, width], angle };
@@ -439,6 +444,7 @@ export class SnowWorld {
   }
   animate(time, vehicle) {
     this.time = time; lakeClock.value = time;
+    animateSnowDiscoveries(this.chunks.values(), time);
     if (vehicle) {
       this.headlights.position.copy(vehicle.car.position); this.headlights.quaternion.copy(vehicle.car.quaternion);
       this.headlight.shadow.camera.up.copy(up).applyQuaternion(vehicle.car.quaternion);

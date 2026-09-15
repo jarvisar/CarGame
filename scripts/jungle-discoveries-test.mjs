@@ -34,7 +34,10 @@ try {
         features:[...a.world.chunks.values()].flatMap(c=>c.features?.discoveries||[])};
     },site);
     assert.equal(record.chunks,9);
-    if(!before) assert.equal(record.features.filter(s=>s.index===site.index).length,1);
+    if(!before) {
+      assert.equal(record.features.filter(s=>s.kind===site.kind&&s.index===site.index).length,1);
+      assert.equal(record.features.filter(s=>s.kind==='parrots').length,3,'nine loaded chunks contain three flocks, like the Pacific');
+    }
     await page.screenshot({path:`${directory}/${site.kind}-drive.png`});
     await page.evaluate(async site=>{
       const a=window.__coastline,{junglePosition,jungleRoadHeight,riverLevel}=await import('/src/world/jungle-route.js');

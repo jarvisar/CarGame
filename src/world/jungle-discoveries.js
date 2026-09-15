@@ -2,6 +2,7 @@ import { randomAt, CHUNK_LENGTH } from './route.js';
 import { riverCenter, riverHalfWidth, riverLevel, riverLips, sideFalls, poolAt, gorgeWall, jungleHeight } from './jungle-route.js';
 
 export const JUNGLE_DISCOVERY_SPACING = 6144;
+export const JUNGLE_PARROT_SPACING = CHUNK_LENGTH * 3;
 const cache = new Map();
 
 function districtSite(index) {
@@ -10,7 +11,8 @@ function districtSite(index) {
   if (randomAt(index, 2801) > .22) {
     const orders = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2802) * orders.length)];
-    const kind = ['rainbow', 'parrots', 'rope-bridge'][order[((index % 3) + 3) % 3]];
+    // Leave quiet districts between the rare landmarks.
+    const kind = ['rainbow', null, 'rope-bridge'][order[((index % 3) + 3) % 3]];
     const desired = index * JUNGLE_DISCOVERY_SPACING + 3072 + (randomAt(index, 2803) - .5) * 1200;
     if (kind === 'rainbow') {
       const sides = sideFalls(desired - 320, desired + 320).map(fall => {
@@ -22,10 +24,7 @@ function districtSite(index) {
         .map(lip => ({...lip, u: riverCenter(lip.s), source: 'cascade'}));
       const fall = (sides.length ? sides : cascades).sort((a,b) => Math.abs(a.s-desired)-Math.abs(b.s-desired))[0];
       if (fall) site = {...fall, kind, index};
-    } else if (kind === 'parrots') {
-      const s = Math.round(desired);
-      site = {kind, index, s, u: riverCenter(s), count: 2 + Math.floor(randomAt(index,2804)*3)};
-    } else {
+    } else if (kind === 'rope-bridge') {
       for (const offset of [0, 88, -88, 176, -176, 264, -264]) {
         const pool = poolAt(desired + offset), s = Math.round((pool.start + pool.end) / 4) * 2;
         const inChunk = ((s % CHUNK_LENGTH) + CHUNK_LENGTH) % CHUNK_LENGTH;
@@ -53,7 +52,12 @@ export function jungleDiscoveries(first, last) {
     const site=districtSite(index);
     if (site && site.s>=first && site.s<last) sites.push(site);
   }
-  return sites;
+  // Match Pacific gulls: one flock in every third chunk, in both directions.
+  for(let cell=Math.floor(first/JUNGLE_PARROT_SPACING)-1;cell<=Math.floor(last/JUNGLE_PARROT_SPACING);cell++) {
+    const index=cell*3,s=cell*JUNGLE_PARROT_SPACING+CHUNK_LENGTH/2;
+    if(s>=first && s<last) sites.push({kind:'parrots',index,s,u:riverCenter(s),count:2+Math.floor(randomAt(index,2804)*3)});
+  }
+  return sites.sort((a,b)=>a.s-b.s);
 }
 
 export function jungleDiscoveryClears(s, u, sites, radius = 0) {
