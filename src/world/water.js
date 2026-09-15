@@ -34,7 +34,7 @@ export function createWaterMaterial(lake = false) {
       #include <begin_vertex>
       vec4 waterWorld = modelMatrix * vec4(position, 1.0);
       vWaterCoord = vec2(waterWorld.x, waterWorld.z - coastOrigin);
-      transformed.y += swell(vWaterCoord) * ${lake ? '0.045' : '0.19'};
+      ${lake ? '// Pond ripples stay in the surface shading so the clipped shoreline stays sealed.' : 'transformed.y += swell(vWaterCoord) * 0.19;'}
     `);
     shader.fragmentShader = declarations + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
@@ -54,7 +54,7 @@ export function createWaterMaterial(lake = false) {
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.79, 0.94, 0.91), glint * ${lake ? '0.035' : '0.055'});
     `);
   };
-  material.customProgramCacheKey = () => `coast-water-${lake ? 'lake' : 'ocean'}-v3`;
+  material.customProgramCacheKey = () => `coast-water-${lake ? 'lake' : 'ocean'}-v4`;
   return material;
 }
 

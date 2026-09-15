@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
-import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, CHUNK_LENGTH } from './route.js';
+import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, terrainCell, terrainColumns, randomAt, TERRAIN_STEP, CHUNK_LENGTH } from './route.js';
 import { createWaterMaterial } from './water.js';
 
 const bridgeMaterial = new THREE.MeshStandardMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, roughness: 1, flatShading: true, side: THREE.DoubleSide });
@@ -52,22 +52,43 @@ function buildBridge(chunk, bridge) {
 }
 
 function buildPond(chunk, pond) {
-  const first = Math.max(chunk.start, Math.floor((pond.center - pond.rs * 1.2) / 2) * 2);
-  const last = Math.min(chunk.start + CHUNK_LENGTH, pond.center + pond.rs * 1.2);
-  if (first >= last) return;
+  if (pond.center + pond.rs * 1.5 < chunk.start || pond.center - pond.rs * 1.5 > chunk.start + CHUNK_LENGTH) return;
   const vertices = [], colors = [];
-  for (let s = first; s < last; s += 2) {
-    for (let u = pond.u - pond.ru * 1.2; u < pond.u + pond.ru * 1.2; u += 2) {
-      const coords = [[s, u], [s + 2, u], [s, u + 2], [s + 2, u + 2]];
-      if (coords.every(([t, v]) => pondRadius(t, v, pond) > 1.05)) continue;
-      const points = coords.map(([t, v]) => positionAt(t, v, pond.level));
-      for (const index of [0, 2, 1, 1, 2, 3]) {
-        const p = points[index]; const radius = pondRadius(...coords[index], pond);
-        const color = new THREE.Color('#246b94').lerp(new THREE.Color('#64bfca'), Math.min(1, radius));
-        vertices.push(p.x, p.y, p.z + chunk.start); colors.push(color.r, color.g, color.b);
+  const shallow = new THREE.Color('#5cacb3'), deep = new THREE.Color('#317f99');
+  // Slice the actual terrain faces at the waterline. An independent square
+  // water grid left exposed teeth and detached patches beyond the coarse bank.
+  // Using the terrain's global rows also matches its jittered streaming seams.
+  const firstRow = chunk.start / TERRAIN_STEP;
+  for (let row = firstRow; row < firstRow + CHUNK_LENGTH / TERRAIN_STEP; row++) {
+    for (let col = 15; col < terrainColumns(row * TERRAIN_STEP).length - 1; col++) {
+      for (const triangle of terrainCell(row, col)) {
+        if (!triangle.some(p => p.y < pond.level && pondRadius(p.s, p.u, pond) < 1.12)) continue;
+        const polygon = [];
+        for (let i = 0; i < 3; i++) {
+          const a = triangle[i], b = triangle[(i + 1) % 3];
+          const wetA = a.y < pond.level, wetB = b.y < pond.level;
+          if (wetA) polygon.push(a);
+          if (wetA !== wetB) {
+            const t = (pond.level - a.y) / (b.y - a.y);
+            polygon.push({ x: a.x + (b.x - a.x) * t, y: pond.level, z: a.z + (b.z - a.z) * t });
+          }
+        }
+        if (polygon.length < 3) continue;
+        // Broad, quiet color facets follow the same faces as the hillside.
+        // Avoid a smooth cyan halo that makes the pond look airbrushed in.
+        const depth = polygon.reduce((sum, p) => sum + pond.level - p.y, 0) / polygon.length;
+        const color = shallow.clone().lerp(deep, Math.min(1, depth / 2.4));
+        color.multiplyScalar(.97 + randomAt(row, col + 2201) * .06);
+        for (let i = 1; i < polygon.length - 1; i++) {
+          // Terrain cells wind downward; the water is viewed from above.
+          for (const p of [polygon[0], polygon[i + 1], polygon[i]]) {
+            vertices.push(p.x, pond.level, p.z + chunk.start); colors.push(color.r, color.g, color.b);
+          }
+        }
       }
     }
   }
+  if (!vertices.length) return;
   const mesh = chunk.addMesh(geometry(vertices, colors), lakeMaterial);
   mesh.name = `inland-pond-${pond.index}`;
   mesh.geometry.boundingSphere.radius += .3;

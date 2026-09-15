@@ -6,6 +6,8 @@ import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animat
 import { buildLandmarks } from './landmarks.js';
 import { CoastalBirds } from './birds.js';
 import { coastalCrags, coastalPines, coastalCypress, coastalMontereyPine, terrainSampler } from './coastal-assets.js';
+import { coastalDiscoveries, discoveryClearsPlanting } from './coastal-discoveries.js';
+import { buildCoastalDiscoveries } from './coastal-discovery-scenery.js';
 
 const terrainMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const waterMaterial = createWaterMaterial();
@@ -111,7 +113,9 @@ function addRockWash(rock, phase, vertices, washCoords, shape = rockGeometry) {
 export class CoastalChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = [];
+    this.discoveries = coastalDiscoveries(this.start - 96, this.start + CHUNK_LENGTH + 96);
     this.buildTerrain(); this.buildWater(); this.buildRoad(); buildLandmarks(this); this.buildScenery();
+    buildCoastalDiscoveries(this, this.discoveries);
     if (index % 3 === 0) this.birds = new CoastalBirds(this);
     finalizeChunkTransforms(this.group);
   }
@@ -192,7 +196,7 @@ export class CoastalChunk {
           }
           // Let broad meadow patches carry the color, with quieter random
           // variation so the flat-shaded slopes still define the facets.
-          color.multiplyScalar(meadowFace ? .97 + r * .06 : col > 9 && !steep ? .95 + r * .1 : .97 + r * .06);
+          color.multiplyScalar(sandyFace ? .985 + r * .03 : meadowFace ? .97 + r * .06 : col > 9 && !steep ? .95 + r * .1 : .97 + r * .06);
           addTriangle(positions, colors, ...tri, color, this.start);
         });
       }
@@ -292,7 +296,7 @@ export class CoastalChunk {
     const random = seededRandom(this.index + 8913);
     const trunks = [], foliage = [[], []], shrubs = [], rocks = [], posts = [], caps = [], rails = [], benches = [], cypresses = [], monterey = [], stacks = [[], [], []];
     const rockWashVertices = [], rockWashCoords = [];
-    const canGrow = (s, u) => !(u < 0 && u > -overlookWidth(s) - 3) && pondRadius(s, u) > 1.15 && ravineAmount(s, u) < .13 && groundHeight(s, u) > 2;
+    const canGrow = (s, u) => !(u < 0 && u > -overlookWidth(s) - 3) && pondRadius(s, u) > 1.15 && ravineAmount(s, u) < .13 && groundHeight(s, u) > 2 && discoveryClearsPlanting(s, u, this.discoveries);
     const hillSlope = (s, u) => Math.hypot(groundHeight(s, u + 1) - groundHeight(s, u - 1), groundHeight(s + 1, u) - groundHeight(s - 1, u)) / 2;
     const green = ['#315c48', '#406747', '#52744e', '#294e40', '#607e4d', '#3e624b'];
     const uplandGreen = ['#254e40', '#305b45', '#40664b', '#29483e'];
@@ -342,6 +346,7 @@ export class CoastalChunk {
       if (sea && i % 8 > 1) continue;
       const hero = sea && i % 8 === 0;
       const u = sea ? shorelineOffset(s) - (i === 0 ? 35 : 6) - random() ** 1.7 * (i === 0 ? 45 : 34) : (i < 35 ? coastOffset(s) + random() * 5 : 12 + random() * 140);
+      if (sea && this.discoveries.some(site => site.kind !== 'lighthouse' && Math.hypot(s - site.s, u - site.u) < site.radius + 10)) continue;
       if (!sea && !canGrow(s, u)) continue;
       const p = planted(s, u);
       const size = sea ? (i === 0 ? 8 + random() * 2.5 : hero ? 3.2 + random() * 2.8 : .8 + random() * 2.2) : .7 + random() * 3.1;

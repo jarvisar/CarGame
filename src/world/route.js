@@ -36,7 +36,7 @@ function coastNoise(s, span, salt) {
   const cell = Math.floor(s / span), t = smoothstep(0, 1, s / span - cell);
   return lerp(randomAt(cell, salt), randomAt(cell + 1, salt), t);
 }
-function headlandCenter(index) { return index * 176 + 50 + randomAt(index, 1601) * 60; }
+export function headlandCenter(index) { return index * 176 + 50 + randomAt(index, 1601) * 60; }
 export function headlandAmount(s) {
   const cell = Math.floor(s / 176);
   let amount = 0;
@@ -50,8 +50,9 @@ export function headlandAmount(s) {
 }
 export function coastOffset(s) { return drivingCoastOffset(s) - headlandAmount(s); }
 export function overlookAt(s) {
-  const index = Math.round((s - 80) / 528), center = headlandCenter(index * 3);
-  return { index, center, enabled: Math.abs(center - bridgeAt(center).center) > 105 };
+  const index = Math.round((s - 80) / 1936);
+  const center = headlandCenter(index * 11 + Math.floor(randomAt(index, 1861) * 3) - 1);
+  return { index, center, enabled: randomAt(index, 1862) > .16 && Math.abs(center - bridgeAt(center).center) > 105 };
 }
 export function overlookWidth(s) {
   const overlook = overlookAt(s);
@@ -214,11 +215,14 @@ function baseTerrainHeight(s, u, radius) {
 export function groundHeight(s, u) {
   const pond = pondAt(s), radius = pondRadius(s, u, pond);
   let height = baseTerrainHeight(s, u, radius);
-  if (radius < 1.6) {
-    const basin = pond.level - 2.2 + 3.5 * smoothstep(.45, 1.12, radius);
-    height = lerp(basin, height, smoothstep(1.12, 1.6, radius));
+  if (radius < 2.3) {
+    // Shape a broad dry bank on the existing hillside mesh. Its width exceeds
+    // a coarse terrain edge, so those faces cannot cut through the rim into
+    // low meadow. The outer slope eases back into the surrounding land.
+    const basin = pond.level - 2.8 + 5.4 * smoothstep(.35, 1.15, radius);
+    height = lerp(basin, height, smoothstep(1.45, 2.3, radius));
   }
-  const ravine = ravineAmount(s, u) * smoothstep(1.5, 2, radius);
+  const ravine = ravineAmount(s, u) * smoothstep(1.65, 2.3, radius);
   height = lerp(height, Math.min(height, -1.5 + smoothstep(20, 100, u) * 49), ravine);
   return height;
 }
@@ -244,6 +248,16 @@ export function terrainColumns(s) {
   return [-420, -300, b - 90, b - 35, b - 17, b - 7, b, foot, lower, upper, crown, shelf, -7, 0, 7, ...Array.from({ length: 23 }, (_, i) => 14 + i * 12)];
 }
 export function terrainVertex(row, column) {
+  if (column === 6.5) {
+    // One broad intermediate beach row breaks the long shore-to-cliff strips.
+    // Reuse the existing edges so sand stays joined to the water and rock toe.
+    const shore = terrainVertex(row, 6), foot = terrainVertex(row, 7);
+    const t = .5 + (randomAt(row, 2241) - .5) * .16;
+    const p = {column};
+    for (const axis of ['x', 'z', 's', 'u']) p[axis] = lerp(shore[axis], foot[axis], t);
+    p.y = groundHeight(p.s, p.u);
+    return p;
+  }
   if (column > 10 && column < 11) {
     // Broad bluff tops need two-dimensional facets, rather than long triangles
     // stretched all the way from the cliff crown to the roadside apron.
@@ -283,11 +297,12 @@ export function terrainVertex(row, column) {
   const along = lerp(randomAt(Math.floor(row), 7), randomAt(Math.ceil(row), 7), row - Math.floor(row));
   const jitter = cliff ? (along - .5) * 4.2
     : (randomAt(seedRow, seedColumn) - .5) * 5.6;
-  const s = baseS + ((column > 2 && (column < 12 || column > 14)) ? jitter : 0);
+  const pondJitter = column >= 15 ? lerp(.55, 1, smoothstep(1.2, 2.2, pondRadius(baseS, terrainColumns(baseS)[column]))) : 1;
+  const s = baseS + pondJitter * ((column > 2 && (column < 12 || column > 14)) ? jitter : 0);
   const columns = terrainColumns(s);
   let u = columns[column];
   if (column >= 7 && column <= 10) u += (randomAt(seedRow + 218, seedColumn) - .5) * (column === 10 ? .8 : column === 7 ? .4 : .9);
-  if (column >= 15) u += (randomAt(seedRow + 991, seedColumn) - .5) * Math.min(8, (u - 7) * .26);
+  if (column >= 15) u += (randomAt(seedRow + 991, seedColumn) - .5) * Math.min(8, (u - 7) * .26) * pondJitter;
   const p = positionAt(s, u, groundHeight(s, u));
   const detail = smoothstep(1.05, 1.65, pondRadius(s, u)) * (1 - ravineAmount(s, u));
   if (column >= 7 && column <= 10) {
@@ -318,6 +333,15 @@ export function terrainCell(row, col, vertex = terrainVertex) {
   // joints into the original coarse beach and meadow, with no open T-junctions.
   if (col === 6) {
     const m = vertex(row + .5, 7);
+    const splitA = Math.hypot(c.x - a.x, c.z - a.z) > 14;
+    const splitB = Math.hypot(d.x - b.x, d.z - b.z) > 14;
+    const e = splitA && vertex(row, 6.5), f = splitB && vertex(row + 1, 6.5);
+    if (e && f) {
+      const beach = randomAt(row, 2242) > .5 ? [[a, b, e], [b, f, e]] : [[a, b, f], [a, f, e]];
+      return [...beach, [e, f, m], [e, m, c], [f, d, m]];
+    }
+    if (e) return [[a, b, e], [b, m, e], [e, m, c], [b, d, m]];
+    if (f) return [[a, b, f], [a, f, m], [a, m, c], [f, d, m]];
     return [[a, b, m], [a, m, c], [b, d, m]];
   }
   if (col === 10) {
@@ -347,7 +371,8 @@ export function terrainCell(row, col, vertex = terrainVertex) {
       : [[a, e, f], [a, f, c], [e, b, f], [b, d, f]];
   }
   const seedCol = col > 8 ? col - 1 : col;
-  return (row + seedCol) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
+  const triangles = (row + seedCol) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
+  return triangles;
 }
 
 export const coastalDrivingRoute = {

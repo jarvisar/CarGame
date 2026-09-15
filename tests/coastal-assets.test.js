@@ -34,7 +34,9 @@ test('cliff joints remain connected to coarse beaches and meadows without open s
       }
     }
     for (let col = 5; col < 12; col++) for (const row of [start, start + 4]) {
-      const columns = col === 9 ? [9, 9.5, 10] : col === 10 ? [10, 10.2, 10.4, 10.6, 10.8, 11] : [col, col + 1];
+      const shore = terrainVertex(row, 6), foot = terrainVertex(row, 7);
+      const splitBeach = Math.hypot(foot.x - shore.x, foot.z - shore.z) > 14;
+      const columns = col === 6 && splitBeach ? [6, 6.5, 7] : col === 9 ? [9, 9.5, 10] : col === 10 ? [10, 10.2, 10.4, 10.6, 10.8, 11] : [col, col + 1];
       for (let i = 0; i < columns.length - 1; i++) {
         boundary.add(edgeKey(terrainVertex(row, columns[i]), terrainVertex(row, columns[i + 1])));
       }
@@ -87,7 +89,7 @@ test('coastal planting heights match raycast terrain, including negative chunks 
 test('paved overlooks sit above the rendered terrain through entrances and streaming seams', () => {
   let checked = 0;
   for (let index = -5; index <= 5; index++) {
-    const overlook = overlookAt(index * 528 + 80);
+    const overlook = overlookAt(index * 1936 + 80);
     if (!overlook.enabled) continue;
     for (let chunkIndex = Math.floor((overlook.center - 28) / CHUNK_LENGTH); chunkIndex <= Math.floor((overlook.center + 28) / CHUNK_LENGTH); chunkIndex++) {
       const chunk = new CoastalChunk(chunkIndex);

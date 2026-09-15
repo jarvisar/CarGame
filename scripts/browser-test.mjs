@@ -107,7 +107,7 @@ const closeCar = await mobile.evaluate(() => {
 assert.ok(Math.abs(closeCar[0]) < .95 && Math.abs(closeCar[1]) < .8, 'close view keeps the car inside the mobile viewport');
 await mobile.screenshot({ path: '.artifacts/coastline-mobile-close.png' });
 assert.deepEqual(errors, []);
-const report = { passed: true, checks: ['WASD acceleration', 'arrow controls and reverse', 'steering', 'pause/resume', 'local reset', 'audio toggle', 'orthographic views', 'bounded streaming at 20 km', 'GPU resource release', 'floating origin', 'lost-focus input release', 'mobile touch input', 'responsive layout', 'no browser errors'], streaming };
+const report = { passed: true, checks: ['WASD acceleration', 'arrow controls and reverse', 'steering', 'pause/resume', 'scene reset', 'audio toggle', 'orthographic views', 'bounded streaming at 20 km', 'GPU resource release', 'floating origin', 'lost-focus input release', 'mobile touch input', 'responsive layout', 'no browser errors'], streaming };
 await writeFile('.artifacts/browser-report.json', JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
