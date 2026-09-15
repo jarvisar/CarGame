@@ -7,6 +7,28 @@ import { JungleWorld, JungleChunk } from '../src/world/jungle.js';
 import { waterClock } from '../src/world/water.js';
 import { DrivingController } from '../src/vehicle.js';
 
+test('side streams meet the full waterfall crest without gaps on curved roads',()=>{
+  for(const fall of sideFalls(-5000,5000).slice(0,12)) {
+    const chunk=new JungleChunk(Math.floor(fall.s/CHUNK_LENGTH));
+    try {
+      const surface=chunk.group.getObjectByName('jungle-river').geometry.attributes.position;
+      const waterfall=chunk.group.getObjectByName('waterfalls').geometry.attributes;
+      const seed=Math.fround(fall.s*.173),corners=[];
+      for(let i=0;i<waterfall.position.count;i++) {
+        if(waterfall.fallCoord.getW(i)!==seed || waterfall.fallCoord.getX(i)>=0 || Math.abs(waterfall.fallCoord.getY(i))!==1) continue;
+        corners.push(new THREE.Vector3().fromBufferAttribute(waterfall.position,i));
+      }
+      assert.ok(corners.length>=2,'both crest corners are present');
+      for(const corner of corners) {
+        let nearest=Infinity;
+        for(let i=0;i<surface.count;i++) nearest=Math.min(nearest,
+          Math.hypot(surface.getX(i)-corner.x,surface.getY(i)-corner.y,surface.getZ(i)-corner.z));
+        assert.ok(nearest<.0001,`stream misses waterfall edge by ${nearest} at ${fall.s}`);
+      }
+    } finally {chunk.dispose();}
+  }
+});
+
 test('jungle columns stay ordered, the road stays flat and the river sits in its valley', () => {
   for (let s = -10000; s < 10000; s += 13) {
     const columns = jungleColumns(s);
