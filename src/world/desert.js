@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight } from './route.js';
-import { DESERT_COLUMNS, DESERT_STEP, desertColumns, desertVertex, desertPosition, desertHeight, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
+import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, desertColumns, desertVertex, desertPosition, desertHeight, desertRowStep, desertBridgeAt, desertCreek, desertCreekDistance, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
+import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
 
 const groundMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 const rockMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true });
@@ -112,7 +113,9 @@ export class DesertChunk {
       if (!columns.has(s)) columns.set(s, desertColumns(s));
       return columns.get(s);
     };
-    this.buildGround(); this.buildMesas(); this.buildRoad(); this.buildPlants(); this.buildReferenceDetails(); this.buildForeground();
+    this.buildGround(); this.buildMesas(); this.buildRoad();
+    buildDesertCrossing(this, instances, { stoneGeometry, slabGeometry, bushGeometry, trunkGeometry, grassGeometry, rockMaterial, barkMaterial, plantMaterial });
+    this.buildPlants(); this.buildReferenceDetails(); this.buildForeground();
     this.sampleColumns = desertColumns;
   }
   addMesh(source, material, castShadow = false) {
@@ -129,9 +132,11 @@ export class DesertChunk {
     const columns = desertColumns(s);
     const column = Math.max(0, columns.findIndex(value => value > u) - 1);
     const row = Math.floor(s / DESERT_STEP);
-    for (let r = row - 1; r <= row + 1; r++) {
-      for (let c = Math.max(0, column - 1); c <= Math.min(columns.length - 2, column + 1); c++) {
-        const a = this.vertex(r, c), b = this.vertex(r + 1, c), d = this.vertex(r + 1, c + 1), e = this.vertex(r, c + 1);
+    for (let c = Math.max(0, column - 1); c <= Math.min(columns.length - 2, column + 1); c++) {
+      const step = r => Math.abs(DESERT_COLUMNS[c]) <= DESERT_VALLEY_EDGE && Math.abs(DESERT_COLUMNS[c + 1]) <= DESERT_VALLEY_EDGE ? desertRowStep(r) : 1;
+      for (let r = row - 1; r <= row + 1; r += step(r)) {
+        const next = r + step(r);
+        const a = this.vertex(r, c), b = this.vertex(next, c), d = this.vertex(next, c + 1), e = this.vertex(r, c + 1);
         const triangles = (r + c) % 2 ? [[a, b, e], [b, d, e]] : [[a, b, d], [a, d, e]];
         for (const [p, q, t] of triangles) {
           const denominator = (q.u - t.u) * (p.s - t.s) + (t.s - q.s) * (p.u - t.u);
@@ -150,23 +155,30 @@ export class DesertChunk {
   }
   buildGround() {
     const positions = [], colors = [];
+    const riverTriangles = [];
     const sand = ['#e7b77d', '#e5b47a', '#ebbd83', '#e2b178', '#e9ba80', '#e6b67c'];
     const stone = ['#c77a46', '#d38247', '#cb7540', '#be6c3e', '#dc884a', '#c57745'];
     const ab = new THREE.Vector3(), ac = new THREE.Vector3();
-    for (let row = this.start / DESERT_STEP; row < (this.start + CHUNK_LENGTH) / DESERT_STEP; row++) {
-      for (let col = 0; col < DESERT_COLUMNS.length - 1; col++) {
-        const a = this.vertex(row, col), b = this.vertex(row + 1, col), c = this.vertex(row, col + 1), d = this.vertex(row + 1, col + 1);
+    for (let col = 0; col < DESERT_COLUMNS.length - 1; col++) {
+      const step = r => Math.abs(DESERT_COLUMNS[col]) <= DESERT_VALLEY_EDGE && Math.abs(DESERT_COLUMNS[col + 1]) <= DESERT_VALLEY_EDGE ? desertRowStep(r) : 1;
+      for (let row = this.start / DESERT_STEP; row < (this.start + CHUNK_LENGTH) / DESERT_STEP; row += step(row)) {
+        const next = row + step(row);
+        const a = this.vertex(row, col), b = this.vertex(next, col), c = this.vertex(row, col + 1), d = this.vertex(next, col + 1);
         const triangles = (row + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
         triangles.forEach((tri, i) => {
           const s = tri.reduce((sum, p) => sum + p.s, 0) / 3;
           const u = tri.reduce((sum, p) => sum + p.u, 0) / 3;
           const distance = Math.abs(u) - canyonProfile(s, Math.sign(u) || 1).foot;
-          const facet = randomAt(row * 2 + i, col + 393);
+          const originalColumn = desertFacetColumn(col, u);
+          const facet = randomAt(row * 2 + i, originalColumn + 393);
           let color;
           ab.subVectors(tri[1], tri[0]); ac.subVectors(tri[2], tri[0]);
           const normal = ab.cross(ac).normalize();
           const steepness = 1 - Math.abs(normal.y);
-          if (distance > -4 && steepness > .24) {
+          const creek = desertCreek(s), bank = Math.abs(u - creek.center) - creek.width;
+          if (bank < 3.4) {
+            color = new THREE.Color(bank < .4 ? '#a59470' : bank < 1.8 ? '#c4a579' : '#d4ad78').multiplyScalar(.95 + facet * .1);
+          } else if (distance > -4 && steepness > .24) {
             // Give an entire vertical face a related color instead of noisy strata.
             const block = Math.floor(randomAt(Math.floor(s / 24), Math.sign(u) + 393) * stone.length);
             color = new THREE.Color(stone[block]).multiplyScalar(.97 + facet * .06);
@@ -177,10 +189,12 @@ export class DesertChunk {
             if (distance > -4) color.lerp(new THREE.Color('#e2a568'), .32);
           }
           triangle(positions, colors, ...tri, color, this.start);
+          if (tri.some(p => desertCreekDistance(p.s, p.u) < 4)) riverTriangles.push(tri);
         });
       }
     }
     this.addMesh(geometry(positions, colors), groundMaterial, true).name = 'desert-floor';
+    buildDesertWater(this, riverTriangles);
   }
   buildMesas() {
     const positions = [], colors = [];
@@ -236,6 +250,8 @@ export class DesertChunk {
   ribbon(ranges, lift, material) {
     const vertices = [];
     for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
+      const bridge = desertBridgeAt(s + 1);
+      if (s >= bridge.start && s < bridge.end) continue;
       const at = (t, u) => desertPosition(t, u, roadHeight(t) + lift);
       const a = at(s, low), b = at(s + 2, low), c = at(s, high), d = at(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
@@ -254,9 +270,9 @@ export class DesertChunk {
     const stoneColors = ['#c67a48', '#af643d', '#db9858', '#c28650', '#dbab74'];
     const greens = ['#6c753f', '#8e8546', '#626d44', '#959255'];
     const sample = () => ({ s: this.start + random() * CHUNK_LENGTH, u: (random() > .5 ? 1 : -1) * (10 + random() ** 1.5 * 210) });
-    const canGrow = (s, u) => !insideMesa(s, u) && Math.abs(desertHeight(s, u + .6) - desertHeight(s, u - .6)) < .9 && Math.abs(u - dryWashCenter(s)) > 2;
+    const canGrow = (s, u) => desertCreekDistance(s, u) > 4 && !insideMesa(s, u) && Math.abs(desertHeight(s, u + .6) - desertHeight(s, u - .6)) < .9 && Math.abs(u - dryWashCenter(s)) > 2;
     for (let i = 0; i < 155; i++) {
-      const { s, u } = sample(); if (insideMesa(s, u, .98)) continue;
+      const { s, u } = sample(); if (insideMesa(s, u, .98) || desertCreekDistance(s, u) < 5.5) continue;
       const p = this.groundPosition(s, u); const size = .35 + random() ** 2 * 3.5;
       stones.push({ p: [p.x, p.y + size * .35, p.z + this.start], scale: [size, size * (.6 + random() * .8), size * .82], r: [random() * .25, random() * 6, random() * .4], color: stoneColors[Math.floor(random() * stoneColors.length)] });
     }
@@ -359,6 +375,7 @@ export class DesertChunk {
     const greens = ['#7e8645', '#8e934d', '#a0a35a', '#727d47'];
     const stoneColors = ['#d79c69', '#c3895e', '#e1af7c', '#b97851'];
     const clear = (s, u, radius = 1) => Math.abs(u) - radius > 9
+      && desertCreekDistance(s, u) > radius + 3.5
       && Math.abs(u - dryWashCenter(s)) > radius + 2
       && !insideMesa(s, u, 1.5)
       && Math.abs(desertHeight(s, u + radius) - desertHeight(s, u - radius)) < radius * .6
@@ -544,6 +561,6 @@ export class DesertWorld {
     }
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
   }
-  animate() {}
+  animate(time) { desertWaterClock.value = time; }
   dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
 }
