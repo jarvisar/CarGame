@@ -59,7 +59,8 @@ export function createWaterMaterial(lake = false) {
 }
 
 export function createSurfMaterial(moving = false) {
-  const material = new THREE.MeshBasicMaterial({ color: '#eafaf1', transparent: true, opacity: .82, depthWrite: false, side: THREE.DoubleSide });
+  // Thin foam surfaces need both sides visible, but not separate back/front passes.
+  const material = new THREE.MeshBasicMaterial({ color: '#eafaf1', transparent: true, opacity: .82, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + `
@@ -94,7 +95,7 @@ export function createSurfMaterial(moving = false) {
 }
 
 export function createRockWashMaterial() {
-  const material = new THREE.MeshBasicMaterial({ color: '#e1f5ec', transparent: true, opacity: .67, depthWrite: false, side: THREE.DoubleSide });
+  const material = new THREE.MeshBasicMaterial({ color: '#e1f5ec', transparent: true, opacity: .67, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + 'attribute vec2 rockWash; varying vec2 vRockWash;\n' + shader.vertexShader;

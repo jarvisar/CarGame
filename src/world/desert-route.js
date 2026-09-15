@@ -95,10 +95,10 @@ export function desertHeight(s, u) {
 }
 export function desertPosition(s, u, height) { return positionAt(s, u, height ?? desertHeight(s, u)); }
 
-export function desertVertex(row, column) {
+export function desertVertex(row, column, sampleColumns = desertColumns) {
   const road = Math.abs(DESERT_COLUMNS[column]) <= 7;
   const s = row * DESERT_STEP + (road ? 0 : (randomAt(row, 3200) - .5) * 2.6);
-  const columns = desertColumns(s);
+  const columns = sampleColumns(s);
   const gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 40), (columns[column + 1] ?? columns[column] + 40) - columns[column]);
   const u = columns[column] + (road ? 0 : (randomAt(row + 791, column) - .5) * Math.min(6, gap * .35));
   const p = desertPosition(s, u);

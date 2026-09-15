@@ -102,7 +102,15 @@ class DesertChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = []; this.vertices = new Map();
     this.group.name = `desert-chunk-${index}`;
+    // A row uses only two column profiles (road and jittered terrain), shared
+    // by all its vertices. Keep this cache local to the chunk's construction.
+    const columns = new Map();
+    this.sampleColumns = s => {
+      if (!columns.has(s)) columns.set(s, desertColumns(s));
+      return columns.get(s);
+    };
     this.buildGround(); this.buildMesas(); this.buildRoad(); this.buildPlants(); this.buildReferenceDetails(); this.buildForeground();
+    this.sampleColumns = desertColumns;
   }
   addMesh(source, material, castShadow = false) {
     const mesh = new THREE.Mesh(source, material); mesh.castShadow = castShadow; mesh.receiveShadow = true;
@@ -110,7 +118,7 @@ class DesertChunk {
   }
   vertex(row, column) {
     const key = `${row},${column}`;
-    if (!this.vertices.has(key)) this.vertices.set(key, desertVertex(row, column));
+    if (!this.vertices.has(key)) this.vertices.set(key, desertVertex(row, column, this.sampleColumns));
     return this.vertices.get(key);
   }
   groundPosition(s, u) {

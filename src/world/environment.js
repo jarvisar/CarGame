@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, mountainHeight, bridgeAt, clamp, lerp, smoothstep } from './route.js';
+import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, mountainHeight, bridgeAt, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
 import { CoastalBirds } from './birds.js';
@@ -120,14 +120,23 @@ class Chunk {
   buildTerrain() {
     const positions = []; const colors = [];
     const firstRow = this.start / TERRAIN_STEP;
+    // Adjacent faces share expensive terrain samples. Release the cache once
+    // this chunk is built, so long drives never accumulate cached terrain.
+    const vertices = new Map();
+    const vertex = (row, col) => {
+      const key = `${row},${col}`;
+      if (!vertices.has(key)) vertices.set(key, terrainVertex(row, col));
+      return vertices.get(key);
+    };
+    const columns = terrainColumns(this.start).length;
     const meadow = new THREE.Color('#a0b856'), fern = new THREE.Color('#6b963d');
     const stone = new THREE.Color('#bdb4a0'), coolStone = new THREE.Color('#899394');
     const cliffStone = new THREE.Color('#c9bda6'), coolCliff = new THREE.Color('#768995');
     const stoneLight = new THREE.Vector3(-145, 230, 95).normalize();
     for (let row = firstRow; row < firstRow + CHUNK_LENGTH / TERRAIN_STEP; row++) {
-      for (let col = 0; col < terrainColumns(row * TERRAIN_STEP).length - 1; col++) {
+      for (let col = 0; col < columns - 1; col++) {
         const seedCol = col > 8 ? col - 1 : col;
-        terrainCell(row, col).forEach((tri, j) => {
+        terrainCell(row, col, vertex).forEach((tri, j) => {
           const r = randomAt(row * 2 + j, seedCol + 191);
           let color, meadowFace = false;
           const s = tri.reduce((sum, p) => sum + p.s, 0) / 3;

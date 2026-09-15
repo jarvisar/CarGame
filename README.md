@@ -94,7 +94,11 @@ The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route butt
 
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
 
+Fixed car body parts share draw calls, and flat foam and lake mist use [single-pass transparency](https://threejs.org/docs/pages/Material.html#forceSinglePass). Coastal terrain vertices and desert column profiles are reused during chunk construction; those temporary caches are released afterward. Paused scenes redraw after a resize, reset, or canvas restoration while controller polling and audio fades continue. Pixel density, scenery detail, shadows, and driving physics retain their existing settings.
+
 Run `npm test` for deterministic generation, continuity, driving, and streaming checks.
+
+With the development server running, `node scripts/performance-test.mjs` checks that all routes stop rendering while paused, redraw after resize/reset, and resume normally. It also compares flat effects pixel-for-pixel against two-pass rendering. Reports go to `.artifacts/performance/`; set `TEST_URL` to override the development URL. Browser checks use software rendering and do not measure physical mobile GPU performance.
 
 With the development server running, `npm run test:generation` checks fresh worlds on reload, repeatable URL seeds across all three journeys, grounded spawns, regenerated chunk consistency, and saved progress. Reports and screenshots go to `.artifacts/generation/`. Set `TEST_URL` to override the development URL. The Node suite uses a repeatable seed by default; set `TEST_WORLD_SEED` to run it against another world.
 

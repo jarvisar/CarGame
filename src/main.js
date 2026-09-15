@@ -26,6 +26,9 @@ async function boot() {
   try {
     const rendering = createRendering($('#scene'));
     const { renderer, scene, camera } = rendering;
+    let needsRender = true;
+    window.addEventListener('resize', () => { needsRender = true; });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) needsRender = true; });
     let journey = 'coast';
     let world = new JOURNEYS.coast.World(scene);
     let changingJourney = false, journeyWasPaused = false;
@@ -114,7 +117,7 @@ async function boot() {
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { vehicle.reset(); traffic.clearNear(vehicle); traffic.render(1, world.origin); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Car reset to the road'); }
+      if (name === 'reset') { vehicle.reset(); traffic.clearNear(vehicle); traffic.render(1, world.origin); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); needsRender = true; toast('Car reset to the road'); }
       if (name === 'view') { toast(rendering.toggleView()); updateViewUi(); }
       if (name === 'sound') {
         try {
@@ -189,8 +192,9 @@ async function boot() {
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
     window.addEventListener('keydown', () => audio.unlock(), { capture: true });
     window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) void audio.dispose().catch(() => {}); });
-    window.addEventListener('pageshow', () => audio.setHidden(document.hidden));
+    window.addEventListener('pageshow', () => { audio.setHidden(document.hidden); needsRender = true; });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
+    $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
     function updateHud() {
       // Physics uses meters and seconds; convert only the displayed measurements.
       const mph = Math.round(Math.abs(vehicle.speed) * 3600 / 1609.344);
@@ -220,8 +224,12 @@ async function boot() {
       }
       audio.update(vehicle.audioTelemetry, dt);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
-      renderer.render(scene, camera);
-      if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
+      // Paused water, traffic and shadows are unchanged. Keep polling input
+      // and fading audio, but only redraw the frozen canvas when invalidated.
+      if (!document.hidden && (!paused || needsRender)) {
+        renderer.render(scene, camera); needsRender = false;
+        if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
+      }
       requestAnimationFrame(frame);
     }
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();

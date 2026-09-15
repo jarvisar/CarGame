@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, coastalDrivingRoute } from './world/route.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
@@ -32,6 +33,22 @@ export function createCar() {
   box(body, [1.98, .14, .17], [0, .64, 1.97], chrome);
   const plate = box(body, [.6, .22, .02], [0, .91, 2.002], roof);
   box(body, [.77, .18, .02], [0, .89, -2.002], tires);
+  // Fixed body parts sharing a material can draw together. The plate still
+  // moves for the spare tire; accessories and animated wheels stay separate.
+  const batches = new Map();
+  for (const mesh of body.children) {
+    if (mesh === plate) continue;
+    if (!batches.has(mesh.material)) batches.set(mesh.material, []);
+    batches.get(mesh.material).push(mesh);
+  }
+  for (const [material, parts] of batches) {
+    if (parts.length < 2) continue;
+    for (const part of parts) { part.updateMatrix(); part.geometry.applyMatrix4(part.matrix); }
+    const mesh = new THREE.Mesh(mergeGeometries(parts.map(part => part.geometry)), material);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    for (const part of parts) { body.remove(part); part.geometry.dispose(); }
+    body.add(mesh);
+  }
   // Keep the coastal design, with a small accessory swap for each other journey.
   const rack = new THREE.Group(); rack.name = 'roof-rack'; body.add(rack);
   for (const z of [-.48, .75]) box(rack, [1.65, .09, .12], [0, 2.2, z], tires);

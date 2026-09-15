@@ -36,7 +36,7 @@ water.onBeforeCompile = shader => {
 water.customProgramCacheKey = () => 'alpine-lake-v1';
 
 const mist = new THREE.MeshBasicMaterial({ color: '#8ba5b4', transparent: true, opacity: .14,
-  depthWrite: false, side: THREE.DoubleSide });
+  depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
 mist.onBeforeCompile = shader => {
   shader.uniforms.lakeTime = lakeClock;
   shader.vertexShader = 'attribute vec3 lakeCoord; varying vec3 vLakeCoord;\n' + shader.vertexShader;

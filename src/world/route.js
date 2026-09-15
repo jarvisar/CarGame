@@ -239,23 +239,23 @@ export function terrainVertex(row, column) {
   return { ...p, s, u, column };
 }
 
-export function terrainCell(row, col) {
-  const a = terrainVertex(row, col), b = terrainVertex(row + 1, col);
-  const c = terrainVertex(row, col + 1), d = terrainVertex(row + 1, col + 1);
+export function terrainCell(row, col, vertex = terrainVertex) {
+  const a = vertex(row, col), b = vertex(row + 1, col);
+  const c = vertex(row, col + 1), d = vertex(row + 1, col + 1);
   // Spend the extra faces on cliff joints. Transition triangles stitch those
   // joints into the original coarse beach and meadow, with no open T-junctions.
   if (col === 6) {
-    const m = terrainVertex(row + .5, 7);
+    const m = vertex(row + .5, 7);
     return [[a, b, m], [a, m, c], [b, d, m]];
   }
   if (col === 10) {
-    const m = terrainVertex(row + .5, 10);
+    const m = vertex(row + .5, 10);
     return [[a, m, c], [m, d, c], [m, b, d]];
   }
   if (col >= 7 && col <= 9) {
-    const e = terrainVertex(row + .5, col), f = terrainVertex(row + .5, col + 1);
+    const e = vertex(row + .5, col), f = vertex(row + .5, col + 1);
     if (col === 9) {
-      const lipA = terrainVertex(row, 9.5), lipB = terrainVertex(row + .5, 9.5), lipC = terrainVertex(row + 1, 9.5);
+      const lipA = vertex(row, 9.5), lipB = vertex(row + .5, 9.5), lipC = vertex(row + 1, 9.5);
       const stone = [[a, e, lipA], [e, lipB, lipA], [e, b, lipC], [e, lipC, lipB]];
       const turf = [[lipA, lipB, c], [lipB, f, c], [lipB, lipC, d], [lipB, d, f]];
       for (const tri of turf) tri.rimTurf = true;
