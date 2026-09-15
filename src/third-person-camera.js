@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 export class ThirdPersonCamera {
   constructor() {
-    this.camera = new THREE.PerspectiveCamera(60, 1, .1, 1200);
+    this.camera = new THREE.PerspectiveCamera(45, 1, .1, 1200);
     this.initialized = false;
     this.heading = 0;
     this.pitch = 0;
@@ -12,7 +12,7 @@ export class ThirdPersonCamera {
   resize(aspect) {
     this.camera.aspect = aspect;
     // Preserve enough horizontal room for the car on narrow phones.
-    this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(Math.PI / 6) / Math.min(aspect, 1)));
+    this.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(Math.PI / 8) / Math.min(aspect, 1)));
     this.camera.updateProjectionMatrix();
   }
   snap() { this.initialized = false; }
