@@ -9,19 +9,19 @@ function box(group, size, location, material) {
 export function createCar() {
   const car = new THREE.Group();
   const body = new THREE.Group(); car.add(body);
-  const coral = mat('#d96143'); const roof = mat('#f5e8c8'); const glass = mat('#36545a', { roughness: .3, metalness: .16 });
+  const paint = mat('#d96143'); const roof = mat('#f5e8c8'); const glass = mat('#36545a', { roughness: .3, metalness: .16 });
   const tires = mat('#303b36'); const chrome = mat('#c9cbb6', { metalness: .2 });
   const nightLights = [];
-  box(body, [2.05, .64, 3.9], [0, .9, 0], coral);
-  box(body, [1.96, .24, 1.12], [0, 1.3, -1.32], coral);
-  box(body, [1.92, .22, .74], [0, 1.28, 1.51], coral);
+  box(body, [2.05, .64, 3.9], [0, .9, 0], paint);
+  box(body, [1.96, .24, 1.12], [0, 1.3, -1.32], paint);
+  box(body, [1.92, .22, .74], [0, 1.28, 1.51], paint);
   box(body, [1.77, .81, 1.9], [0, 1.57, .12], glass);
   box(body, [1.89, .16, 2.03], [0, 2.04, .13], roof);
   for (const side of [-1, 1]) {
-    for (const z of [-.77, .23, 1.03]) box(body, [.095, .85, .09], [side * .9, 1.61, z], coral);
-    box(body, [.085, .16, 2], [side * .92, 1.24, .14], coral);
+    for (const z of [-.77, .23, 1.03]) box(body, [.095, .85, .09], [side * .9, 1.61, z], paint);
+    box(body, [.085, .16, 2], [side * .92, 1.24, .14], paint);
     box(body, [.09, .08, .27], [side * 1.03, 1.14, .52], chrome);
-    box(body, [.23, .15, .29], [side * 1.1, 1.42, -.64], coral);
+    box(body, [.23, .15, .29], [side * 1.1, 1.42, -.64], paint);
     const front = mat('#fff5cf', { emissive: '#e9cc84', emissiveIntensity: .24 });
     const rear = mat('#8e3328', { emissive: '#b8220d', emissiveIntensity: .1 });
     box(body, [.42, .25, .055], [side * .64, 1.03, -1.978], front);
@@ -30,15 +30,26 @@ export function createCar() {
   }
   box(body, [1.98, .14, .17], [0, .64, -1.97], chrome);
   box(body, [1.98, .14, .17], [0, .64, 1.97], chrome);
-  box(body, [.6, .22, .02], [0, .91, 2.002], roof);
+  const plate = box(body, [.6, .22, .02], [0, .91, 2.002], roof);
   box(body, [.77, .18, .02], [0, .89, -2.002], tires);
-  // A tiny cream surfboard gives the silhouette a Sunday-on-the-coast character.
-  for (const z of [-.48, .75]) box(body, [1.65, .09, .12], [0, 2.2, z], tires);
+  // Keep the coastal design, with a small accessory swap for each other journey.
+  const rack = new THREE.Group(); rack.name = 'roof-rack'; body.add(rack);
+  for (const z of [-.48, .75]) box(rack, [1.65, .09, .12], [0, 2.2, z], tires);
+  const surfboard = new THREE.Group(); surfboard.name = 'surfboard'; body.add(surfboard);
   const boardShape = new THREE.Shape();
   boardShape.moveTo(0, -1.65); boardShape.quadraticCurveTo(.5, -1.35, .47, .65); boardShape.quadraticCurveTo(.43, 1.55, 0, 1.65); boardShape.quadraticCurveTo(-.43, 1.55, -.47, .65); boardShape.quadraticCurveTo(-.5, -1.35, 0, -1.65);
   const board = new THREE.Mesh(new THREE.ExtrudeGeometry(boardShape, { depth: .11, bevelEnabled: false, curveSegments: 3 }), roof);
-  board.rotation.x = Math.PI / 2; board.position.set(.14, 2.38, .04); board.castShadow = true; body.add(board);
-  box(body, [.065, .02, 2.85], [.14, 2.385, .02], coral);
+  board.rotation.x = Math.PI / 2; board.position.set(.14, 2.38, .04); board.castShadow = true; surfboard.add(board);
+  box(surfboard, [.065, .02, 2.85], [.14, 2.385, .02], paint);
+  const spare = new THREE.Group(); spare.name = 'desert-spare'; spare.position.set(0, 1.22, 2.12); body.add(spare);
+  const spareTire = new THREE.Mesh(new THREE.CylinderGeometry(.48, .48, .28, 12), tires);
+  spareTire.rotation.x = Math.PI / 2; spareTire.castShadow = true; spare.add(spareTire);
+  const spareHub = new THREE.Mesh(new THREE.CylinderGeometry(.23, .23, .295, 10), roof);
+  spareHub.rotation.x = Math.PI / 2; spare.add(spareHub);
+  const roofBox = new THREE.Group(); roofBox.name = 'alpine-roof-box'; body.add(roofBox);
+  box(roofBox, [1.24, .3, 1.86], [0, 2.4, .13], tires);
+  box(roofBox, [1.16, .12, 1.72], [0, 2.61, .13], mat('#536774'));
+  for (const x of [-.4, .4]) box(roofBox, [.07, .025, 1.74], [x, 2.68, .13], chrome);
   const wheels = [];
   for (const x of [-1.02, 1.02]) for (const z of [-1.18, 1.21]) {
     const pivot = new THREE.Group(); pivot.position.set(x, .49, z); car.add(pivot);
@@ -46,7 +57,15 @@ export function createCar() {
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(.23, .23, .295, 10), roof); hub.rotation.z = Math.PI / 2; pivot.add(hub);
     wheels.push({ pivot, wheel, hub, front: z < 0 });
   }
-  return { car, body, wheels, nightLights };
+  // Reuse the model and its materials so repeated route changes stay bounded.
+  function setAppearance(journey) {
+    paint.color.set({ coast: '#d96143', desert: '#78977b', snow: '#9fc4d5' }[journey] ?? '#d96143');
+    surfboard.visible = journey === 'coast'; spare.visible = journey === 'desert'; roofBox.visible = journey === 'snow';
+    rack.visible = surfboard.visible || roofBox.visible;
+    plate.position.x = spare.visible ? -.65 : 0;
+  }
+  setAppearance('coast');
+  return { car, body, wheels, nightLights, setAppearance };
 }
 
 export class DrivingController {

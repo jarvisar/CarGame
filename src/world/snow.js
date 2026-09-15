@@ -24,6 +24,23 @@ const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 
+function headlightPattern() {
+  // Two soft, symmetric lobes projected by one light; no extra shadow pass.
+  const size = 64, pixels = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = (x + .5) / size * 2 - 1, v = (y + .5) / size * 2 - 1;
+    const left = Math.exp(-.5 * ((u + .3) / .25) ** 2);
+    const right = Math.exp(-.5 * ((u - .3) / .25) ** 2);
+    const value = Math.round(255 * Math.min(1, left + right) * Math.exp(-.5 * (v / .65) ** 2));
+    const offset = (y * size + x) * 4;
+    pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = value; pixels[offset + 3] = 255;
+  }
+  const texture = new THREE.DataTexture(pixels, size, size);
+  texture.minFilter = texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 function geometry(vertices, colors) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   if (colors) g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -275,8 +292,9 @@ export class SnowWorld {
     this.lampGlows = new THREE.Points(this.glowGeometry, this.glowMaterial); this.lampGlows.name = 'lamp-halos';
     this.lampGlows.frustumCulled = false; this.effects.add(this.lampGlows);
     this.headlights = new THREE.Group(); this.effects.add(this.headlights);
-    this.headlight = new THREE.SpotLight('#ffce85', 850, 45, .48, .65, 1.5);
-    this.headlight.position.set(0, 1.2, -1.8); this.headlight.target.position.set(0, -.3, -27);
+    this.headlight = new THREE.SpotLight('#ffe0a6', 170, 18, .64, .8, 1.5);
+    this.headlight.position.set(0, 1.03, -2.02); this.headlight.target.position.set(0, -1, -8);
+    this.headlight.map = headlightPattern(); this.headlight.castShadow = false;
     this.headlights.add(this.headlight, this.headlight.target);
     this.snowfall = new Snowfall(); this.flakes = this.snowfall.points;
     this.flakeGeometry = this.snowfall.geometry; this.flakeMaterial = this.snowfall.material;
@@ -310,13 +328,17 @@ export class SnowWorld {
   }
   animate(time, vehicle) {
     this.time = time; lakeClock.value = time;
-    if (vehicle) { this.headlights.position.copy(vehicle.car.position); this.headlights.quaternion.copy(vehicle.car.quaternion); }
+    if (vehicle) {
+      this.headlights.position.copy(vehicle.car.position); this.headlights.quaternion.copy(vehicle.car.quaternion);
+      this.headlight.shadow.camera.up.copy(up).applyQuaternion(vehicle.car.quaternion);
+    }
     const anchor = snowPosition(this.s, -35, snowRoadHeight(this.s));
     this.snowfall.update(time, anchor, this.origin);
   }
   dispose() {
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
     this.snowfall.dispose();
+    this.headlight.map.dispose(); this.headlight.dispose();
     this.glowGeometry.dispose(); this.glowMaterial.dispose();
   }
 }

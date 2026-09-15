@@ -12,6 +12,8 @@ Use **Change Route** in the top bar to choose **Pacific Coast** or **Red Rock De
 
 The third journey, **Midnight Alpine**, winds above a broad mountain lake at night. Three overlapping mountain ranges rise behind the roadside peaks, with irregular summits, deep saddles, and distant slopes fading into blue mist. Snow-laden firs, guardrails, warm lamps, working headlights, light snowfall, and occasional summit relay huts complete the scene. The view frames more of the lake below the road while retaining the camera angle and driving controls. Night effects pause with the drive and are removed when returning to a daytime journey.
 
+Each journey has a matching car in the same miniature style: coral with a cream surfboard on the coast, sage green with a rear spare tire in the desert, and pale blue with a dark roof box in the mountains. Handling stays the same across all three.
+
 The desert also includes small branching trees with rounded leafy crowns, clustered scrub and straw-colored grass, and broad fractured sandstone slabs surrounded by stone chips. These reference-inspired details grow in scattered pockets along the valley and upper ledges, using deterministic instancing and keeping the asphalt clear.
 
 The slope below the road descends gradually through broad spurs, gullies, and uneven snow-covered shoulders. Local pockets flatten directly into the terrain on both sides, with small groups of pines growing on those shelves. These variations use continuous world-space height functions, so the terrain connects across chunks while retaining the overall summit shape.

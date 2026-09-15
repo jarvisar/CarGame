@@ -73,6 +73,7 @@ async function boot() {
         else renderer.compile(scene, camera);
         world.dispose(); world = nextWorld; journey = id;
         vehicle.setRoute(JOURNEYS[id].route, savedJourneys[id]);
+        vehicle.setAppearance(id);
         vehicle.setNight(id === 'snow');
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
         vehicle.render(1, world.origin);
