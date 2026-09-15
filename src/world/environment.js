@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
-import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, clamp, lerp, smoothstep } from './route.js';
+import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
 import { CoastalBirds } from './birds.js';
@@ -44,18 +44,10 @@ const rockGeometry = new THREE.DodecahedronGeometry(1, 0);
 const postGeometry = new THREE.BoxGeometry(.22, 1.25, .25);
 const capGeometry = new THREE.BoxGeometry(.235, .18, .265);
 const capMaterial = new THREE.MeshStandardMaterial({ color: '#466050' });
-const grassGeometry = new THREE.BufferGeometry();
-grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-  -.45, 0, 0, .12, .95, .04, .2, 0, 0,
-  0, 0, -.35, .06, .7, .2, 0, 0, .4,
-  -.25, 0, .2, -.4, .55, -.1, .3, 0, -.2,
-], 3));
-grassGeometry.computeVertexNormals();
-const grassMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 1 });
 const matrix = new THREE.Object3D();
 registerChunkResources('coast', { terrainMaterial, waterMaterial, roadMaterial, shoulderMaterial, lineMaterial, centerMaterial,
   foamMaterial, rollingSurfMaterial, rockWashMaterial, leavesMaterial, pineMaterial, trunkMaterial, rockMaterial, cragMaterial,
-  postMaterial, capMaterial, grassMaterial, trunkGeometry, shrubGeometry, rockGeometry, postGeometry, capGeometry, grassGeometry,
+  postMaterial, capMaterial, trunkGeometry, shrubGeometry, rockGeometry, postGeometry, capGeometry,
   coastalPines, coastalCrags, coastalCypress });
 
 function geometryFrom(positions, colors) {
@@ -269,7 +261,7 @@ export class CoastalChunk {
   }
   buildScenery() {
     const random = seededRandom(this.index + 8913);
-    const trunks = [], foliage = [[], []], shrubs = [], rocks = [], posts = [], caps = [], grasses = [], cypresses = [], stacks = [[], [], []];
+    const trunks = [], foliage = [[], []], shrubs = [], rocks = [], posts = [], caps = [], cypresses = [], stacks = [[], [], []];
     const rockWashVertices = [], rockWashCoords = [];
     const canGrow = (s, u) => pondRadius(s, u) > 1.15 && ravineAmount(s, u) < .13 && groundHeight(s, u) > 2;
     const hillSlope = (s, u) => Math.hypot(groundHeight(s, u + 1) - groundHeight(s, u - 1), groundHeight(s + 1, u) - groundHeight(s - 1, u)) / 2;
@@ -462,20 +454,6 @@ export class CoastalChunk {
       const p = planted(s, u), size = 5.5 + detailRandom() * 3;
       cypresses.push({ p: [p.x, p.y - .12, p.z + this.start], scale: [size, size, size], r: [0, -.5 + detailRandom(), 0], color: '#487d3b' });
     }
-    // Reeds and low bank stones soften the pond's transition into the meadow.
-    const pond = pondAt(this.start + CHUNK_LENGTH / 2);
-    for (let i = 0; i < 64; i++) {
-      const angle = i / 64 * Math.PI * 2;
-      const shape = 1 + .09 * Math.sin(angle * 3 + pond.index) + .045 * Math.sin(angle * 5);
-      const s = pond.center + Math.cos(angle) * pond.rs * shape * 1.1;
-      const u = pond.u + Math.sin(angle) * pond.ru * shape * 1.1;
-      if (s < this.start || s >= this.start + CHUNK_LENGTH || randomAt(pond.index, i + 819) < .35) continue;
-      const p = planted(s, u);
-      if (p.y < pond.level + .05 || p.y > pond.level + 3) continue;
-      const size = .8 + randomAt(pond.index, i + 820) * .8;
-      grasses.push({ p: [p.x, p.y, p.z + this.start], scale: [size, size * 1.6, size], r: [0, angle, 0], color: i % 3 ? '#677e45' : '#a6a06c' });
-      if (i % 5 === 0) rocks.push({ p: [p.x + .6, p.y, p.z + this.start], scale: [size, size * .48, size * .8], r: [0, angle, 0], color: '#99a399' });
-    }
     makeInstances(this.group, trunkGeometry, trunkMaterial, trunks);
     coastalPines.forEach((shape, i) => { const mesh = makeInstances(this.group, shape, pineMaterial, foliage[i]); if (mesh) mesh.name = 'coastal-firs'; });
     makeInstances(this.group, coastalCypress.bark, trunkMaterial, cypresses.map(({ color, ...item }) => item));
@@ -488,8 +466,6 @@ export class CoastalChunk {
     makeInstances(this.group, rockGeometry, rockMaterial, rocks.filter(rock => rock.scale[0] >= 1 || rock.p[1] < 4));
     makeInstances(this.group, postGeometry, postMaterial, posts);
     makeInstances(this.group, capGeometry, capMaterial, caps);
-    const grass = makeInstances(this.group, grassGeometry, grassMaterial, grasses, false);
-    if (grass) grass.name = 'coastal-grass-pockets';
   }
   dispose() {
     this.group.removeFromParent();
