@@ -25,17 +25,18 @@ export function createRiverMaterial() {
     shader.fragmentShader = 'uniform float jungleTime; varying vec3 vRiver;\n' + noise + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      float flow = vRiver.x * 0.16 - jungleTime * 0.9;
-      float lane = vRiver.y * 2.4;
-      float streak = jungleNoise(vec2(flow, lane)) * 0.6 + jungleNoise(vec2(flow * 2.1 + 7.3, lane * 1.8 + 3.1)) * 0.4;
-      float ripple = smoothstep(0.5, 0.8, streak);
-      float edge = smoothstep(0.55, 1.0, abs(vRiver.y)) * smoothstep(0.35, 0.8, jungleNoise(vec2(flow * 1.6, lane * 2.7 + 11.0)));
-      float churn = vRiver.z * (0.5 + 0.5 * smoothstep(0.3, 0.75, jungleNoise(vec2(vRiver.x * 0.45 - jungleTime * 2.4, lane * 1.9 + 5.0))));
-      float white = clamp(ripple * 0.2 + edge * 0.5 + churn, 0.0, 1.0);
+      float flow = vRiver.x * 0.12 - jungleTime * 0.65;
+      float lane = vRiver.y * 7.0;
+      float streak = jungleNoise(vec2(flow * 1.3, lane * 1.6)) * 0.65 + jungleNoise(vec2(flow * 2.4 + 7.3, lane * 3.1)) * 0.35;
+      float ripple = smoothstep(0.66, 0.83, streak);
+      float edge = smoothstep(0.86, 1.0, abs(vRiver.y)) * smoothstep(0.48, 0.76, jungleNoise(vec2(flow * 2.1, lane + 11.0)));
+      float churn = vRiver.z * (0.35 + 0.65 * smoothstep(0.3, 0.75, jungleNoise(vec2(vRiver.x * 0.5 - jungleTime * 2.4, lane * 0.75 + 5.0))));
+      diffuseColor.rgb *= 0.96 + streak * 0.1;
+      float white = clamp(ripple * 0.17 + edge * 0.32 + churn * 0.88, 0.0, 1.0);
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.94, 0.99, 0.97), white);
     `);
   };
-  material.customProgramCacheKey = () => 'jungle-river-v1';
+  material.customProgramCacheKey = () => 'jungle-river-v2';
   return material;
 }
 

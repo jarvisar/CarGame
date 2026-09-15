@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CHUNK_LENGTH, roadHeight, roadX } from '../src/world/route.js';
-import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, POOL_SPAN, jungleColumns, jungleVertex, jungleHeight, jungleDrivingRoute, riverLevel, riverBedLevel, riverLips, riverDams, damAt, sideFalls, riverCenter, riverHalfWidth, jungleMountains, jungleCrags } from '../src/world/jungle-route.js';
+import { CHUNK_LENGTH, roadX, positionAt } from '../src/world/route.js';
+import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, POOL_SPAN, jungleColumns, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, jungleDrivingRoute, jungleGuardrail, gorgeWall, riverLevel, riverBedLevel, riverLips, riverLipOffset, sideFalls, riverCenter, riverHalfWidth, jungleMountains, jungleCrags } from '../src/world/jungle-route.js';
 import { JungleWorld, JungleChunk } from '../src/world/jungle.js';
 import { waterClock } from '../src/world/water.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -15,7 +15,7 @@ test('jungle columns stay ordered, the road stays flat and the river sits in its
     for (const u of [-7, 0, 7]) assert.equal(jungleHeight(s, u), roadHeight(s));
     const rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s);
     assert.ok(level < roadHeight(s) - 5 && level > roadHeight(s) - 26, `river level ${level} at ${s}`);
-    if (damAt(s).amount === 0) assert.ok(jungleHeight(s, rc) < level - 1.5, `river bed above the water at ${s}`);
+    assert.ok(jungleHeight(s, rc) < level - 1.5, `river bed above the water at ${s}`);
     // Under a gorge wall the water reaches the cliff foot; the camera-side bank always stands clear.
     assert.ok(jungleHeight(s, rc + hw + 4) > level - .7 && jungleHeight(s, rc - hw - 4) > level + 1, `submerged bank at ${s}`);
     assert.ok(jungleHeight(s, 100) > roadHeight(s) + 5);
@@ -30,8 +30,8 @@ test('jungle columns stay ordered, the road stays flat and the river sits in its
 });
 
 test('river pools are terraced by rocky lips fixed in world space', () => {
-  const lips = riverLips(-4000, 4000), dams = riverDams(-4000, 4000), boundaries = [...lips, ...dams].sort((a, b) => a.s - b.s);
-  assert.ok(lips.length > 50 && dams.length > 3 && dams.length < lips.length / 3);
+  const lips = riverLips(-4000, 4000), boundaries = lips;
+  assert.ok(lips.length > 75);
   for (let i = 1; i < boundaries.length; i++) {
     const spacing = boundaries[i].s - boundaries[i - 1].s;
     assert.ok(spacing >= 50 && spacing <= POOL_SPAN + 60, `pool spacing ${spacing}`);
@@ -44,26 +44,49 @@ test('river pools are terraced by rocky lips fixed in world space', () => {
     assert.ok(Math.abs(riverLevel(lip.s + lip.direction * 2) - lip.lower) < 1e-9);
     for (const d of [-8, -4, -1, 0, 1, 4, 8]) assert.ok(riverBedLevel(lip.s + d) <= riverLevel(lip.s + d) + 1e-9);
     for (const d of [-3, -2, -1.5, -.5, .5, 1.5, 2, 3]) assert.ok(Math.abs(riverLevel(lip.s + d + .001) - riverLevel(lip.s + d - .001)) < .02);
+    for (const f of [-1, -.55, 0, .55, 1]) {
+      const edge = lip.s + riverLipOffset(lip.index, f);
+      assert.ok(Math.abs(riverLevel(edge, f) - lip.upper) < 1e-8);
+      assert.ok(Math.abs(riverLevel(edge - 2, f) - lip.lower) < 1e-8);
+    }
   }
   for (let chunk = -30; chunk < 30; chunk++) {
     for (const local of riverLips(chunk * CHUNK_LENGTH, chunk * CHUNK_LENGTH + CHUNK_LENGTH)) assert.ok(lips.some(lip => lip.s === local.s && lip.index === local.index));
   }
 });
 
-test('the river never runs backwards; barriers close each reach and a waterfall feeds the next', () => {
-  const dams = riverDams(-12000, 12000);
-  for (let s = -12000; s < 12000; s += 2) {
-    if (dams.some(dam => Math.abs(dam.s - s) < 4)) continue;
-    assert.ok(riverLevel(s) <= riverLevel(s + 2) + 1e-9, `water climbs toward -s at ${s}`);
+test('the whole river descends continuously in world space and in the fixed camera', () => {
+  const camera = new THREE.OrthographicCamera(-100, 100, 100, -100, 1, 1200);
+  camera.position.set(-220, 245, 260); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+  for (const start of [-1000000, -20000, -12000, -1024, 0, 1024, 20000, 1000000]) for (let s = start; s < start + 1600; s += 1) {
+    for (const f of [-.9, 0, .9]) {
+      assert.ok(riverLevel(s, f) <= riverLevel(s + 1, f) + 1e-9, `water climbs downstream at ${s}, ${f}`);
+      const project = t => {
+        const p = positionAt(t, riverCenter(t) + f * riverHalfWidth(t), riverLevel(t, f));
+        return new THREE.Vector3(p.x, p.y, p.z).project(camera).y;
+      };
+      assert.ok(project(s) < project(s + 1), `river turns up the screen at ${s}, ${f}`);
+    }
+    assert.ok(roadHeight(s + 1) > roadHeight(s), 'road follows the descending valley smoothly');
+    assert.equal(jungleDrivingRoute.frame(s).y, roadHeight(s));
   }
-  const falls = sideFalls(-12000, 12000);
-  for (const dam of dams) {
-    const rc = riverCenter(dam.s);
-    assert.ok(dam.below > dam.above - 1, `barrier at ${dam.s} does not hold back a higher pool downstream`);
-    for (const d of [-6, 0, 6]) assert.ok(jungleHeight(dam.s + d, rc) > Math.max(dam.above, dam.below) + .5, `water pours over the barrier at ${dam.s + d}`);
-    assert.ok(falls.some(fall => fall.source && Math.abs(fall.s - (dam.s - 16)) < 1e-9), `no waterfall feeds the reach below ${dam.s}`);
+  assert.ok(sideFalls(-12000, 12000).length > 10);
+});
+
+test('waterfall terrain uses shared fine rows and guardrails only protect nearby steep cliffs', () => {
+  for (let index = -20; index < 20; index++) {
+    const start = index * CHUNK_LENGTH, rows = jungleRows(start, start + CHUNK_LENGTH);
+    assert.equal(rows[0], start); assert.equal(rows.at(-1), start + CHUNK_LENGTH);
+    assert.ok(rows.every((s, i) => i === 0 || s > rows[i - 1]));
+    for (const lip of riverLips(start, start + CHUNK_LENGTH)) assert.ok(rows.includes(lip.s));
   }
-  assert.ok(falls.filter(fall => !fall.source).length > 30);
+  let guarded = 0;
+  for (let s = -12000; s < 12000; s += 4) if (jungleGuardrail(s)) {
+    guarded++;
+    const rim = riverCenter(s) + riverHalfWidth(s) + 7;
+    assert.ok(rim > -25 && gorgeWall(s) > .65 && jungleHeight(s, rim) - riverLevel(s) > 6);
+  }
+  assert.ok(guarded > 10 && guarded < 600, `guardrails should be occasional (${guarded}/6000)`);
 });
 
 test('misty mountains and crags are deterministic and continuous', () => {

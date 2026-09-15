@@ -69,8 +69,10 @@ function emergentTrunk(seed) {
   const parts = [];
   const trunk = new THREE.CylinderGeometry(.026, .044, .8, 7); trunk.translate(0, .4, 0); parts.push(tinted(trunk, 1));
   for (let i = 0; i < 4; i++) {
-    const angle = i * 1.57 + randomAt(seed, i + 2311) * .8, reach = .3 + randomAt(seed, i + 2312) * .28;
-    const from = new THREE.Vector3(0, .74, 0), to = new THREE.Vector3(Math.cos(angle) * reach, .86 + randomAt(seed, i + 2313) * .08, Math.sin(angle) * reach);
+    // Short ascending limbs finish inside the central foliage instead of
+    // projecting horizontally beyond the flat crown.
+    const angle = i * 1.57 + randomAt(seed, i + 2311) * .8, reach = .12 + randomAt(seed, i + 2312) * .07;
+    const from = new THREE.Vector3(0, .7, 0), to = new THREE.Vector3(Math.cos(angle) * reach, .83 + randomAt(seed, i + 2313) * .025, Math.sin(angle) * reach);
     const direction = to.clone().sub(from);
     const limb = new THREE.CylinderGeometry(.008, .017, direction.length(), 5);
     limb.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
