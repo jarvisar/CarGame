@@ -6,10 +6,39 @@ export const snowRoadHeight = s => roadHeight(s) + 38 + 5 * Math.sin(s / 270);
 export const snowFrame = s => ({ ...roadFrame(s), y: snowRoadHeight(s) });
 export const ledgeEdge = s => -23 - 7 * Math.sin(s / 91 + .8) - 4 * Math.sin(s / 31 + .1);
 
+// The stream follows the foot of the cliff. Terrain and water share this
+// profile so banks, chunk boundaries and floating-origin shifts stay aligned.
+export function alpineRiver(s) {
+  return { u: ledgeEdge(s) - 114 + 5 * Math.sin(s / 65 + .5),
+    halfWidth: 3.1 + .65 * Math.sin(s / 43) + .35 * Math.sin(s / 17),
+    y: snowRoadHeight(s) - 100 + 2 * Math.sin(s / 160 + .3) };
+}
+
 export function summitForCell(index) {
   return { index, s: index * 280 + 76 + (randomAt(index, 618) - .5) * 28,
     u: 60 + randomAt(index, 619) * 12, height: 62 + randomAt(index, 620) * 16,
     rs: 156 + randomAt(index, 621) * 24, ru: 50 + randomAt(index, 622) * 12 };
+}
+
+export function alpineRelief(s, u) {
+  const outer = u < 0, cell = Math.floor(s / 64);
+  const distance = outer ? ledgeEdge(s) - u : u;
+  const mask = outer ? smoothstep(3, 24, distance) * (1 - smoothstep(73, 96, distance))
+    : smoothstep(13, 24, u) * (1 - smoothstep(53, 68, u));
+  if (!mask) return 0;
+  let relief = 0;
+  for (let i = cell - 1; i <= cell + 1; i++) {
+    const seed = i * 2 + (outer ? 0 : 1), center = i * 64 + 12 + randomAt(seed, 641) * 40;
+    const across = outer ? 18 + randomAt(seed, 642) * 45 : 26 + randomAt(seed, 642) * 23;
+    const along = (s - center) / (22 + randomAt(seed, 643) * 24);
+    // Tilt each fracture independently. Pointed lobes overlap at different
+    // elevations rather than sharing a contour or quantized height band.
+    const cross = (distance - across) / (12 + randomAt(seed, 644) * 14) + along * (randomAt(seed, 645) - .5) * .9;
+    const radius = Math.max(Math.abs(along) * .86 + Math.abs(cross) * .38, Math.abs(cross) * .9 + Math.abs(along) * .25);
+    const lobe = Math.max(0, 1 - radius);
+    relief += lobe * lobe * (8 + randomAt(seed, 646) * 13) * (randomAt(seed, 647) > .24 ? 1 : -.55);
+  }
+  return relief * mask;
 }
 
 export function mountainHeight(s, u) {
@@ -31,8 +60,10 @@ export function mountainHeight(s, u) {
 const valleyColumns = Array.from({ length: 12 }, (_, i) => -350 + i * 130 / 11);
 const uplandColumns = Array.from({ length: 26 }, (_, i) => 103 + i * 247 / 25);
 export function snowColumns(s) {
-  const edge = ledgeEdge(s);
-  return [...valleyColumns, ...[175, 155, 138, 122, 108, 96, 85, 75, 66, 58, 51, 44, 38, 32, 26, 21, 16, 12, 8, 4, 0].map(d => edge - d), -10, -7, 0, 7, 11,
+  const edge = ledgeEdge(s), river = alpineRiver(s);
+  return [...valleyColumns, ...[175, 155, 142].map(d => edge - d),
+    ...[-16, -9, -river.halfWidth, -river.halfWidth * .65, 0, river.halfWidth * .65, river.halfWidth, 9, 16].map(d => river.u + d),
+    ...[85, 75, 66, 58, 51, 44, 38, 32, 26, 21, 16, 12, 8, 4, 0].map(d => edge - d), -10, -7, 0, 7, 11,
     16, 22, 28, 35, 43, 51, 60, 70, 80, 91, ...uplandColumns];
 }
 const initialColumns = snowColumns(0);
@@ -50,11 +81,14 @@ export function snowBaseHeight(s, u) {
     const valley = smoothstep(75, 155, d) * (6 * Math.sin(s / 89 + u / 57) + 9 * Math.sin(s / 127 - u / 63) ** 2);
     const fissure = (3.2 * (.5 + .5 * Math.sin(s / 6.7 + u / 47)) ** 8 + 1.3 * Math.sin(s / 11 + u / 19))
       * smoothstep(1, 7, d) * (1 - smoothstep(29, 43, d));
-    return h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17)) - drop + valley - fissure;
+    const height = h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17)) - drop + valley - fissure + alpineRelief(s, u);
+    const river = alpineRiver(s), distanceToRiver = Math.abs(u - river.u);
+    const channel = river.y - 1.3 + 2.6 * smoothstep(river.halfWidth * .5, river.halfWidth * 1.5, distanceToRiver);
+    return channel + (height - channel) * smoothstep(river.halfWidth + 3.5, river.halfWidth + 13, distanceToRiver);
   }
   const fissure = 2.8 * (.5 + .5 * Math.sin(s / 7.3 + u / 39)) ** 7
     * smoothstep(14, 25, u) * (1 - smoothstep(48, 73, u));
-  return h + mountainHeight(s, u) - fissure;
+  return h + mountainHeight(s, u) - fissure + alpineRelief(s, u);
 }
 
 export function terrainPocket(index, side) {
@@ -82,12 +116,15 @@ export function snowHeight(s, u) {
 export const snowPosition = (s, u, y = snowHeight(s, u)) => positionAt(s, u, y);
 export function snowVertex(row, column) {
   const road = Math.abs(initialColumns[column]) <= 7;
-  const s = row * SNOW_STEP + (road ? 0 : (randomAt(row, column + 811) - .5) * 3.3);
+  const baseS = row * SNOW_STEP, river = alpineRiver(baseS);
+  const bank = Math.abs(snowColumns(baseS)[column] - river.u) < 18;
+  const s = baseS + (road || bank ? 0 : (randomAt(row, column + 811) - .5) * 3.3);
   const columns = snowColumns(s);
   const gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 40), (columns[column + 1] ?? columns[column] + 40) - columns[column]);
-  const u = columns[column] + (road ? 0 : (randomAt(row, column + 912) - .5) * Math.min(8, gap * .5));
+  const u = columns[column] + (road || bank ? 0 : (randomAt(row, column + 912) - .5) * Math.min(8, gap * .5));
   const p = snowPosition(s, u);
-  p.y += (randomAt(row, column + 177) - .5) * smoothstep(10, 35, Math.abs(u)) * 2.4;
+  const riverMask = smoothstep(river.halfWidth + 1, river.halfWidth + 13, Math.abs(u - river.u));
+  p.y += (randomAt(row, column + 177) - .5) * smoothstep(10, 35, Math.abs(u)) * 1.1 * riverMask;
   return { ...p, s, u };
 }
 export function lampAt(index) {

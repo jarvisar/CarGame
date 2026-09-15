@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
-import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell, ledgeEdge, terrainPocket } from '../src/world/snow-route.js';
+import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineRiver } from '../src/world/snow-route.js';
 import { SnowWorld } from '../src/world/snow.js';
+import { Snowfall } from '../src/world/snowfall.js';
 import { DrivingController } from '../src/vehicle.js';
 
 test('mountain ledges stay continuous, ordered and clear of the driving corridor', () => {
@@ -31,6 +32,44 @@ test('alpine summits rise inland of the road and descend on the far side', () =>
     assert.ok(top > snowHeight(summit.s, summit.u + 55) + 40);
     assert.deepEqual(summit, summitForCell(i));
   }
+});
+
+test('the narrow alpine river sits in a submerged channel with dry banks below the ledge', () => {
+  for (let s = -10000; s < 10000; s += 11) {
+    const river = alpineRiver(s);
+    assert.ok(river.halfWidth > 2 && river.halfWidth < 4.2);
+    assert.ok(river.y < snowRoadHeight(s) - 95);
+    for (const fraction of [-.8, 0, .8]) assert.ok(snowHeight(s, river.u + river.halfWidth * fraction) < river.y - .25);
+    for (const side of [-1, 1]) assert.ok(snowHeight(s, river.u + side * (river.halfWidth + 1.5)) > river.y + .5);
+  }
+  // Check actual shared terrain samples, including the noise suppression at
+  // the waterline, so the rendered channel cannot randomly fill with snow.
+  for (let row = -256; row <= 256; row++) {
+    const river = alpineRiver(row * SNOW_STEP), columns = snowColumns(row * SNOW_STEP);
+    const center = columns.indexOf(river.u), floor = snowVertex(row, center);
+    assert.ok(floor.y < river.y - 1);
+    assert.equal(floor.s, row * SNOW_STEP);
+    for (const col of [center - 2, center + 2]) assert.ok(Math.abs(snowVertex(row, col).y - river.y) < .0001);
+  }
+});
+
+test('snowfall stays in world space while the camera follows and the origin rebases', () => {
+  const snowfall = new Snowfall(), anchor = { x: 12, y: 67, z: -1023 };
+  snowfall.update(12, anchor, 0);
+  const before = Array.from(snowfall.geometry.attributes.position.array);
+  const next = { x: 14, y: 67.3, z: -1025 };
+  snowfall.update(12, next, 1024);
+  const after = snowfall.geometry.attributes.position.array;
+  let compared = 0;
+  for (let i = 0; i < before.length; i += 3) {
+    if (Math.abs(before[i]) > 140 || Math.abs(before[i + 1]) > 90 || Math.abs(before[i + 2]) > 170) continue;
+    assert.ok(Math.abs(before[i] + anchor.x - (after[i] + next.x)) < .0001);
+    assert.ok(Math.abs(before[i + 1] + anchor.y - (after[i + 1] + next.y)) < .0001);
+    assert.ok(Math.abs(before[i + 2] + anchor.z - (after[i + 2] + snowfall.points.position.z - 1024)) < .0001);
+    compared++;
+  }
+  assert.ok(compared > 900);
+  snowfall.dispose();
 });
 
 test('snow drive stays grounded on slopes and safely within the ledge', () => {

@@ -43,7 +43,10 @@ try {
   await press(3); assert.equal(await page.evaluate(() => window.__coastline.vehicle.speed), 0);
   await button(6, 1); await page.waitForFunction(() => window.__coastline.vehicle.speed < -1);
   await button(6, 0); await frames();
-  await page.locator('#change-journey').tap();
+  for (const selector of ['#change-journey', '#view', '#reset', '#next-journey', '#pause']) {
+    assert.equal(await page.locator(selector).isVisible(), false, `${selector} hides with a controller`);
+  }
+  await press(8);
   const position = await page.evaluate(() => window.__coastline.vehicle.s);
   await button(7, 1); await press(9); await frames();
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.s), position);

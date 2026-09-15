@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+const url = process.env.TEST_URL ?? 'http://127.0.0.1:5173';
 await mkdir('.artifacts', { recursive: true });
 const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 try {
   const errors = [], records = [];
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   page.on('pageerror', e => errors.push(e.message)); page.on('console', e => { if (e.type() === 'error') errors.push(e.text()); });
-  await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+  await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline);
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure }; });
   await page.getByRole('button', { name: 'Change Route', exact: true }).click();
@@ -24,10 +25,13 @@ try {
     await page.waitForTimeout(500);
     const result = await page.evaluate(() => {
       const a = window.__coastline, info = a.rendering.renderer.info;
-      return { s: a.vehicle.s, chunks: a.world.chunks.size, geometry: info.memory.geometries, triangles: info.render.triangles, lights: a.world.lights.length, headlight: a.world.headlight.intensity, origin: a.world.origin, carZ: a.vehicle.car.position.z, rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray() };
+      return { s: a.vehicle.s, chunks: a.world.chunks.size, geometry: info.memory.geometries, triangles: info.render.triangles, lights: a.world.lights.length, headlight: a.world.headlight.intensity, origin: a.world.origin, carZ: a.vehicle.car.position.z, rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(),
+        rivers: [...a.world.chunks.values()].filter(chunk => chunk.group.getObjectByName('alpine-river')).length,
+        flakeSizes: new Set(a.world.flakeGeometry.attributes.flakeSize.array).size };
     });
     assert.equal(result.chunks, 9); assert.equal(result.lights, 7); assert.ok(result.headlight > 0);
     assert.ok(result.geometry < 150); assert.ok(Math.abs(result.carZ) < 1030);
+    assert.equal(result.rivers, 9); assert.ok(result.flakeSizes > 100);
     assert.deepEqual(result.scale, initial.scale); assert.equal(result.top, initial.top);
     result.rotation.forEach((v, i) => assert.ok(Math.abs(v - initial.rotation[i]) < 1e-10));
     records.push(result);
@@ -50,7 +54,7 @@ try {
   }
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   mobile.on('pageerror', e => errors.push(e.message));
-  await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' }); await mobile.waitForFunction(() => window.__coastline);
+  await mobile.goto(url, { waitUntil: 'networkidle' }); await mobile.waitForFunction(() => window.__coastline);
   await mobile.getByRole('button', { name: 'Change Route', exact: true }).tap();
   await mobile.screenshot({ path: '.artifacts/three-journeys-mobile.png' });
   await mobile.getByRole('button', { name: 'Midnight Alpine', exact: true }).tap();

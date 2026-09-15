@@ -40,7 +40,7 @@ test('stick deadzone, analog triggers, D-pad and face-button fallbacks', () => {
 
 test('shortcuts fire once per press and Start works while paused', () => {
   const { input, device, actions } = fixture();
-  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset']]) {
+  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset'], [5, 'nextJourney'], [8, 'journey'], [4, 'fullscreen']]) {
     hold(device, index); input.update(); input.update(); input.update();
     assert.equal(actions.filter(item => item === action).length, 1);
     hold(device, index, 0); input.update();
@@ -49,6 +49,32 @@ test('shortcuts fire once per press and Start works while paused', () => {
   assert.equal(actions.filter(item => item === 'pause').length, 2);
   hold(device, 9, 0); hold(device, 7); input.update({ paused: true });
   assert.deepEqual(input.state, {}); assert.equal(actions.includes('drive'), false);
+});
+
+test('scene shortcut works paused and consumes presses made in a modal', () => {
+  const { input, device, actions } = fixture();
+  hold(device, 5); input.update({ paused: true }); input.update({ paused: true });
+  assert.deepEqual(actions, ['nextJourney']);
+  hold(device, 5, 0); input.update();
+  hold(device, 5); input.update({ blocked: true }); input.update();
+  assert.deepEqual(actions, ['nextJourney']);
+  hold(device, 5, 0); input.update();
+  hold(device, 5); input.update();
+  assert.deepEqual(actions, ['nextJourney', 'nextJourney']);
+});
+
+test('chooser routes controller inputs to navigation without driving', () => {
+  const { input, device, actions } = fixture();
+  for (const [index, action] of [[15, 'menuNext'], [12, 'menuPrevious'], [0, 'menuConfirm'], [1, 'menuClose'], [8, 'menuClose'], [4, 'fullscreen']]) {
+    hold(device, index); input.update({ menu: true }); input.update({ menu: true });
+    assert.equal(actions.at(-1), action);
+    assert.deepEqual(input.state, {});
+    hold(device, index, 0); input.update({ menu: true });
+  }
+  assert.equal(actions.length, 6);
+  device.axes[0] = 1; input.update({ menu: true }); input.update({ menu: true });
+  assert.equal(actions.at(-1), 'menuNext');
+  assert.equal(actions.length, 7);
 });
 
 test('focus loss and menus consume held inputs until the controller returns to neutral', () => {

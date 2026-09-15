@@ -14,6 +14,8 @@ The desert also includes small branching trees with rounded leafy crowns, cluste
 
 The slope below the road descends gradually through broad spurs, gullies, and uneven snow-covered shoulders. Local pockets flatten directly into the terrain on both sides, with small groups of pines growing on those shelves. These variations use continuous world-space height functions, so the terrain connects across chunks while retaining the overall summit shape.
 
+Midnight Alpine's mountains also have irregular, tilted rock outcrops and recesses, with angular boulders and small rockfall clusters. A narrow blue stream follows a carved channel at the foot of the slope, most visible in Scenic view. Soft, round snowflakes vary in size, depth, drift, and fall speed; they remain anchored in the world as the car moves. Snowfall and river highlights pause with the drive.
+
 ## Run
 
 Requires Node.js 22.12+ or 24+.
@@ -38,6 +40,7 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 - **N:** switch to the next scene, cycling through all routes while preserving each route’s progress
 - **P / Escape:** pause / resume
 - **M:** optional synthesized ocean and engine sound
+- **F:** toggle fullscreen (also available via the fullscreen icon on touchscreens).
 
 On touch devices, tap **Let’s drive**, then drag the right-side virtual joystick toward the direction you want the car to move **on screen**. Up moves toward the top of the screen, regardless of the car's previous heading. Drag farther for more speed; release to stop. Camera orientation and terrain slope are accounted for, while roadside limits still apply. This directional driving mode only applies to the touch joystick; keyboard and physical controller steering retain their existing behavior and can start a drive directly. Leaving the tab pauses the drive.
 
@@ -54,8 +57,11 @@ Basic support uses the browser's [Gamepad API](https://w3c.github.io/gamepad/) f
 - **Start / Menu / Options:** pause or resume.
 - **Left face button (Xbox X / PlayStation Square):** change view.
 - **Top face button (Xbox Y / PlayStation Triangle):** reset to the road.
+- **RB / R1 (right shoulder):** next scene, including while paused.
+- **Select / Back / View:** open the scenery chooser. Use the D-pad or stick to highlight a route, A / Cross to select, and B / Circle or Select to close.
+- **LB / L1 (left shoulder):** toggle fullscreen. Browsers may require a tap on the fullscreen icon or the F key to enter fullscreen; controller requests are handled without interrupting the game if denied.
 
-The touch joystick hides while a controller is detected and returns when it disconnects. Disconnecting during a drive pauses the game. Release held controls before resuming after a menu or focus change. Journey selection still uses touch or mouse. Standard browser mappings work best; unmapped devices use the same button indices as a rough fallback, with no device-specific remapping. AYN Thor compatibility depends on its controls being exposed to the browser as a gamepad; it has not been tested on physical hardware.
+The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route button hide while a controller is detected and returns when it disconnects. Disconnecting during a drive pauses the game. Release held controls before resuming after a menu or focus change. Tap the next-scene button beside View to cycle routes on touchscreens, or use RB / R1 on a controller. The Change Route chooser remains available for selecting a specific route. Standard browser mappings work best; unmapped devices use the same button indices as a rough fallback, with no device-specific remapping. AYN Thor compatibility depends on its controls being exposed to the browser as a gamepad; it has not been tested on physical hardware.
 
 ## Implementation
 

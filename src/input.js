@@ -12,6 +12,11 @@ export class Input {
       onControllerConnection(connected);
     });
     window.addEventListener('keydown', e => {
+      if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (!e.repeat) onAction('fullscreen');
+        return;
+      }
       if (document.querySelector('dialog[open]')) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
       this.keys.add(e.code);

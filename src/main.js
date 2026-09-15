@@ -52,6 +52,7 @@ async function boot() {
       if (changingJourney || journeyDialog.open) return;
       journeyWasPaused = paused; setPaused(true); $('#pause-overlay').hidden = true;
       journeyDialog.showModal();
+      journeyDialog.querySelector(`[data-journey="${journey}"]`).focus();
     }
     async function changeJourney(id) {
       if (changingJourney || !JOURNEYS[id]) return;
@@ -86,7 +87,18 @@ async function boot() {
       }
     }
     async function action(name) {
+      if (name === 'fullscreen') { await toggleFullscreen(); return; }
       if (changingJourney) return;
+      if (journeyDialog.open) {
+        if (name === 'menuClose') journeyDialog.close();
+        if (name === 'menuNext' || name === 'menuPrevious') {
+          const cards = [...journeyDialog.querySelectorAll('[data-journey]')];
+          const index = cards.indexOf(document.activeElement);
+          cards[(index + (name === 'menuNext' ? 1 : cards.length - 1)) % cards.length].focus();
+        }
+        if (name === 'menuConfirm' && journeyDialog.contains(document.activeElement)) document.activeElement.click();
+        return;
+      }
       if (name === 'nextJourney') {
         const journeys = Object.keys(JOURNEYS);
         await changeJourney(journeys[(journeys.indexOf(journey) + 1) % journeys.length]);
@@ -110,6 +122,42 @@ async function boot() {
       if (!connected && started && !paused) setPaused(true);
     });
     $('#change-journey').addEventListener('click', openJourneys);
+    $('#next-journey').addEventListener('click', event => {
+      if (event.pointerType !== 'touch') action('nextJourney');
+    });
+    let fullscreenPending = false;
+    function updateFullscreenUi() {
+      const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      $('#fullscreen').setAttribute('aria-pressed', String(active));
+      $('#fullscreen').setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+      $('#fullscreen').title = `${active ? 'Exit' : 'Enter'} fullscreen (F / LB / L1)`;
+    }
+    async function toggleFullscreen() {
+      if (fullscreenPending) return;
+      fullscreenPending = true;
+      try {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          await (document.exitFullscreen ?? document.webkitExitFullscreen).call(document);
+        } else {
+          const request = document.documentElement.requestFullscreen ?? document.documentElement.webkitRequestFullscreen;
+          if (!request) { toast('Fullscreen is unavailable in this browser'); return; }
+          await request.call(document.documentElement);
+        }
+      } catch {
+        toast('To enter fullscreen, tap the fullscreen button or press F');
+      } finally { fullscreenPending = false; updateFullscreenUi(); }
+    }
+    document.addEventListener('fullscreenchange', updateFullscreenUi);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenUi);
+    $('#fullscreen').addEventListener('click', event => {
+      if (event.pointerType !== 'touch') action('fullscreen');
+    });
+    $('#fullscreen').addEventListener('pointerup', event => {
+      if (event.pointerType === 'touch') { event.preventDefault(); action('fullscreen'); }
+    });
+    $('#next-journey').addEventListener('pointerup', event => {
+      if (event.pointerType === 'touch') { event.preventDefault(); action('nextJourney'); }
+    });
     $('#close-journeys').addEventListener('click', () => journeyDialog.close());
     journeyDialog.addEventListener('close', () => { if (!changingJourney) setPaused(journeyWasPaused || document.hidden); });
     journeyDialog.addEventListener('click', event => {
@@ -148,7 +196,7 @@ async function boot() {
       vehicle.update(dt, state);
     };
     function frame(timestamp) {
-      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || journeyDialog.open || changingJourney, paused });
+      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: journeyDialog.open });
       frameClock.tick(timestamp, !paused, simulate);
       const dt = frameClock.dt;
       if (!paused) {

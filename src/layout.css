@@ -10,6 +10,9 @@
 }
 .topbar { top: var(--ui-top); left: var(--ui-left); right: var(--ui-right); gap: 12px; }
 .top-actions { gap: 8px; }
+body[data-controller=true] #app :is(.controls, #pause, #change-journey) { display: none !important; }
+#journey-dialog > .controller-hint { margin: 0 0 12px; }
+.journey-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
 
@@ -161,6 +164,8 @@ body[data-journey=snow] .location .speedometer { background: none; }
 }
 @media (max-width: 360px) {
   .location svg { display: none; }
+  .controls button { min-width: 44px; padding: 0; justify-content: center; }
+  .controls .control-label { display: none; }
 }
 
 /* Anchor dismiss icons to the help area's corner, away from the copy. */

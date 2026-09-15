@@ -36,7 +36,7 @@ try {
         const visible = el => el && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none';
         const rect = el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
         const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-        const selectors = state === 'chooser' ? ['.journey-dialog-heading', '#journey-heading', '#journey-description', '.journey-options', '.journey-note'] : ['.brand', '#change-journey', '#sound', '#pause', '.controls', '.location', '.speedometer', '#touch-stick', '#stick-help', ...(state === 'menu' ? ['#welcome'] : [])];
+        const selectors = state === 'chooser' ? ['.journey-dialog-heading', '#journey-heading', '#journey-description', '.journey-options', '.journey-note'] : ['.brand', '#change-journey', '#fullscreen', '#sound', '#pause', '.controls', '.location', '.speedometer', '#touch-stick', '#stick-help', ...(state === 'menu' ? ['#welcome'] : [])];
         const items = selectors.map(selector => ({ selector, element: document.querySelector(selector) })).filter(item => visible(item.element)).map(item => ({ ...item, rect: rect(item.element) }));
         for (let i = 0; i < items.length; i++) {
           const a = items[i];
@@ -44,8 +44,10 @@ try {
           for (const b of items.slice(i + 1)) if (!a.element.contains(b.element) && !b.element.contains(a.element) && overlaps(a.rect, b.rect)) issues.push(`${a.selector} overlaps ${b.selector}`);
         }
         const buttons = state === 'menu' ? ['#start', '#change-journey', '#sound'] : state === 'pause' ? ['#resume', '#change-journey', '#sound', '#pause'] : state === 'chooser' ? ['#close-journeys'] : ['#view', '#reset', '#pause', '#sound', '#change-journey'];
+        if (state !== 'chooser') buttons.push('#fullscreen');
         for (const selector of buttons) {
           const el = document.querySelector(selector);
+          if (document.body.dataset.controller === 'true' && ['#view', '#reset', '#pause', '#change-journey'].includes(selector)) continue;
           if (!visible(el)) { issues.push(`${selector} required action hidden`); continue; }
           const r = rect(el), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
           if (!el.contains(hit)) issues.push(`${selector} covered or clipped by ${hit?.id || hit?.className}`);
@@ -67,7 +69,7 @@ try {
         return issues;
       }, state);
       results.push({ name, issues });
-      if (issues.length || /320x480|390x844|568x320|800x600|1440x900|notched|controller|install-help/.test(name)) await page.screenshot({ path: `.artifacts/responsive/latest-${name}.png` });
+      if (!process.env.SKIP_SCREENSHOTS && (issues.length || /320x480|390x844|568x320|800x600|1440x900|notched|controller|install-help/.test(name))) await page.screenshot({ path: `.artifacts/responsive/latest-${name}.png` });
     }
     for (const [width, height] of viewports) {
       await page.setViewportSize({ width, height });
