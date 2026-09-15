@@ -76,7 +76,7 @@ Windows notes:
 `.github/workflows/desktop.yml` does three things:
 
 1. On every push and pull request it runs the desktop smoke test on Ubuntu against the current web build, so a web change that breaks the shell shows up immediately.
-2. On a `v*` tag or a manual run it builds Windows, Linux, and macOS packages on their native runners and smoke-tests each unpacked build.
+2. On a `v*` tag or a manual run it builds Windows, Linux, and macOS packages on their native runners and smoke-tests each unpacked build. The macOS smoke test is informational only: GPU-less macOS runners have not loaded the WebGL scene reliably, so its report and `failure.png` are uploaded as artifacts without blocking the release.
 3. On a tag it attaches the installers to a GitHub release with generated notes.
 
 ```sh

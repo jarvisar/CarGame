@@ -74,8 +74,9 @@ electronApp.on('window', page => {
   page.on('pageerror', error => consoleErrors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
 });
+let page;
 try {
-  const page = await electronApp.firstWindow();
+  page = await electronApp.firstWindow();
   const windowState = () => electronApp.evaluate(({ BrowserWindow }) => {
     const [window] = BrowserWindow.getAllWindows();
     return { fullscreen: window.isFullScreen(), title: window.getTitle(), bounds: window.getBounds(), visible: window.isVisible() };
@@ -171,6 +172,19 @@ try {
 } catch (error) {
   report.errors.push(String(error?.stack ?? error));
   console.error(error);
+  // Capture what the page looked like so a CI failure can be diagnosed from the artifacts.
+  if (page) {
+    report.failureState = await page.evaluate(() => ({
+      href: location.href, readyState: document.readyState,
+      loading: document.querySelector('#loading')?.className, errorShown: document.querySelector('#error')?.hidden === false,
+      errorText: document.querySelector('#error:not([hidden])')?.textContent?.trim(),
+      webgl2: Boolean(document.createElement('canvas').getContext('webgl2')),
+      webgl2Renderer: (() => { try { const gl = document.createElement('canvas').getContext('webgl2'); const ext = gl?.getExtension('WEBGL_debug_renderer_info'); return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null; } catch { return null; } })(),
+      userAgent: navigator.userAgent,
+    })).catch(reason => ({ unavailable: String(reason) }));
+    console.error('Page state at failure:', JSON.stringify(report.failureState, null, 2));
+    await page.screenshot({ path: path.join(out, 'failure.png') }).catch(() => {});
+  }
 } finally {
   await electronApp.close().catch(() => {});
   report.consoleErrors = consoleErrors;
