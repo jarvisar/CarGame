@@ -170,7 +170,6 @@ export class DrivingController {
     const [coastLimit, inlandLimit] = this.route.bounds(this.s);
     if (this.u < coastLimit || this.u > inlandLimit) {
       this.u = clamp(this.u, coastLimit, inlandLimit); this.speed *= Math.exp(-dt * 4);
-      this.heading = THREE.MathUtils.damp(this.heading, roadFrame(this.s).angle, 3, dt);
     }
     const p = positionAt(this.s, this.u); p.y += .13;
     this.groundedPosition.set(p.x, p.y, p.z); this.car.position.copy(this.groundedPosition);
