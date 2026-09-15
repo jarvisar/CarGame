@@ -139,7 +139,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
 
 /* One three-line readout: area, distance, speed. */
 .bottom-bar { justify-content: flex-start; }
-.location { display: flex; max-width: min(240px, 65%); padding: 10px 12px; border: 1px solid #ffffff50; border-radius: 10px; background: #f9f8eebf; backdrop-filter: blur(12px); }
+.location { display: flex; max-width: min(240px, 65%); padding: 10px 12px; border: 1px solid #ffffff50; border-radius: 10px; background: #f9f8ee5e; backdrop-filter: blur(12px); }
 .location-copy { display: flex; flex-direction: column; gap: 3px; }
 .location-title { font-size: 10px; letter-spacing: .9px; }
 .location-sub { margin-top: 0; font-size: 11px; }
@@ -147,7 +147,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
 .location .speedometer > #speed { font-size: 23px; letter-spacing: -.7px; line-height: 1; }
 .location .speed-unit { font-size: 9px; padding: 0; }
 .location .speed-track, .location .speed-unit span { display: none; }
-body[data-journey=snow] .location { background: #17273ee8; border-color: #93acc64a; }
+body[data-journey=snow] .location { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] .location .speedometer { background: none; }
 @media (min-width: 761px) {
   .controls { position: fixed; left: 50%; bottom: var(--ui-bottom); top: auto; transform: translateX(-50%); }

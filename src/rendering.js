@@ -36,6 +36,7 @@ export function createRendering(canvas) {
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
   const cameraRight = new THREE.Vector3(cameraOffset.z, 0, -cameraOffset.x).normalize();
   const framingOffset = new THREE.Vector3();
+  const touchScreen = window.matchMedia('(any-pointer: coarse)');
   const sunOffset = new THREE.Vector3(-110, 240, 100);
   const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 115, label: 'Third-person view' }];
   const activeCamera = () => view === 3 ? thirdPerson.camera : camera;
@@ -49,11 +50,6 @@ export function createRendering(canvas) {
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
     thirdPerson.resize(aspect);
-    // Place the car lower on touch screens to leave more scenery visible ahead.
-    for (const framedCamera of [camera, thirdPerson.camera]) {
-      if (window.matchMedia('(any-pointer: coarse)').matches) framedCamera.setViewOffset(width, height, 0, -height * .08, width, height);
-      else framedCamera.clearViewOffset();
-    }
     if (initialized) fitSunShadow(activeCamera(), sun);
   }
   function update(car, dt, origin, touchActive = false) {
@@ -66,11 +62,10 @@ export function createRendering(canvas) {
     const framing = Math.min(1, viewHeight / 165);
     target.copy(follow).addScaledVector(lookAhead, framing);
     if (snowy) { target.y -= 14 * framing; target.z += 18 * framing; }
-    if (window.innerWidth < window.innerHeight) {
-      // Keep the car just right of center at every portrait zoom, preserving vertical look-ahead.
+    if (touchScreen.matches || window.innerWidth < window.innerHeight) {
+      // Ease the desktop framing slightly toward center without changing vertical look-ahead.
       const lateralOffset = framingOffset.copy(target).sub(follow).dot(cameraRight);
-      const portraitOffset = -.08 * (camera.right - camera.left);
-      target.addScaledVector(cameraRight, portraitOffset - lateralOffset);
+      target.addScaledVector(cameraRight, -lateralOffset * .30);
     }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);

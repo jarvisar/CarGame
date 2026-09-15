@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
-import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowHeight, snowRoadHeight, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
+import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
 import { alpinePines } from './alpine-pines.js';
 import { buildAlpineLake, lakeClock } from './alpine-lake.js';
@@ -19,13 +19,22 @@ const barkMaterial = material('#3a3e49');
 const roadMaterial = material('#414a53', { roughness: .72 });
 const lineMaterial = material('#b4ab84');
 const edgeMaterial = material('#b1becf');
+// Brown timber vanishes under the blue night ambient, so a little warm
+// emissive keeps the trestle legible beside the lamps.
+const timberMaterial = material('#7d6a5c', { roughness: .9, emissive: '#5a4636', emissiveIntensity: .24 });
 const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped: false });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 registerChunkResources('snow', { terrainMaterial, snowMaterial, rockMaterial, stoneMaterial, pineMaterial, metalMaterial,
-  barkMaterial, roadMaterial, lineMaterial, edgeMaterial, glowMaterial, boxGeometry, rockGeometry, poleGeometry, alpinePines, alpineRockVariants });
+  barkMaterial, roadMaterial, lineMaterial, edgeMaterial, timberMaterial, glowMaterial, boxGeometry, rockGeometry, poleGeometry, alpinePines, alpineRockVariants });
+
+// Road ribbons, guardrails and stakes stop at the abutments of a timber trestle.
+function onDeck(a, b) {
+  const bridge = snowBridgeAt((a + b) / 2);
+  return b > bridge.start && a < bridge.end;
+}
 
 function headlightPattern() {
   // Two soft, symmetric lobes projected by one light; no extra shadow pass.
@@ -114,6 +123,7 @@ export class SnowChunk {
   ribbon(ranges, lift, mat, name) {
     const vertices = [];
     for (const [low, high] of ranges) for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 2) {
+      if (onDeck(s, s + 2)) continue;
       const p = (t, u) => snowPosition(t, u, snowRoadHeight(t) + lift);
       const a = p(s, low), b = p(s + 2, low), c = p(s, high), d = p(s + 2, high);
       triangle(vertices, null, a, b, c, null, this.start); triangle(vertices, null, b, d, c, null, this.start);
@@ -130,7 +140,7 @@ export class SnowChunk {
       const profile = [[5.55, .05], [6.1, .33], [6.65, .54], [7.45, .1]];
       const at = (t, col) => {
         const [u, lift] = profile[col], drift = 1 + .28 * Math.sin(t / 7 + side);
-        return snowPosition(t, side * u, Math.max(snowRoadHeight(t) + lift * drift, snowHeight(t, side * u) + .035));
+        return snowPosition(t, side * u, Math.max(snowRoadHeight(t) + lift * drift, snowGroundHeight(t, side * u) + .035));
       };
       for (let i = 0; i < profile.length - 1; i++) {
         triangle(banks, null, at(s, i), at(s + 4, i), at(s, i + 1), null, this.start);
@@ -147,7 +157,7 @@ export class SnowChunk {
     const stone = (s, u, size, snowy = true, tall = false) => {
       if (onLake(s, u, size + .8) || nearCabin(s, u)) return;
       const variant = Math.floor(random() * rocks.length);
-      const ground = Math.min(snowHeight(s, u), snowHeight(s, u - size * .45), snowHeight(s, u + size * .45));
+      const ground = Math.min(snowGroundHeight(s, u), snowGroundHeight(s, u - size * .45), snowGroundHeight(s, u + size * .45));
       const item = { p: point(s, u, ground - size * .04),
         scale: [size * (.8 + random() * .5), size * (tall ? 1.35 : .55 + random() * .5), size * (.65 + random() * .5)],
         angle: random() * Math.PI * 2 };
@@ -168,13 +178,14 @@ export class SnowChunk {
     };
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
       const y = snowRoadHeight(s), endY = snowRoadHeight(s + 4);
-      metal.push({ p: point(s, -7.2, y + .73), scale: [.2, 1.65, .22] });
-      beam(point(s, -7.2, y + 1.42), point(s + 4, -7.2, endY + 1.42), .3, .2);
+      if (!onDeck(s - .5, s + .5)) metal.push({ p: point(s, -7.2, y + .73), scale: [.2, 1.65, .22] });
+      if (!onDeck(s, s + 4)) beam(point(s, -7.2, y + 1.42), point(s + 4, -7.2, endY + 1.42), .3, .2);
       // Slim red snow stakes mark the inner shoulder without enclosing the view.
-      if (s % 16 === 0) trunks.push({ p: point(s, 7.4, y + .9), scale: [.12, 1.9, .12] });
+      if (s % 16 === 0 && !onDeck(s - .5, s + .5)) trunks.push({ p: point(s, 7.4, y + .9), scale: [.12, 1.9, .12] });
     }
-    for (let i = Math.ceil((this.start - 16) / LAMP_SPACING); i * LAMP_SPACING + 16 < this.start + CHUNK_LENGTH; i++) {
+    for (let i = Math.ceil((this.start - 60) / LAMP_SPACING); i * LAMP_SPACING - 24 < this.start + CHUNK_LENGTH; i++) {
       const lamp = lampAt(i), ground = snowRoadHeight(lamp.s);
+      if (lamp.hidden || lamp.s < this.start || lamp.s >= this.start + CHUNK_LENGTH) continue;
       metal.push({ p: point(lamp.s, lamp.u, ground + 3.75), scale: [.17, 7.5, .17] });
       beam(point(lamp.s, lamp.u, ground + 7.5), point(lamp.s, 6.2, ground + 7.5), .14);
       lamps.push({ p: point(lamp.s, 6.2, ground + 7.38), scale: [.62, .18, .95] });
@@ -182,8 +193,8 @@ export class SnowChunk {
     for (let i = 0; i < 95; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
       const u = (random() > .48 ? 1 : -1) * (12 + random() ** 1.5 * 190);
-      const slope = Math.abs(snowHeight(s, u + 1) - snowHeight(s, u - 1));
-      const y = snowHeight(s, u);
+      const slope = Math.abs(snowGroundHeight(s, u + 1) - snowGroundHeight(s, u - 1));
+      const y = snowGroundHeight(s, u);
       if (slope > 1.5 || onLake(s, u, 4)) continue;
       const height = 5 + random() * 8.5, angle = random() * Math.PI;
       pine(s, u, y, height, angle);
@@ -195,8 +206,8 @@ export class SnowChunk {
       for (let j = 0; j < 3; j++) {
         const t = s + (random() - .5) * 11, v = u + (random() - .5) * 7;
         if (t < this.start || t >= this.start + CHUNK_LENGTH || onLake(t, v, 3)) continue;
-        if (Math.abs(snowHeight(t, v + 1) - snowHeight(t, v - 1)) > 1.6) continue;
-        pine(t, v, snowHeight(t, v), 5 + random() * 7.5, random() * Math.PI * 2);
+        if (Math.abs(snowGroundHeight(t, v + 1) - snowGroundHeight(t, v - 1)) > 1.6) continue;
+        pine(t, v, snowGroundHeight(t, v), 5 + random() * 7.5, random() * Math.PI * 2);
       }
     }
     for (let cell = Math.floor(this.start / 80) - 1; cell <= Math.floor((this.start + CHUNK_LENGTH) / 80); cell++) {
@@ -205,7 +216,7 @@ export class SnowChunk {
         if (pocket.s < this.start || pocket.s >= this.start + CHUNK_LENGTH) continue;
         for (let i = 0; i < 2; i++) {
           const s = pocket.s + (i - .5) * 3.5, u = pocket.u + (i - .5) * 1.4;
-          pine(s, u, snowHeight(s, u) - .6, 4.5 + random() * 3, random() * Math.PI);
+          pine(s, u, snowGroundHeight(s, u) - .6, 4.5 + random() * 3, random() * Math.PI);
         }
       }
     }
@@ -218,7 +229,7 @@ export class SnowChunk {
     }
     for (let i = 0; i < 115; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = (random() > .5 ? 1 : -1) * (12 + random() ** 1.8 * 160);
-      if (Math.abs(snowHeight(s, u + 1) - snowHeight(s, u - 1)) > 2.8) continue;
+      if (Math.abs(snowGroundHeight(s, u + 1) - snowGroundHeight(s, u - 1)) > 2.8) continue;
       const size = .8 + random() ** 2 * 4.6;
       stone(s, u, size, true, i % 5 === 0);
       // A few fragments around larger stones read as natural rockfall groups.
@@ -228,6 +239,7 @@ export class SnowChunk {
           stone(s + ds, u + du, size * (.15 + random() * .16), chip === 0);
       }
     }
+    this.buildBridge(point, random, stone);
     instances(this.group, poleGeometry, barkMaterial, trunks, 'alpine-trunks');
     alpinePines.forEach((variant, i) => {
       instances(this.group, variant.needles, pineMaterial, pines[i], 'alpine-firs');
@@ -245,18 +257,89 @@ export class SnowChunk {
       if ((i % 3 + 3) % 3 === 0 && summit.s >= this.start && summit.s < this.start + CHUNK_LENGTH) this.buildRelay(point, summit);
     }
   }
+  buildBridge(point, random, stone) {
+    // A timber trestle carries the road over each stream gully. Planks, bents
+    // and railings are instanced boxes like the guardrails, tinted per plank.
+    const bridge = snowBridgeAt(this.start + CHUNK_LENGTH / 2), { start, end } = bridge;
+    if (end + 40 < this.start || start - 40 >= this.start + CHUNK_LENGTH) return;
+    const inChunk = s => s >= this.start && s < this.start + CHUNK_LENGTH;
+    const timber = [], caps = [], road = snowRoadHeight, across = s => -snowFrame(s).angle;
+    const bar = (list, a, b, width, depth = width) => {
+      const direction = new THREE.Vector3().fromArray(b).sub(new THREE.Vector3().fromArray(a));
+      list.push({ p: a.map((v, i) => (v + b[i]) / 2), scale: [width, direction.length(), depth], q: new THREE.Quaternion().setFromUnitVectors(up, direction.normalize()) });
+    };
+    const floor = (s, u) => Math.min(snowGroundHeight(s - 1.5, u), snowGroundHeight(s, u), snowGroundHeight(s + 1.5, u)) - .8;
+    const tint = () => ['#ffffff', '#e8dfd6', '#d6cabf', '#f3ece5'][Math.floor(random() * 4)];
+    for (let s = start + .475; s < end; s += .95) {
+      if (inChunk(s)) timber.push({ p: point(s, 0, road(s) - .12), scale: [15.4, .32, .9], angle: across(s), color: tint() });
+    }
+    for (let s = start; s < end; s += 4) {
+      if (!inChunk(s)) continue;
+      const e = Math.min(s + 4, end);
+      for (const u of [-5.4, 0, 5.4]) bar(timber, point(s, u, road(s) - .58), point(e, u, road(e) - .58), .5, .6);
+      for (const side of [-1, 1]) {
+        const u = side * 7.15;
+        timber.push({ p: point(s, u, road(s) + .55), scale: [.3, 1.4, .3], angle: across(s) });
+        bar(timber, point(s, u, road(s) + 1.12), point(e, u, road(e) + 1.12), .2, .24);
+        bar(timber, point(s, u, road(s) + .62), point(e, u, road(e) + .62), .12, .18);
+        bar(caps, point(s, u, road(s) + 1.3), point(e, u, road(e) + 1.3), .3, .12);
+      }
+    }
+    // Timber cribbing at each abutment meets the dipping terrain, so the road
+    // ribbon never floats above the gully rim; a sill plank covers the joint.
+    for (const s of [start, end]) {
+      if (inChunk(s)) {
+        timber.push({ p: point(s, 0, road(s) + .05), scale: [15.4, .22, 1.3], angle: across(s), color: '#c9bcb0' });
+        for (const side of [-1, 1]) timber.push({ p: point(s, side * 7.15, road(s) + .6), scale: [.36, 1.5, .36], angle: across(s) });
+      }
+      for (let t = s === start ? start - 8 : end; t < (s === start ? start : end + 8); t += 4) {
+        if (!inChunk(t + 2)) continue;
+        const top = road(t + 2) - .2, bottom = Math.min(floor(t, -7.5), floor(t, 7.5), floor(t + 4, -7.5), floor(t + 4, 7.5));
+        timber.push({ p: point(t + 2, 0, (top + bottom) / 2), scale: [15, top - bottom, 4.1], angle: across(t + 2) });
+      }
+    }
+    for (let s = start + 4; s < end; s += 8) {
+      if (!inChunk(s)) continue;
+      const cap = road(s) - 1, angle = across(s);
+      timber.push({ p: point(s, 0, cap), scale: [14.8, .55, .55], angle });
+      const drop = cap - floor(s, 0), splay = Math.min(2.4, Math.max(0, drop) * .14);
+      const feet = { [-6.2]: -6.2 - splay, [6.2]: 6.2 + splay, 0: 0 };
+      const base = Object.fromEntries(Object.values(feet).map(u => [u, floor(s, u)]));
+      for (const top of drop > 3.5 ? [-6.2, 0, 6.2] : [-6.2, 6.2]) bar(timber, point(s, top, cap), point(s, feet[top], base[feet[top]]), .5);
+      if (drop > 2) bar(timber, point(s, feet[-6.2], base[feet[-6.2]] + .3), point(s, feet[6.2], base[feet[6.2]] + .3), .5, .5);
+      if (drop > 4.5) {
+        bar(timber, point(s, -6, cap - .4), point(s, feet[6.2] * .95, base[feet[6.2]] + .6), .3, .16);
+        bar(timber, point(s, 6, cap - .4), point(s, feet[-6.2] * .95, base[feet[-6.2]] + .6), .3, .16);
+      }
+      // Longitudinal ties and alternating diagonals brace neighbouring bents.
+      const next = s + 8, nextCap = road(next) - 1, nextDrop = nextCap - floor(next, 0);
+      if (next >= end || drop < 5 || nextDrop < 5) continue;
+      const nextSplay = Math.min(2.4, nextDrop * .14), lean = ((s - start) / 8) % 2 ? [.15, .85] : [.85, .15];
+      for (const side of [-1, 1]) {
+        bar(timber, point(s, side * (6.2 + splay * .5), cap - drop * .5), point(next, side * (6.2 + nextSplay * .5), nextCap - nextDrop * .5), .3, .3);
+        bar(timber, point(s, side * (6.2 + splay * lean[0]), cap - drop * lean[0]), point(next, side * (6.2 + nextSplay * lean[1]), nextCap - nextDrop * lean[1]), .26, .16);
+      }
+    }
+    // Loose stones gather along the stream bed on both sides of the crossing.
+    for (let i = 0; i < 9; i++) {
+      const u = (i % 2 ? 1 : -1) * (11 + random() * 16), s = bridge.center + u * .2 + (random() - .5) * 18;
+      if (inChunk(s)) stone(s, u, .7 + random() * 1.8, i % 3 === 0);
+    }
+    instances(this.group, boxGeometry, timberMaterial, timber, 'timber-trestle');
+    instances(this.group, boxGeometry, snowMaterial, caps, 'trestle-snow');
+  }
   buildRelay(point, summit) {
     // A tiny mountaintop relay hut and antenna echo the reference's summit detail.
-    const s = summit.s, u = summit.u, y = snowHeight(s, u);
+    const s = summit.s, u = summit.u, y = snowGroundHeight(s, u);
     instances(this.group, boxGeometry, rockMaterial, [{ p: point(s, u, y + 2.1), scale: [5.2, 4.2, 5] }], 'relay-hut');
     instances(this.group, boxGeometry, snowMaterial, [{ p: point(s, u, y + 4.4), scale: [5.8, .6, 5.7] }], 'relay-roof');
     instances(this.group, boxGeometry, glowMaterial, [{ p: point(s, u - 2.62, y + 2.4), scale: [.07, 1.1, 1.1] }], 'relay-window');
     const metal = [];
     for (const ds of [-2, 2]) for (const du of [-2, 2]) {
-      const ground = snowHeight(s + ds, u + du) - 3;
+      const ground = snowGroundHeight(s + ds, u + du) - 3;
       metal.push({ p: point(s + ds, u + du, (y + ground) / 2), scale: [.22, Math.max(.2, y - ground), .22] });
     }
-    const towerY = snowHeight(s, u + 7) - 1;
+    const towerY = snowGroundHeight(s, u + 7) - 1;
     for (const du of [-1, 1]) for (const ds of [-1, 1]) metal.push({ p: point(s + ds, u + 7 + du, towerY + 8), scale: [.14, 16, .14] });
     for (let h = 2; h < 16; h += 3) metal.push({ p: point(s, u + 7, towerY + h), scale: [2.2, .15, 2.2] });
     metal.push({ p: point(s, u + 7, towerY + 17), scale: [.08, 5, .08] });
@@ -316,7 +399,7 @@ export class SnowWorld {
     this.lights.forEach((light, i) => {
       const lamp = lampAt(lampIndex + i - 3), p = snowPosition(lamp.s, 6.2, lamp.y - .35);
       light.position.set(p.x, p.y, p.z + this.origin);
-      const strength = 1 - smoothstep(120, 174, Math.abs(lamp.s - s));
+      const strength = lamp.hidden ? 0 : 1 - smoothstep(120, 174, Math.abs(lamp.s - s));
       light.intensity = 340 * strength;
       this.glowGeometry.attributes.position.setXYZ(i, p.x, p.y + .2, p.z + this.origin);
       this.glowGeometry.attributes.strength.setX(i, strength);

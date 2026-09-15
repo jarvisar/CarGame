@@ -147,6 +147,31 @@ export function snowHeight(s, u) {
   }
   return height;
 }
+// Timber trestles cross stream gullies at world-space intervals, independently
+// of streaming chunks. Each span straddles a chunk boundary so both halves are built.
+export const BRIDGE_SPACING = 768;
+export function snowBridgeAt(s) {
+  const index = Math.round((s - 372) / BRIDGE_SPACING), center = 372 + index * BRIDGE_SPACING;
+  return { index, center, start: center - 32, end: center + 32 };
+}
+export function gullyAmount(s, u) {
+  const bridge = snowBridgeAt(s);
+  // The gully descends diagonally from the peaks towards the lake, so the
+  // crossing reads as a mountain stream bed rather than a slot cut across the road.
+  const d = Math.abs(s - bridge.center - u * .2 - 2.4 * Math.sin(u / 11 + bridge.index));
+  const along = 1 - smoothstep(9, 38, d);
+  if (!along) return 0;
+  const across = u >= 0 ? 1 - smoothstep(26, 62, u)
+    : (1 - smoothstep(16, 50, ledgeEdge(s) - u)) * smoothstep(6, 22, u - alpineLake(s).near);
+  return along * across;
+}
+// Scenery and the terrain mesh see the gully beneath each trestle; the car
+// and the road ribbons keep sampling the flat deck through snowHeight.
+export function snowGroundHeight(s, u) {
+  const height = snowHeight(s, u), gully = gullyAmount(s, u);
+  if (!gully) return height;
+  return height - (12 + 1.6 * Math.sin(s / 5.7 + u / 3.9) + 1.1 * Math.sin(s / 2.3 - u / 6.1)) * gully;
+}
 export const snowPosition = (s, u, y = snowHeight(s, u)) => positionAt(s, u, y);
 export function snowVertex(row, column) {
   const road = Math.abs(initialColumns[column]) <= 7;
@@ -157,13 +182,18 @@ export function snowVertex(row, column) {
   const columns = snowColumns(s);
   const gap = Math.min(columns[column] - (columns[column - 1] ?? columns[column] - 40), (columns[column + 1] ?? columns[column] + 40) - columns[column]);
   const u = columns[column] + (road || bank ? 0 : (randomAt(row, column + 912) - .5) * Math.min(8, gap * .5));
-  const p = snowPosition(s, u);
+  const p = snowPosition(s, u, snowGroundHeight(s, u));
   const land = smoothstep(2, 15, Math.max(lake.far - u, u - lake.near));
   p.y += (randomAt(row, column + 177) - .5) * smoothstep(10, 35, Math.abs(u)) * .85 * land;
   return { ...p, s, u };
 }
 export function lampAt(index) {
-  const s = index * LAMP_SPACING + 16, u = 8.8;
-  return { s, u, ...snowPosition(s, u, snowRoadHeight(s) + 7.6) };
+  let s = index * LAMP_SPACING + 16;
+  const u = 8.8, bridge = snowBridgeAt(s), offset = s - bridge.center;
+  // Lamps step off the trestle to its nearer abutment, which lights the deck.
+  // One right at mid-span would crowd its neighbour, so it is left out instead.
+  const hidden = Math.abs(offset) < 12;
+  if (Math.abs(offset) < 38) s = bridge.center + (offset >= 0 ? 38 : -38);
+  return { s, u, hidden, ...snowPosition(s, u, snowRoadHeight(s) + 7.6) };
 }
 export const snowDrivingRoute = { frame: snowFrame, position: snowPosition, height: snowHeight, bounds: () => [-5.85, 6.3] };

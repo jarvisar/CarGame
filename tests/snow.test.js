@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
-import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowRoadHeight, snowDrivingRoute, SNOW_STEP, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineLake, LAKE_LEVEL, distantMountainHeight } from '../src/world/snow-route.js';
+import { snowColumns, snowVertex, snowHeight, snowBaseHeight, snowGroundHeight, snowRoadHeight, snowDrivingRoute, snowBridgeAt, BRIDGE_SPACING, SNOW_STEP, LAMP_SPACING, lampAt, summitForCell, ledgeEdge, terrainPocket, alpineLake, LAKE_LEVEL, distantMountainHeight } from '../src/world/snow-route.js';
 import { lakeClock } from '../src/world/alpine-lake.js';
 import { alpineCabin } from '../src/world/alpine-cabins.js';
-import { SnowWorld } from '../src/world/snow.js';
+import { SnowWorld, SnowChunk } from '../src/world/snow.js';
 import { Snowfall } from '../src/world/snowfall.js';
 import { DrivingController } from '../src/vehicle.js';
 
@@ -144,4 +144,37 @@ test('night effects remain bounded, animate deterministically and dispose on lea
   }
   for (let i = -50; i < 50; i++) assert.equal(lampAt(i).y, snowRoadHeight(lampAt(i).s) + 7.6);
   world.dispose(); assert.equal(scene.children.length, 0); assert.ok(disposed >= 55);
+});
+
+test('timber trestles span stream gullies that leave the deck, lake and lamps untouched', () => {
+  for (let i = -12; i < 12; i++) {
+    const bridge = snowBridgeAt(372 + i * BRIDGE_SPACING), { center, start, end } = bridge;
+    assert.equal(bridge.index, i); assert.deepEqual(snowBridgeAt(center + 300), bridge);
+    for (const u of [-7, 0, 7]) {
+      assert.ok(snowGroundHeight(center, u) < snowRoadHeight(center) - 8, `shallow gully at ${center}`);
+      assert.equal(snowHeight(center, u), snowRoadHeight(center));
+      for (const s of [start - 42, end + 42]) assert.equal(snowGroundHeight(s, u), snowHeight(s, u));
+    }
+    const abutment = snowGroundHeight(start, 0) - snowRoadHeight(start);
+    assert.ok(abutment < 0 && abutment > -4);
+    for (let s = start - 44; s <= end + 44; s += 1.7) for (const u of [-30, -7, 0, 7, 20])
+      assert.ok(Math.abs(snowGroundHeight(s + .001, u) - snowGroundHeight(s - .001, u)) < .03);
+    const lake = alpineLake(center);
+    for (const u of [lake.near, lake.near - 20, lake.far]) assert.equal(snowGroundHeight(center, u), snowHeight(center, u));
+    for (let j = Math.floor((start - 60) / LAMP_SPACING); j * LAMP_SPACING < end + 60; j++) {
+      const lamp = lampAt(j);
+      assert.ok(lamp.hidden || lamp.s <= start - 4 || lamp.s >= end + 4, `lamp on the deck at ${lamp.s}`);
+    }
+  }
+  const visible = Array.from({ length: 400 }, (_, j) => lampAt(j - 200)).filter(lamp => !lamp.hidden);
+  for (let j = 1; j < visible.length; j++) assert.ok(visible[j].s - visible[j - 1].s >= 26);
+  assert.ok(visible.some((lamp, j) => j && lamp.s - visible[j - 1].s !== LAMP_SPACING));
+  const names = index => { const chunk = new SnowChunk(index), found = []; chunk.group.traverse(o => found.push(o)); chunk.dispose(); return found; };
+  const trestles = index => names(index).filter(o => o.name === 'timber-trestle').length;
+  const roadVertices = index => names(index).find(o => o.name === 'mountain-road').geometry.attributes.position.count;
+  // The span straddles a chunk boundary, so both neighbours build their halves.
+  assert.equal(trestles(2), 1); assert.equal(trestles(3), 1); assert.equal(trestles(5), 0);
+  assert.equal(trestles(-4), 1); assert.equal(trestles(-3), 1);
+  assert.equal(roadVertices(5) - roadVertices(2), 22 * 6);
+  assert.equal(roadVertices(5) - roadVertices(3), 10 * 6);
 });
