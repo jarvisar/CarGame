@@ -69,7 +69,8 @@ const streaming = await page.evaluate(async () => {
   a.vehicle.s = 215; a.vehicle.reset(); a.rendering.snap();
   return records;
 });
-for (const record of streaming) { assert.equal(record.chunks, 9); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 3); assert.ok(Math.abs(record.carZ) < 1030); }
+// Three scenery textures plus six fixed AO textures; streaming must remain bounded.
+for (const record of streaming) { assert.equal(record.chunks, 9); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 9); assert.ok(Math.abs(record.carZ) < 1030); }
 await page.waitForTimeout(700);
 await page.screenshot({ path: '.artifacts/coastline-driving.png' });
 // Input cannot remain held when the window loses focus.

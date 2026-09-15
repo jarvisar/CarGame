@@ -28,6 +28,21 @@ async function boot() {
   try {
     const rendering = createRendering($('#scene'));
     const { renderer, scene } = rendering;
+    const fpsCounter = $('#fps-counter');
+    let fpsStart = null, fpsFrames = 0;
+    function updateFPS(timestamp, rendered) {
+      if (fpsCounter.hidden) return;
+      if (paused || document.hidden || changingJourney) {
+        fpsCounter.textContent = 'FPS: paused'; fpsStart = null; fpsFrames = 0; return;
+      }
+      if (fpsStart === null) { fpsStart = timestamp; fpsFrames = 0; return; }
+      if (rendered) fpsFrames++;
+      const elapsed = timestamp - fpsStart;
+      if (elapsed >= 500) {
+        fpsCounter.textContent = `${Math.round(fpsFrames * 1000 / elapsed)} FPS`;
+        fpsStart = timestamp; fpsFrames = 0;
+      }
+    }
     let needsRender = true;
     window.addEventListener('resize', () => { needsRender = true; });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) needsRender = true; });
@@ -89,7 +104,7 @@ async function boot() {
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
-        updateHud(); renderer.render(scene, rendering.camera);
+        updateHud(); rendering.render();
         toast(`${JOURNEYS[id].title} selected`);
       } catch (error) {
         if (nextWorld && nextWorld !== world) nextWorld.dispose();
@@ -101,6 +116,11 @@ async function boot() {
       }
     }
     async function action(name, routeNumber) {
+      if (name === 'fps') {
+        fpsCounter.hidden = !fpsCounter.hidden;
+        fpsCounter.textContent = 'FPS: …'; fpsStart = null; fpsFrames = 0;
+        return;
+      }
       if (name === 'fullscreen') { await toggleFullscreen(); return; }
       if (changingJourney) return;
       if (name === 'selectJourney') {
@@ -131,6 +151,10 @@ async function boot() {
         toast(rendering.toggleView()); updateViewUi();
         rendering.update(vehicle.car, 0, world.origin);
         needsRender = true;
+      }
+      if (name === 'ambientOcclusion') {
+        const enabled = rendering.toggleAO();
+        needsRender = true; toast(`Soft shading ${enabled ? 'on' : 'off'}`);
       }
       if (name === 'sound') {
         try {
@@ -255,10 +279,12 @@ async function boot() {
       rendering.recordFrame(timestamp, !paused && !document.hidden && document.hasFocus() && !changingJourney);
       // Paused water, traffic and shadows are unchanged. Keep polling input
       // and fading audio, but only redraw the frozen canvas when invalidated.
-      if (!document.hidden && (!paused || needsRender)) {
-        renderer.render(scene, rendering.camera); needsRender = false;
+      const rendered = !document.hidden && (!paused || needsRender);
+      if (rendered) {
+        rendering.render(); needsRender = false;
         if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
       }
+      updateFPS(timestamp, rendered);
       requestAnimationFrame(frame);
     }
     await world.chunkSource.prepare(vehicle.s);

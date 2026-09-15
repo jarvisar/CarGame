@@ -12,6 +12,11 @@ export class Input {
       onControllerConnection(connected);
     });
     window.addEventListener('keydown', e => {
+      if (e.code === 'F3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (!e.repeat) onAction('fps');
+        return;
+      }
       if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         if (!e.repeat) onAction('fullscreen');
@@ -32,6 +37,7 @@ export class Input {
         if (e.code === 'KeyR') onAction('reset');
         if (e.code === 'KeyV') onAction('view');
         if (e.code === 'KeyM') onAction('sound');
+        if (e.code === 'KeyO' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('ambientOcclusion');
         if (e.code === 'KeyN' && !e.ctrlKey && !e.metaKey && !e.altKey) onAction('nextJourney');
       }
     });

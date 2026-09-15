@@ -26,6 +26,12 @@ try {
   assert.equal(await page.locator('.touch-controls').isVisible(), false);
   assert.equal(await page.locator('#welcome .controller-hint').isVisible(), true);
   assert.equal(await page.locator('.touch-hint').isVisible(), false);
+  assert.equal(await page.locator('#fps-counter').isVisible(), false);
+  await button(11, 1); await frames();
+  await page.waitForFunction(() => /^\d+ FPS$/.test(document.querySelector('#fps-counter').textContent));
+  assert.equal(await page.locator('#fps-counter').isVisible(), true, 'holding R3 toggles FPS only once');
+  await button(11, 0); await frames(); await press(11);
+  assert.equal(await page.locator('#fps-counter').isVisible(), false);
   await page.screenshot({ path: '.artifacts/controller-mobile.png' });
   await button(7, .75);
   await page.waitForFunction(() => window.__coastline.started && window.__coastline.vehicle.speed > 3);
@@ -34,6 +40,10 @@ try {
   await page.evaluate(() => window.testPads[1].axes[0] = 0);
   await button(7, 0); await frames();
   await press(9); assert.equal(await page.evaluate(() => window.__coastline.paused), true);
+  await press(11);
+  assert.equal(await page.locator('#fps-counter').textContent(), 'FPS: paused');
+  await press(11);
+  assert.equal(await page.locator('#fps-counter').isVisible(), false);
   await button(9, 1); await frames();
   assert.equal(await page.evaluate(() => window.__coastline.paused), false);
   await page.waitForTimeout(200);

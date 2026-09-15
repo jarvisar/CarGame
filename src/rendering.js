@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { fitSunShadow } from './shadows.js';
 import { PixelDensity } from './pixel-density.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
+import { AmbientOcclusion } from './ambient-occlusion.js';
 
 export function createRendering(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -32,6 +33,8 @@ export function createRendering(canvas) {
   scene.add(sun); scene.add(sun.target);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
   const thirdPerson = new ThirdPersonCamera();
+  const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
+  ambientOcclusion.enabled = new URLSearchParams(window.location.search).get('ao') !== '0';
   const follow = new THREE.Vector3(); const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
   const cameraRight = new THREE.Vector3(cameraOffset.z, 0, -cameraOffset.x).normalize();
@@ -44,7 +47,7 @@ export function createRendering(canvas) {
   let snowy = false;
   let journey = 'coast';
   const fogProfiles = {
-    coast: { color: '#bbd9de', near: 540, far: 1050, thirdNear: 170, thirdFar: 300 },
+    coast: { color: '#b9def3', near: 600, far: 1150, thirdNear: 170, thirdFar: 300 },
     desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
@@ -114,13 +117,15 @@ export function createRendering(canvas) {
       return;
     }
     const desert = id === 'desert';
-    scene.background.set(desert ? '#dfb399' : '#b4dbe7'); updateFog();
-    sky.color.set(desert ? '#e5d8d0' : '#d3eaf6'); sky.groundColor.set(desert ? '#79635a' : '#405e52');
-    sky.intensity = desert ? 1.27 : 1.12;
-    sun.color.set(desert ? '#ffe0bc' : '#fff0d5'); sun.intensity = desert ? 2.45 : 2.7;
+    // Clear coastal daylight: blue sky fill and a near-neutral sun keep the
+    // ocean cyan and separate warm rock faces from cool, deeper shadows.
+    scene.background.set(desert ? '#dfb399' : '#b5dff5'); updateFog();
+    sky.color.set(desert ? '#e5d8d0' : '#c4e5ff'); sky.groundColor.set(desert ? '#79635a' : '#365544');
+    sky.intensity = desert ? 1.27 : .85;
+    sun.color.set(desert ? '#ffe0bc' : '#fff7ec'); sun.intensity = desert ? 2.45 : 3.05;
     sunOffset.set(...(desert ? [-170, 150, 120] : [-145, 230, 95]));
-    renderer.toneMappingExposure = desert ? .92 : .97;
+    renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');
-  return { renderer, scene, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
+  return { renderer, scene, ambientOcclusion, render() { ambientOcclusion.render(activeCamera()); }, toggleAO() { ambientOcclusion.enabled = !ambientOcclusion.enabled; density.reset(); return ambientOcclusion.enabled; }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
 }

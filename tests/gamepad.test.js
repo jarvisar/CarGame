@@ -40,7 +40,7 @@ test('stick deadzone, analog triggers, D-pad and face-button fallbacks', () => {
 
 test('shortcuts fire once per press and Start works while paused', () => {
   const { input, device, actions } = fixture();
-  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset'], [5, 'nextJourney'], [8, 'journey'], [4, 'fullscreen']]) {
+  for (const [index, action] of [[9, 'pause'], [2, 'view'], [3, 'reset'], [5, 'nextJourney'], [8, 'journey'], [4, 'fullscreen'], [11, 'fps']]) {
     hold(device, index); input.update(); input.update(); input.update();
     assert.equal(actions.filter(item => item === action).length, 1);
     hold(device, index, 0); input.update();
@@ -49,6 +49,8 @@ test('shortcuts fire once per press and Start works while paused', () => {
   assert.equal(actions.filter(item => item === 'pause').length, 2);
   hold(device, 9, 0); hold(device, 7); input.update({ paused: true });
   assert.deepEqual(input.state, {}); assert.equal(actions.includes('drive'), false);
+  hold(device, 11); input.update({ paused: true }); input.update({ paused: true });
+  assert.equal(actions.filter(item => item === 'fps').length, 2, 'R3 toggles FPS once while paused');
 });
 
 test('scene shortcut works paused and consumes presses made in a modal', () => {

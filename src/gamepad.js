@@ -49,11 +49,12 @@ export class GamepadInput {
     // fire once and Start can resume the game without a keyboard or touchscreen.
     this.state = paused ? {} : state;
     const pause = pressed(9), view = pressed(2), reset = pressed(3), nextJourney = pressed(5);
-    const journey = pressed(8), fullscreen = pressed(4);
+    const journey = pressed(8), fullscreen = pressed(4), fps = pressed(11);
     const back = pressed(1), confirm = pressed(0);
     const previous = pressed(12) || pressed(14) || pressed(17);
     const next = pressed(13) || pressed(15) || pressed(18);
     this.previousButtons = buttons;
+    if (fps) this.onAction('fps');
     if (fullscreen) { this.onAction('fullscreen'); return; }
     if (menu) {
       this.state = {};

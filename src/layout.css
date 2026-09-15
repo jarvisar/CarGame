@@ -242,6 +242,8 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
   .welcome p { margin-bottom: 8px; }
 }
 
+#fps-counter { position: absolute; top: var(--header-clear); left: var(--ui-left); z-index: 6; padding: 6px 9px; border-radius: 4px; background: #102019d9; color: #edffe9; font: 12px/1.4 monospace; font-variant-numeric: tabular-nums; pointer-events: none; }
+
 /* Four route cards: two columns on mid-width screens before the single mobile column. */
 @media (min-width: 761px) and (max-width: 960px) {
   .journey-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }

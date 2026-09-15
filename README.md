@@ -47,6 +47,10 @@ Open the local URL printed by Vite. For a production build, run `npm run build`,
 
 Windows, Linux (including the Steam Deck), and macOS builds wrap this same web build in Electron; nothing in `src/` changes. `npm run electron:dev` opens the game in a desktop window with hot reload, `npm run electron:build` packages it for the current OS, and pushing a `v*` tag builds installers for all three platforms on GitHub Actions. `npm run test:electron` checks the desktop shell against the current web build. See [ELECTRON.md](ELECTRON.md) for options, Steam Deck setup, and how the wrapper stays in sync with the web app.
 
+## Experimental shading
+
+Experimental ambient occlusion is enabled by default. AO sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge. Fixed sampling directions and finer depth/normal coverage (up to 1280 pixels) reduce shimmer during camera motion. Open with `?ao=0` for the original rendering. `npm run test:ao` checks image comparisons, camera modes, route changes, display density, and buffer reuse against a running dev server (`TEST_URL` can override its address). `node scripts/ao-motion-test.mjs` compares shading stability against the original settings during a controlled camera pan.
+
 ## Controls
 
 The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F). Driving physics and world geometry use meters internally; displayed measurements are converted to US units.
