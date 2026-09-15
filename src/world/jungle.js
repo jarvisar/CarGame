@@ -197,7 +197,7 @@ export class JungleChunk {
   }
   buildScenery() {
     const random = seededRandom(this.index + 77113);
-    const trunks = [], crowns = jungleCrowns.map(() => []), emergents = emergentTrunks.map(() => []), emergentCrowns = [], vines = [], vineLeaves = [];
+    const trunks = [], crowns = jungleCrowns.map(() => []), farCrowns = jungleCrowns.map(() => []), emergents = emergentTrunks.map(() => []), emergentCrowns = [], vines = [], vineLeaves = [];
     const palmTrunks = junglePalms.map(() => []), palmFronds = junglePalms.map(() => []), ferns = [], leaves = [], shrubs = [], tufts = [];
     const boulders = jungleBoulders.map(() => []), posts = [], caps = [], logs = [];
     const crownColors = ['#2c6429', '#33742f', '#3d8236', '#47903a', '#295c2a', '#529c40', '#397a33', '#3c8a3c'];
@@ -220,7 +220,8 @@ export class JungleChunk {
     const tree = (s, u, height, palette) => {
       const p = ground(s, u), width = height * (.4 + random() * .18);
       trunks.push({ p: [p.x, p.y + height * .3, p.z], scale: [height * .045, height * .62, height * .045] });
-      crowns[Math.floor(random() * crowns.length)].push({ p: [p.x, p.y + height * .42, p.z], scale: [width, height * .58, width], r: [0, random() * 6.28, 0], color: pick(palette) });
+      // Crowns deep in the forest skip the shadow pass; their shade lands on other canopy anyway.
+      (Math.abs(u) > 70 ? farCrowns : crowns)[Math.floor(random() * crowns.length)].push({ p: [p.x, p.y + height * .42, p.z], scale: [width, height * .58, width], r: [0, random() * 6.28, 0], color: pick(palette) });
       spots.push({ s, u, r: width * .45 });
     };
     const emergent = (s, u, height, lean) => {
@@ -382,7 +383,7 @@ export class JungleChunk {
       caps.push({ p: [p.x, p.y + 1.05, p.z + this.start], scale: [1, 1, 1] });
     }
     instances(this.group, trunkGeometry, barkMaterial, trunks, 'jungle-trunks');
-    jungleCrowns.forEach((g, i) => instances(this.group, g, canopyMaterial, crowns[i], 'jungle-canopy'));
+    jungleCrowns.forEach((g, i) => { instances(this.group, g, canopyMaterial, crowns[i], 'jungle-canopy'); instances(this.group, g, canopyMaterial, farCrowns[i], 'jungle-canopy-far', false); });
     emergentTrunks.forEach((g, i) => instances(this.group, g, barkMaterial, emergents[i], 'emergent-trunks'));
     instances(this.group, emergentCrown, canopyMaterial, emergentCrowns, 'emergent-crowns');
     instances(this.group, vineGeometry, vineMaterial, vines, 'lianas', false);

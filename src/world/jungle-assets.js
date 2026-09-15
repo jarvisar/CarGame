@@ -111,7 +111,7 @@ function palmFronds(seed, lean) {
 
 // Ferns and broad-leaved plants fill the floor between the trunks.
 function fern(seed) {
-  const vertices = [], colors = [], count = 8;
+  const vertices = [], colors = [], count = 6;
   for (let i = 0; i < count; i++) {
     const angle = i / count * Math.PI * 2 + randomAt(seed, i + 2341) * .6;
     const dir = [Math.cos(angle), Math.sin(angle)], side = [-dir[1], dir[0]];
@@ -168,7 +168,7 @@ function boulder(seed, moss) {
 }
 function tuft() {
   const vertices = [], colors = [];
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 6; i++) {
     const angle = i * 2.399963, dir = [Math.cos(angle), Math.sin(angle)], side = [-dir[1], dir[0]];
     const height = .45 + randomAt(i, 2371) * .55, bend = .2 + randomAt(i, 2372) * .35;
     blade(vertices, colors, [{ x: 0, y: 0, z: 0 }, { x: dir[0] * bend * .5, y: height * .7, z: dir[1] * bend * .5 }, { x: dir[0] * bend, y: height, z: dir[1] * bend }], [.035, .028, .005], side, .9 + randomAt(i, 2373) * .2, 0);
