@@ -21,15 +21,45 @@ export function canyonProfile(s, side) {
   const shelfEnd = 27 + 8 * terraceNoise(s, 64, side + 613);
   const lowerShare = .43 + .12 * terraceNoise(s, 96, side + 614);
   const upperStrength = .25 + .75 * smoothstep(.22, .62, terraceNoise(s + side * 110, 144, side + 615));
-  return { foot, height, shelfEnd, lowerShare, upperStrength };
+  // Eroded fans replace whole stretches of the lower scarp with a sandy slope.
+  const cliffStrength = side < 0
+    ? smoothstep(.44, .76, .5 + .38 * Math.sin(s / 91 - .9) + .18 * Math.sin(s / 39 + 1.4))
+    : .58 + .42 * terraceNoise(s, 137, 632);
+  return { foot, height, shelfEnd, lowerShare, upperStrength, cliffStrength };
 }
-export function dryWashCenter(s) { return -26 - 2 * Math.sin(s / 57 + .4); }
+export function dryWashCenter(s) {
+  return -Math.min(27 + 3 * Math.sin(s / 91 + .4) + 2 * Math.sin(s / 34), canyonProfile(s, -1).foot - 13);
+}
+export function dryWashWidth(s) { return 1.6 + 1.1 * Math.sin(s / 72 + .6) ** 2; }
+
+// Low, dissected benches give the camera-facing side its own relief. Unlike a
+// single plateau, each landform has an outer face, a cap, and sandy space around it.
+export function desertRelief(s, u) {
+  const side = Math.sign(u) || 1, cross = Math.abs(u);
+  if (cross < 65 || cross > 360) return 0;
+  const cell = Math.floor(s / 160);
+  let relief = 0;
+  for (let i = cell - 1; i <= cell + 1; i++) {
+    for (let belt = 0; belt < (side < 0 ? 2 : 1); belt++) {
+      const seed = side + 1870;
+      const center = i * 160 + 40 + randomAt(i, seed + belt * 13) * 65 + belt * 64;
+      const across = (side < 0 ? 137 + belt * 99 : 166) + (randomAt(i, seed + 2) - .5) * 32;
+      const rs = 48 + randomAt(i, seed + 3) * 23 + belt * 12, ru = 34 + randomAt(i, seed + 4) * 17 + belt * 18;
+      const x = (s - center) / rs, y = (cross - across) / ru;
+      const angle = Math.atan2(y, x);
+      const radius = Math.hypot(x, y) / (1 + .08 * Math.sin(angle * 3 + i) + .045 * Math.sin(angle * 5));
+      const height = (side < 0 ? 14 : 10) + randomAt(i, seed + 5) * (belt ? 10 : 18);
+      relief += height * (.28 * (1 - smoothstep(.55, 1.4, radius)) + .72 * (1 - smoothstep(.58, belt ? 1.04 : .9, radius)));
+    }
+  }
+  return relief * smoothstep(65, 84, cross) * (1 - smoothstep(338, 360, cross));
+}
 
 export function desertColumns(s) {
   const sideColumns = side => {
     const { foot, shelfEnd } = canyonProfile(s, side);
-    const wash = -dryWashCenter(s);
-    const floor = side < 0 ? [7, 15, 20, wash - 3, wash - 1.5, wash, wash + 1.5, wash + 3] : [7, 15, 20, 27, 32];
+    const wash = -dryWashCenter(s), width = dryWashWidth(s);
+    const floor = side < 0 ? [7, 13, wash - width * 1.5, wash - width * .6, wash, wash + width * .6, wash + width * 1.5] : [7, 15, 20, 27, 32];
     const upland = Array.from({ length: 30 }, (_, i) => foot + 47 + (360 - foot - 47) * i / 29);
     return [...floor, foot - 7, foot, foot + 5, foot + 7, foot + 9,
       foot + 15, foot + (15 + shelfEnd) / 2, foot + shelfEnd,
@@ -40,13 +70,15 @@ export function desertColumns(s) {
 export const DESERT_COLUMNS = desertColumns(0);
 
 export function canyonRise(s, u) {
-  const { foot, height, shelfEnd, lowerShare, upperStrength } = canyonProfile(s, Math.sign(u) || 1);
+  const { foot, height, shelfEnd, lowerShare, upperStrength, cliffStrength } = canyonProfile(s, Math.sign(u) || 1);
   const distance = Math.abs(u) - foot;
   return height * (
-    .11 * smoothstep(-7, 5, distance)
-    + lowerShare * smoothstep(5, 9, distance)
-    + .025 * smoothstep(9, shelfEnd, distance)
-    + (.84 - lowerShare) * upperStrength * smoothstep(shelfEnd, shelfEnd + 4, distance)
+    cliffStrength * (.11 * smoothstep(-7, 5, distance)
+      + lowerShare * smoothstep(5, 9, distance)
+      + .025 * smoothstep(9, shelfEnd, distance))
+    + (1 - cliffStrength) * (.135 + lowerShare) * smoothstep(-15, shelfEnd, distance)
+    + (.84 - lowerShare) * upperStrength * (cliffStrength * smoothstep(shelfEnd, shelfEnd + 4, distance)
+      + (1 - cliffStrength) * smoothstep(shelfEnd - 6, 55, distance))
     + .025 * smoothstep(shelfEnd + 4, 41, distance)
   );
 }
@@ -57,8 +89,9 @@ export function desertHeight(s, u) {
   const foothills = smoothstep(32, 175, Math.abs(u)) * (3 + 5 * Math.sin(s / 103 + u / 77) ** 2);
   const rim = smoothstep(41, 65, Math.abs(u) - canyonProfile(s, Math.sign(u) || 1).foot)
     * (.7 * Math.sin(s / 43 + u / 31) + .4 * Math.sin(s / 21 - u / 27));
-  const wash = 1 - smoothstep(.5, 3, Math.abs(u - dryWashCenter(s)));
-  return roadHeight(s) + shoulder * (dunes + foothills) + canyonRise(s, u) + rim - wash * 1.05;
+  const wash = 1 - smoothstep(dryWashWidth(s) * .15, dryWashWidth(s) * 1.5, Math.abs(u - dryWashCenter(s)));
+  const washDepth = .18 + .55 * (.5 + .5 * Math.sin(s / 101 + .5)) ** 2;
+  return roadHeight(s) + shoulder * (dunes + foothills) + canyonRise(s, u) + rim + desertRelief(s, u) - wash * washDepth;
 }
 export function desertPosition(s, u, height) { return positionAt(s, u, height ?? desertHeight(s, u)); }
 
@@ -93,7 +126,8 @@ export function mesasForChunk(index) {
   for (const side of [-1, 1]) {
     for (let i = 0; i < 2; i++) {
       const s = start + 20 + i * 62 + random() * 19;
-      const { foot, height, lowerShare } = canyonProfile(s, side);
+      const { foot, height, lowerShare, cliffStrength } = canyonProfile(s, side);
+      if (cliffStrength < .35) continue;
       mesas.push({ s, u: side * (foot + 2), rs: 8 + random() * 7, ru: 5 + random() * 3,
         height: height * (lowerShare + .13), seed: index * 17 + 5 + i + (side + 1), kind: 'buttress' });
     }

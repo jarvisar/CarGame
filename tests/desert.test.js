@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { desertHeight, desertVertex, DESERT_COLUMNS, DESERT_STEP, desertColumns, canyonProfile, canyonRise, desertDrivingRoute, mesasForChunk } from '../src/world/desert-route.js';
+import { desertHeight, desertVertex, desertRelief, DESERT_COLUMNS, DESERT_STEP, desertColumns, canyonProfile, canyonRise, desertDrivingRoute, mesasForChunk } from '../src/world/desert-route.js';
 import { roadHeight, coastalDrivingRoute } from '../src/world/route.js';
 import { DesertWorld } from '../src/world/desert.js';
 import { CoastalWorld } from '../src/world/environment.js';
@@ -58,6 +58,42 @@ test('desert driving stays grounded and switching routes restores the given plac
   assert.equal(car.s, saved.s); assert.equal(car.distance, saved.distance); assert.equal(car.speed, 0);
   for (let i = 0; i < 180; i++) car.update(1 / 60, { brake: true });
   assert.ok(car.speed < 0);
+});
+
+test('left canyon alternates cliffs with gentle fans and keeps foreground relief continuous', () => {
+  let fans = 0, cliffs = 0;
+  for (let s = -2400; s <= 2400; s += 17) {
+    const { foot, height, cliffStrength } = canyonProfile(s, -1);
+    const rise = canyonRise(s, -(foot + 10)) - canyonRise(s, -(foot + 4));
+    if (cliffStrength < .02) { assert.ok(rise < height * .16, `fan still has a ledge at ${s}`); fans++; }
+    if (cliffStrength > .98) { assert.ok(rise > height * .4, `cliff lost its scarp at ${s}`); cliffs++; }
+  }
+  assert.ok(fans > 30 && cliffs > 30, 'both open slopes and rocky enclosures should appear during a drive');
+  for (let cell = -20; cell <= 20; cell++) {
+    const s = cell * 160;
+    for (const u of [-330, -240, -180, -135, -80]) {
+      assert.ok(Math.abs(desertRelief(s - .001, u) - desertRelief(s + .001, u)) < .01, `broken foreground at ${s}, ${u}`);
+    }
+    const heights = Array.from({ length: 20 }, (_, i) => desertRelief(s + 80, -85 - i * 9));
+    assert.ok(Math.max(...heights) - Math.min(...heights) > 8, `empty foreground at ${s}`);
+  }
+});
+
+test('desert scenery samples the rendered ground on shelves, slopes and chunk boundaries', () => {
+  const scene = new THREE.Scene(), world = new DesertWorld(scene);
+  world.update(24); scene.updateMatrixWorld(true);
+  const ground = [...world.chunks.values()].map(chunk => chunk.group.getObjectByName('desert-floor'));
+  const ray = new THREE.Raycaster();
+  for (const s of [-255, -128.2, .1, 127.9, 256, 511]) {
+    const chunk = world.chunks.get(Math.floor(s / 128));
+    for (const u of [-250, -178, -135, -90, -64, -25, 19, 76, 142]) {
+      const p = chunk.groundPosition(s, u);
+      ray.set(new THREE.Vector3(p.x, p.y + 100, p.z), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObjects(ground, false)[0];
+      assert.ok(hit && Math.abs(hit.point.y - p.y) < .002, `floating scenery at ${s}, ${u}`);
+    }
+  }
+  world.dispose();
 });
 
 test('desert streaming and repeated world changes release scene objects and owned geometry', () => {
