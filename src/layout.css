@@ -189,3 +189,46 @@ body[data-journey=snow] .location .speedometer { background: none; }
 @media (any-pointer: coarse) {
   .dismiss-control-help, .touch-controls .dismiss-control-help { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
 }
+
+/* Persistent driving actions share one panel under the top-right utility buttons. */
+:root { --header-clear: calc(var(--ui-top) + 116px); }
+.drive-actions {
+  position: absolute; top: 56px; right: 0;
+  display: flex; align-items: center; padding: 3px; gap: 2px;
+  border: 1px solid #ffffff70; border-radius: 12px;
+  background: #f9f8eebf; backdrop-filter: blur(12px); pointer-events: auto;
+}
+.drive-actions button {
+  position: static; display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 44px; min-height: 44px; padding: 0 9px;
+  border: 0; border-radius: 8px; background: transparent; backdrop-filter: none;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.drive-actions button:hover { background: #25473e12; }
+.drive-actions svg { display: block; width: 18px; height: 18px; flex-shrink: 0; }
+.drive-actions kbd { display: none; }
+.drive-actions .control-label { margin: 0; text-transform: capitalize; }
+#app:has(.welcome:not(.hidden), #pause-overlay:not([hidden])) .drive-actions :is(#view, #reset) { display: none; }
+#app:has(.welcome.hidden) .brand,
+#app:has(#pause-overlay:not([hidden])) .brand { display: none; }
+#app:has(.welcome.hidden, #pause-overlay:not([hidden])) .topbar { justify-content: flex-end; }
+body[data-controller=true] .drive-actions { display: none; }
+body[data-journey=snow] .drive-actions { background: #17273ee8; border-color: #93acc64a; }
+body[data-journey=snow] .drive-actions button { background: transparent; }
+body[data-journey=snow] .drive-actions button:hover { background: #304663e0; }
+@media (any-pointer: coarse), (max-width: 1100px) {
+  .controls { display: none; }
+}
+@media (any-pointer: coarse), (max-width: 760px) {
+  :root { --edge: 18px; }
+}
+@media (max-width: 360px) {
+  .drive-actions button { padding-inline: 7px; gap: 5px; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .welcome { padding: 12px; }
+  .welcome h1 { font-size: 26px; margin: 0 0 8px; }
+  .welcome h1 br { display: none; }
+  .welcome h1 em::before { content: ' '; white-space: pre; }
+  .welcome p { margin-bottom: 8px; }
+}
