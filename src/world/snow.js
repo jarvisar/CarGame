@@ -109,10 +109,11 @@ export class SnowChunk {
           const highSnow = tri.reduce((sum, p) => sum + p.y, 0) / 3 > snowRoadHeight(s) + 54;
           const exposure = .5 + .5 * Math.sin(s / 29 + u / 19);
           const snowy = Math.abs(cross.y) > (highSnow ? .5 : .66 + exposure * .07);
-          const color = new THREE.Color(snowy ? '#c4d1dd' : '#6a7883');
+          const color = new THREE.Color(snowy ? '#c2cddb' : '#4f5d6e');
           // Broad tonal changes let the actual fracture planes describe the
-          // mountain, with only a little variation between adjacent facets.
-          color.multiplyScalar(snowy ? .94 + exposure * .09 + facet * .045 : .87 + exposure * .07 + facet * .17);
+          // mountain, with only a little variation between adjacent facets so
+          // each stratum riser reads as one dark plane.
+          color.multiplyScalar(snowy ? .94 + exposure * .09 + facet * .045 : .9 + exposure * .1 + facet * .07);
           triangle(vertices, colors, ...tri, color, this.start);
         });
       }
@@ -190,14 +191,18 @@ export class SnowChunk {
       beam(point(lamp.s, lamp.u, ground + 7.5), point(lamp.s, 6.2, ground + 7.5), .14);
       lamps.push({ p: point(lamp.s, 6.2, ground + 7.38), scale: [.62, .18, .95] });
     }
-    for (let i = 0; i < 95; i++) {
+    // Firs gather in small groves on the flat strata shelves, as in the
+    // reference, with lone trees between them; steep risers stay bare rock.
+    for (let i = 0; i < 38; i++) {
       const s = this.start + random() * CHUNK_LENGTH;
       const u = (random() > .48 ? 1 : -1) * (12 + random() ** 1.5 * 190);
-      const slope = Math.abs(snowGroundHeight(s, u + 1) - snowGroundHeight(s, u - 1));
-      const y = snowGroundHeight(s, u);
-      if (slope > 1.5 || onLake(s, u, 4)) continue;
-      const height = 5 + random() * 8.5, angle = random() * Math.PI;
-      pine(s, u, y, height, angle);
+      const count = i % 3 === 0 ? 1 : 2 + Math.floor(random() * 3), size = 4.5 + random() * 5;
+      for (let j = 0; j < count; j++) {
+        const t = s + (random() - .5) * 9, v = u + (random() - .5) * 7;
+        if (t < this.start || t >= this.start + CHUNK_LENGTH || Math.abs(v) < 12 || onLake(t, v, 4)) continue;
+        if (Math.abs(snowGroundHeight(t, v + 1) - snowGroundHeight(t, v - 1)) > 1.5) continue;
+        pine(t, v, snowGroundHeight(t, v), size * (.8 + random() * .5), random() * Math.PI);
+      }
     }
     // Fir groves follow coves on both shores, framing open stretches of water.
     for (let i = 0; i < 13; i++) {

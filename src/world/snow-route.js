@@ -85,6 +85,18 @@ export function mountainHeight(s, u) {
   return apron + peak * smoothstep(11, 26, u) + rockFaces + distantMountainHeight(s, u);
 }
 
+// Stacked rock strata: flat snow shelves between near-vertical risers, as in
+// the reference cliffs. The bands drift and dip with position so no two
+// contours share one level, and each shelf renders as a single plane.
+export function strata(height, s, u, period, strength) {
+  if (strength <= 0) return height;
+  const drift = 3.1 * Math.sin(s / 43 + u / 57) + 1.7 * Math.sin(s / 19 - u / 29) + u * .1;
+  const t = (height + drift) / period, tier = Math.floor(t), f = t - tier;
+  // Shelves sit mid-band, so tiers cut into and build out of the slope equally.
+  const stepped = (tier + .29 + smoothstep(.58, 1, f)) * period - drift;
+  return lerp(height, stepped, strength);
+}
+
 const uplandColumns = [103, 114, 127, 142, 159, 178, 199, 222, 247, 274, 304, 337, 373, 413, 456, 503, 554, 609, 668, 731];
 export function snowColumns(s) {
   const edge = ledgeEdge(s), lake = alpineLake(s);
@@ -117,11 +129,15 @@ export function snowBaseHeight(s, u) {
     const shoulder = h + smoothstep(-7, -13, u) * (1.1 + .55 * Math.sin(s / 17));
     const slope = lerp(shoulder, lake.y + .45, smoothstep(0, 1, t + warp));
     const fissure = 2.3 * (.5 + .5 * Math.sin(s / 8.7 + u / 37)) ** 7 * smoothstep(0, 12, distance);
-    return slope + (alpineRelief(s, u) - fissure) * (1 - smoothstep(.45, .78, t));
+    const bluff = slope + (alpineRelief(s, u) - fissure) * (1 - smoothstep(.45, .78, t));
+    // The bluff below the road drops in a few tall tiers, easing off at the
+    // ledge and again above the shore so both edges stay exact.
+    return strata(bluff, s, u, 19, .85 * smoothstep(.03, .14, t) * smoothstep(11, 26, u - lake.near));
   }
   const fissure = 2.8 * (.5 + .5 * Math.sin(s / 7.3 + u / 39)) ** 7
     * smoothstep(14, 25, u) * (1 - smoothstep(48, 73, u));
-  return h + mountainHeight(s, u) - fissure + alpineRelief(s, u);
+  const rise = h + mountainHeight(s, u) - fissure + alpineRelief(s, u);
+  return strata(rise, s, u, 16, .85 * smoothstep(9, 24, u) * (1 - smoothstep(110, 175, u)));
 }
 
 export function terrainPocket(index, side) {
