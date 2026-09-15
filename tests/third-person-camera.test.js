@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { ThirdPersonCamera } from '../src/third-person-camera.js';
-import { touchDrivingInput } from '../src/touch-stick.js';
+import { touchDrivingInput, TouchDrivingFrame } from '../src/touch-stick.js';
 import { DrivingController } from '../src/vehicle.js';
 import { coastalDrivingRoute } from '../src/world/route.js';
 import { desertDrivingRoute } from '../src/world/desert-route.js';
@@ -46,15 +46,23 @@ test('perspective joystick follows all screen directions on every route and afte
   }
 });
 
-test('holding the joystick keeps camera orientation stable; release stops and restores follow', () => {
+test('camera follows during a held joystick drag without rotating the input frame', () => {
   const car = new DrivingController();
   const rig = new ThirdPersonCamera(); rig.resize(390 / 844); rig.update(car.car, 0);
   const rotation = rig.camera.quaternion.clone();
+  const frame = new TouchDrivingFrame();
   for (let i = 0; i < 60; i++) {
-    car.update(1 / 60, { touchDrive: touchDrivingInput({ x: 0, y: -1 }, rig.camera, car.route, car.s, car.u) });
-    rig.update(car.car, 1 / 60, true);
-    assert.ok(1 - Math.abs(rig.camera.quaternion.dot(rotation)) < 1e-10);
+    const camera = frame.update(rig.camera, car.car.position, 1);
+    car.update(1 / 60, { touchDrive: touchDrivingInput({ x: 0, y: -1 }, camera, car.route, car.s, car.u) });
+    rig.update(car.car, 1 / 60);
+    assert.ok(1 - Math.abs(camera.quaternion.dot(rotation)) < 1e-10);
   }
+  assert.ok(car.speed > 1);
+  assert.ok(Math.abs(rig.camera.quaternion.dot(rotation)) < .1);
+  assert.ok(Math.cos(rig.heading - car.heading) > .999);
+  assert.equal(frame.update(rig.camera, car.car.position, null), rig.camera);
+  const nextDrag = frame.update(rig.camera, car.car.position, 1);
+  assert.ok(1 - Math.abs(nextDrag.quaternion.dot(rig.camera.quaternion)) < 1e-10);
   for (let i = 0; i < 120; i++) {
     car.update(1 / 60, { touchDrive: { amount: 0 } }); rig.update(car.car, 1 / 60);
   }
@@ -62,6 +70,22 @@ test('holding the joystick keeps camera orientation stable; release stops and re
   assert.ok(Math.cos(rig.heading - car.heading) > .999);
   car.heading = 1.2; car.update(0, {}); rig.snap(); rig.update(car.car, 0);
   assert.ok(Math.abs(rig.heading - car.heading) < 1e-9);
+});
+
+test('held touch frame tracks translation and origin shifts and resets outside third person', () => {
+  const car = new DrivingController(), rig = new ThirdPersonCamera(), frame = new TouchDrivingFrame();
+  rig.update(car.car, 0);
+  const camera = frame.update(rig.camera, car.car.position, 4);
+  const projected = car.car.position.clone().project(camera);
+  car.car.position.add(new THREE.Vector3(12, 3, 20000));
+  rig.update(car.car, 1 / 60);
+  frame.update(rig.camera, car.car.position, 4);
+  assert.ok(projected.distanceTo(car.car.position.clone().project(camera)) < 1e-9);
+  const scenic = new THREE.OrthographicCamera();
+  assert.equal(frame.update(scenic, car.car.position, 4), scenic);
+  car.car.rotation.y = -1;
+  rig.snap(); rig.update(car.car, 0);
+  assert.ok(frame.update(rig.camera, car.car.position, 4).quaternion.angleTo(rig.camera.quaternion) < 1e-7);
 });
 
 test('perspective shadows cover nearby receivers without changing the camera projection', () => {

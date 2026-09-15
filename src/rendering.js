@@ -70,7 +70,7 @@ export function createRendering(canvas) {
     thirdPerson.resize(aspect);
     if (initialized) fitSunShadow(activeCamera(), sun);
   }
-  function update(car, dt, origin, touchActive = false) {
+  function update(car, dt, origin) {
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
     if (!initialized) { follow.copy(car.position); initialized = true; }
     follow.lerp(car.position, 1 - Math.exp(-dt * (reducedMotion ? 8 : 3)));
@@ -87,7 +87,7 @@ export function createRendering(canvas) {
     }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
-    if (views[view].thirdPerson) { thirdPerson.update(car, dt, touchActive); target.copy(car.position); }
+    if (views[view].thirdPerson) { thirdPerson.update(car, dt); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
     fitSunShadow(activeCamera(), sun);
   }

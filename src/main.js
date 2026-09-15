@@ -9,7 +9,7 @@ import { ChunkWorker } from './world/chunk-source.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic } from './traffic.js';
 import { Input } from './input.js';
-import { touchDrivingInput } from './touch-stick.js';
+import { touchDrivingInput, TouchDrivingFrame } from './touch-stick.js';
 import { DriveAudio } from './audio.js';
 import { FrameClock } from './timing.js';
 import { setupControlHelp, controlHelpDismissed } from './control-help.js';
@@ -219,9 +219,11 @@ async function boot() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
       $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
     }
+    const touchFrame = new TouchDrivingFrame();
     const simulate = dt => {
       const state = started ? input.state : {};
-      if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, rendering.camera, vehicle.route, vehicle.s, vehicle.u, world.origin);
+      const touchCamera = touchFrame.update(rendering.camera, vehicle.car.position, input.touchStick.pointer);
+      if (state.touchStick) state.touchDrive = touchDrivingInput(state.touchStick, touchCamera, vehicle.route, vehicle.s, vehicle.u, world.origin);
       vehicle.update(dt, state);
       traffic.update(dt, vehicle);
     };
@@ -233,7 +235,7 @@ async function boot() {
         time += dt;
         world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
         traffic.render(frameClock.alpha, world.origin);
-        rendering.update(vehicle.car, dt, world.origin, input.touchStick.pointer !== null); world.animate(time, vehicle);
+        rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }
       audio.update(vehicle.audioTelemetry, dt);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }

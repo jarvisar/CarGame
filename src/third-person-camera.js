@@ -16,17 +16,14 @@ export class ThirdPersonCamera {
     this.camera.updateProjectionMatrix();
   }
   snap() { this.initialized = false; }
-  update(car, dt, holdHeading = false) {
+  update(car, dt) {
     const heading = -car.rotation.y;
     if (!this.initialized) {
       this.heading = heading; this.pitch = car.rotation.x; this.initialized = true;
     } else {
-      // Screen-relative touch movement must not rotate its own coordinate frame.
-      if (!holdHeading) {
-        const difference = Math.atan2(Math.sin(heading - this.heading), Math.cos(heading - this.heading));
-        this.heading += difference * (1 - Math.exp(-dt * 5));
-        this.pitch = THREE.MathUtils.damp(this.pitch, car.rotation.x, 5, dt);
-      }
+      const difference = Math.atan2(Math.sin(heading - this.heading), Math.cos(heading - this.heading));
+      this.heading += difference * (1 - Math.exp(-dt * 5));
+      this.pitch = THREE.MathUtils.damp(this.pitch, car.rotation.x, 5, dt);
     }
     this.forward.set(Math.sin(this.heading), 0, -Math.cos(this.heading));
     this.camera.position.copy(car.position).addScaledVector(this.forward, -14);

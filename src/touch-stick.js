@@ -41,6 +41,31 @@ export class TouchStick {
   clear() { if (this.engaged || this.pointer !== null) this.release(); this.engaged = false; }
 }
 
+// Keep each drag's initial perspective orientation while translating with the car.
+// The visible camera can then follow turns without steering feeding back into itself.
+export class TouchDrivingFrame {
+  constructor() {
+    this.pointer = null;
+    this.camera = null;
+    this.position = new THREE.Vector3();
+  }
+  update(camera, position, pointer) {
+    if (!camera.isPerspectiveCamera || pointer === null) {
+      this.pointer = null;
+      return camera;
+    }
+    if (this.pointer !== pointer || !this.camera) {
+      this.camera = camera.clone();
+      this.pointer = pointer;
+    } else {
+      this.camera.position.add(position).sub(this.position);
+    }
+    this.position.copy(position);
+    this.camera.updateMatrixWorld();
+    return this.camera;
+  }
+}
+
 // Invert the terrain's local screen projection. Including terrain height and the
 // actual road coordinates keeps cardinal and diagonal drags aligned with pixels
 // even on slopes, bends, or after rotating/resizing the camera.
