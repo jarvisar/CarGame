@@ -233,6 +233,7 @@ async function boot() {
       }
       audio.update(vehicle.audioTelemetry, dt);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
+      rendering.recordFrame(timestamp, !paused && !document.hidden && document.hasFocus() && !changingJourney);
       // Paused water, traffic and shadows are unchanged. Keep polling input
       // and fading audio, but only redraw the frozen canvas when invalidated.
       if (!document.hidden && (!paused || needsRender)) {

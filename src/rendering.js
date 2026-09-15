@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { fitSunShadow } from './shadows.js';
+import { PixelDensity } from './pixel-density.js';
 
 export function createRendering(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  const density = new PixelDensity();
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
-    const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio, 1.75);
+    const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio, density.cap);
     if (width === canvasWidth && height === canvasHeight && ratio === pixelRatio) return;
     // Update size and density together: setPixelRatio followed by setSize allocates twice.
     renderer.setDrawingBufferSize(width, height, ratio);
@@ -13,6 +15,11 @@ export function createRendering(canvas) {
     canvasWidth = width; canvasHeight = height; pixelRatio = ratio;
   }
   resizeCanvas();
+  function recordFrame(timestamp, active) {
+    if (density.update(timestamp, active, pixelRatio)) resizeCanvas();
+  }
+  document.addEventListener('visibilitychange', () => density.reset());
+  window.addEventListener('blur', () => density.reset());
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
@@ -62,7 +69,7 @@ export function createRendering(canvas) {
     fitSunShadow(camera, sun);
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
-  window.addEventListener('resize', () => { resizeCanvas(); resize(); }); resize();
+  window.addEventListener('resize', () => { density.reset(); resizeCanvas(); resize(); }); resize();
   function setJourney(id) {
     snowy = id === 'snow';
     if (id === 'snow') {
@@ -82,5 +89,5 @@ export function createRendering(canvas) {
     renderer.toneMappingExposure = desert ? .92 : .97;
   }
   setJourney('coast');
-  return { renderer, scene, camera, update, resize, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; return views[view].label; }, snap() { initialized = false; } };
+  return { renderer, scene, camera, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; return views[view].label; }, snap() { initialized = false; } };
 }
