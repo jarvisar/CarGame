@@ -34,6 +34,7 @@ async function boot() {
     function start() { if (paused) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
+      audio.setPaused(paused);
       $('#pause-overlay').hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
       if (paused) $('#resume').focus(); else $('#pause').blur();
     }
@@ -42,7 +43,7 @@ async function boot() {
       document.body.dataset.journey = journey;
       $('.location-title').textContent = data.label;
       $('.location svg text').textContent = data.routeNumber;
-      $('#weather-copy').textContent = data.weather; $('#temperature').textContent = data.temperature;
+      $('#welcome .eyebrow').lastChild.textContent = ` ${data.label}`;
       $('#welcome p').textContent = data.introduction; $('#pause-overlay .eyebrow').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
       document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30' }[journey];
@@ -59,6 +60,7 @@ async function boot() {
       if (id === journey) { journeyDialog.close(); return; }
       if (!journeyDialog.open) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
+      audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close();
       $('#pause-overlay').hidden = true;
       savedJourneys[journey] = { s: vehicle.s, distance: vehicle.distance };
@@ -107,7 +109,7 @@ async function boot() {
       if (name === 'journey') { openJourneys(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
-      if (name === 'reset') { vehicle.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Car reset to the road'); }
+      if (name === 'reset') { vehicle.reset(); audio.reset(); frameClock.reset(); vehicle.render(1, world.origin); rendering.snap(); rendering.update(vehicle.car, 0, world.origin); world.animate(time, vehicle); toast('Car reset to the road'); }
       if (name === 'view') { toast(rendering.toggleView()); updateViewUi(); }
       if (name === 'sound') {
         try {
@@ -176,8 +178,13 @@ async function boot() {
     });
     $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Drag the stick where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); audio.update(0, time, true); } frameClock.suspend(); });
-    window.addEventListener('blur', () => { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
+    document.addEventListener('visibilitychange', () => { audio.setHidden(document.hidden); if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); } frameClock.suspend(); });
+    window.addEventListener('blur', () => { audio.setHidden(true); if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
+    window.addEventListener('focus', () => audio.setHidden(document.hidden));
+    window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
+    window.addEventListener('keydown', () => audio.unlock(), { capture: true });
+    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) void audio.dispose().catch(() => {}); });
+    window.addEventListener('pageshow', () => audio.setHidden(document.hidden));
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     function updateHud() {
       // Physics uses meters and seconds; convert only the displayed measurements.
@@ -204,7 +211,7 @@ async function boot() {
         world.update(vehicle.s); vehicle.render(frameClock.alpha, world.origin);
         rendering.update(vehicle.car, dt, world.origin); world.animate(time, vehicle);
       }
-      audio.update(vehicle.speed, time, paused);
+      audio.update(vehicle.audioTelemetry, dt);
       hudTime += dt; if (hudTime > .1) { updateHud(); hudTime = 0; }
       renderer.render(scene, camera);
       if (!sceneReady) { sceneReady = true; $('#loading').classList.add('loaded'); }
@@ -215,7 +222,7 @@ async function boot() {
     else renderer.compile(scene, camera);
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { vehicle, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { vehicle, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

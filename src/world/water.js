@@ -26,7 +26,7 @@ const declarations = /* glsl */`
 `;
 
 export function createWaterMaterial(lake = false) {
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .58, metalness: .08 });
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .72, metalness: .03 });
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + shader.vertexShader;
@@ -45,16 +45,16 @@ export function createWaterMaterial(lake = false) {
       float detail = waterNoise(drift * 4.0 + vec2(19.3, 7.1));
       // Distort the crests and break them into uneven patches instead of
       // intersecting regularly spaced sine bands (which read as a grid).
-      float phase = q.x * 183.0 + q.y * 41.0 - coastTime * 1.3
-        + (bend - 0.5) * 9.0 + (detail - 0.5) * 2.2;
+      float phase = q.x * 284.0 + q.y * 92.0 - coastTime * 1.3
+        + (bend - 0.5) * 4.0 + (detail - 0.5) * 1.2;
       float wave = sin(phase);
       float crestPatch = waterNoise(drift * 8.0 + vec2(bend * 1.7, 11.6));
-      float glint = pow(max(0.0, wave), 18.0) * smoothstep(0.38, 0.73, crestPatch);
+      float glint = pow(max(0.0, wave), 24.0) * smoothstep(0.38, 0.73, crestPatch);
       diffuseColor.rgb *= 0.97 + 0.035 * swell(vWaterCoord);
-      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.79, 0.94, 0.91), glint * ${lake ? '0.14' : '0.22'});
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.79, 0.94, 0.91), glint * ${lake ? '0.035' : '0.055'});
     `);
   };
-  material.customProgramCacheKey = () => `coast-water-${lake ? 'lake' : 'ocean'}-v2`;
+  material.customProgramCacheKey = () => `coast-water-${lake ? 'lake' : 'ocean'}-v3`;
   return material;
 }
 
@@ -63,10 +63,12 @@ export function createSurfMaterial(moving = false) {
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + `
+      attribute float surfEdge; varying float vSurfEdge;
       ${moving ? 'attribute vec3 surfFlow; varying float vSurfFade;' : ''}
     ` + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
       #include <begin_vertex>
+      vSurfEdge = surfEdge;
       ${moving ? `
         vec4 baseWorld = modelMatrix * vec4(position, 1.0);
         vec2 baseCoord = vec2(baseWorld.x, baseWorld.z - coastOrigin);
@@ -79,14 +81,45 @@ export function createSurfMaterial(moving = false) {
       vWaterCoord = vec2(waterWorld.x, waterWorld.z - coastOrigin);
       transformed.y += swell(vWaterCoord) * 0.19;
     `);
-    shader.fragmentShader = declarations + (moving ? 'varying float vSurfFade;\n' : '') + shader.fragmentShader;
+    shader.fragmentShader = declarations + 'varying float vSurfEdge;\n' + (moving ? 'varying float vSurfFade;\n' : '') + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
       #include <color_fragment>
-      float foamPatch = waterNoise(vWaterCoord / 8.0 + vec2(-coastTime * 0.06, coastTime * 0.04));
-      diffuseColor.a *= ${moving ? 'vSurfFade *' : ''} (0.25 + 0.7 * smoothstep(0.2, 0.8, foamPatch));
+      float foamPatch = waterNoise(vWaterCoord / 4.0 + vec2(-coastTime * 0.06, coastTime * 0.04));
+      float feather = smoothstep(0.0, 0.2, vSurfEdge) * (1.0 - smoothstep(0.35, 1.0, vSurfEdge));
+      diffuseColor.a *= ${moving ? 'vSurfFade *' : ''} feather * smoothstep(0.2, 0.72, foamPatch);
     `);
   };
-  material.customProgramCacheKey = () => `coast-surf-${moving ? 'rolling' : 'wash'}-v2`;
+  material.customProgramCacheKey = () => `coast-surf-${moving ? 'rolling' : 'wash'}-v3`;
+  return material;
+}
+
+export function createRockWashMaterial() {
+  const material = new THREE.MeshBasicMaterial({ color: '#e1f5ec', transparent: true, opacity: .67, depthWrite: false, side: THREE.DoubleSide });
+  material.onBeforeCompile = shader => {
+    shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
+    shader.vertexShader = declarations + 'attribute vec2 rockWash; varying vec2 vRockWash;\n' + shader.vertexShader;
+    shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+      #include <begin_vertex>
+      vRockWash = rockWash;
+      vec4 waterWorld = modelMatrix * vec4(position, 1.0);
+      vWaterCoord = vec2(waterWorld.x, waterWorld.z - coastOrigin);
+      transformed.y += swell(vWaterCoord) * 0.19;
+    `);
+    shader.fragmentShader = declarations + 'varying vec2 vRockWash;\n' + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `
+      #include <color_fragment>
+      vec2 drift = vWaterCoord / 4.0 + vec2(-coastTime * 0.09, coastTime * 0.025);
+      float washNoise = waterNoise(drift);
+      float froth = waterNoise(drift * 4.0 + vec2(7.3, 19.1));
+      float surge = 0.5 + 0.5 * sin(coastTime * 1.05 + vRockWash.y);
+      // Fade out through a ragged edge instead of outlining a hollow ring.
+      float reach = 0.4 + washNoise * 0.35 + surge * 0.2;
+      float edgeFade = 1.0 - smoothstep(reach * 0.3, reach, vRockWash.x);
+      float breakup = smoothstep(0.2, 0.7, washNoise * 0.65 + froth * 0.35);
+      diffuseColor.a *= edgeFade * (0.2 + breakup * 0.8) * (0.65 + surge * 0.35);
+    `);
+  };
+  material.customProgramCacheKey = () => 'coast-rock-wash-v1';
   return material;
 }
 

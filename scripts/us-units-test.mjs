@@ -33,16 +33,15 @@ try {
     assert.equal(await page.locator('#gear').textContent(), status);
     assert.ok(Math.abs(await page.locator('#speed-fill').evaluate(el => parseFloat(el.style.width)) - fill) < .01);
   }
-  for (const [id, temperature] of [['desert', '79°F'], ['snow', '21°F'], ['coast', '64°F']]) {
+  for (const id of ['desert', 'snow', 'coast']) {
     await page.locator('#change-journey').click();
     await page.locator(`[data-journey="${id}"]`).click();
     await page.waitForFunction(id => window.__coastline.journey === id && !window.__coastline.changingJourney, id);
-    assert.equal(await page.locator('#temperature').textContent(), temperature);
     assert.equal(await page.locator('#pause-overlay .eyebrow').textContent(), await page.locator('.location-title').textContent());
     assert.equal(await page.locator('#distance').textContent(), id === 'coast' ? '1,234.4' : '0.0');
   }
   assert.deepEqual(errors, []);
-  console.log('Passed: mph, miles, US number formatting, reverse speed, speed bar, Fahrenheit, and restored mileage across all routes.');
+  console.log('Passed: mph, miles, US number formatting, reverse speed, speed bar, and restored mileage across all routes.');
 } finally {
   await browser.close();
 }

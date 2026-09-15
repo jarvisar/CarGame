@@ -58,13 +58,14 @@ export function createRendering(canvas) {
       return;
     }
     const desert = id === 'desert';
-    scene.fog.near = 460; scene.fog.far = 860;
-    scene.background.set(desert ? '#dfb399' : '#b8dfe0'); scene.fog.color.set(desert ? '#dab49b' : '#c2e2db');
-    sky.color.set(desert ? '#e5d8d0' : '#e4f2f5'); sky.groundColor.set(desert ? '#79635a' : '#617149');
-    sky.intensity = desert ? 1.27 : 1.45;
-    sun.color.set(desert ? '#ffe0bc' : '#fff1db'); sun.intensity = desert ? 2.45 : 2.5;
-    sunOffset.set(...(desert ? [-170, 150, 120] : [-110, 240, 100]));
-    renderer.toneMappingExposure = desert ? .92 : .94;
+    scene.fog.near = desert ? 460 : 540; scene.fog.far = desert ? 860 : 1050;
+    scene.background.set(desert ? '#dfb399' : '#b4dbe7'); scene.fog.color.set(desert ? '#dab49b' : '#bbd9de');
+    sky.color.set(desert ? '#e5d8d0' : '#d3eaf6'); sky.groundColor.set(desert ? '#79635a' : '#405e52');
+    sky.intensity = desert ? 1.27 : 1.12;
+    sun.color.set(desert ? '#ffe0bc' : '#fff0d5'); sun.intensity = desert ? 2.45 : 2.7;
+    sunOffset.set(...(desert ? [-170, 150, 120] : [-145, 230, 95]));
+    renderer.toneMappingExposure = desert ? .92 : .97;
   }
+  setJourney('coast');
   return { renderer, scene, camera, update, resize, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; return views[view].label; }, snap() { initialized = false; } };
 }

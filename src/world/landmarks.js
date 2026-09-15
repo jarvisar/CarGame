@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, CHUNK_LENGTH } from './route.js';
 import { createWaterMaterial } from './water.js';
 
-const bridgeMaterial = new THREE.MeshStandardMaterial({ color: '#dcd0b7', emissive: '#766b54', emissiveIntensity: .14, roughness: 1, flatShading: true, side: THREE.DoubleSide });
+const bridgeMaterial = new THREE.MeshStandardMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, roughness: 1, flatShading: true, side: THREE.DoubleSide });
 const lakeMaterial = createWaterMaterial(true);
 
 function geometry(vertices, colors) {
@@ -61,7 +61,7 @@ function buildPond(chunk, pond) {
       const points = coords.map(([t, v]) => positionAt(t, v, pond.level));
       for (const index of [0, 2, 1, 1, 2, 3]) {
         const p = points[index]; const radius = pondRadius(...coords[index], pond);
-        const color = new THREE.Color('#4e9ea5').lerp(new THREE.Color('#8dc8b2'), Math.min(1, radius));
+        const color = new THREE.Color('#276d78').lerp(new THREE.Color('#72b8a5'), Math.min(1, radius));
         vertices.push(p.x, p.y, p.z + chunk.start); colors.push(color.r, color.g, color.b);
       }
     }

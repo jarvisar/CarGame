@@ -1,6 +1,6 @@
 /* Shared limits for the header, panels, HUD and touch controls. */
 :root {
-  --edge: clamp(12px, 2.5vw, 32px);
+  --edge: clamp(6px, 1.25vw, 16px);
   --ui-top: calc(var(--edge) + var(--safe-top));
   --ui-left: calc(var(--edge) + var(--safe-left));
   --ui-right: calc(var(--edge) + var(--safe-right));
@@ -15,8 +15,11 @@ body[data-controller=true] #app :is(.controls, #pause, #change-journey) { displa
 .journey-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
+#app:has(.welcome.hidden) .brand,
+#app:has(#pause-overlay:not([hidden])) .brand { visibility: hidden; }
 
 /* Menus reserve space for their primary action, not for the driving HUD. */
+#app:has(.welcome.hidden, #pause-overlay:not([hidden]), dialog[open], #journey-transition.active) .vignette { display: none; }
 #app:has(.welcome:not(.hidden)) :is(.bottom-bar, .touch-controls, #pause),
 #app:has(#pause-overlay:not([hidden])) :is(.bottom-bar, .touch-controls, .welcome),
 #app:has(#journey-dialog[open]) :is(.topbar, .bottom-bar, .touch-controls, .welcome, #pause-overlay, #toast) { visibility: hidden; pointer-events: none; }
@@ -72,7 +75,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
   .controls button { min-width: 64px; }
 }
 @media (max-width: 1100px) {
-  .weather, .speed-unit span, .controls > span, .controls kbd { display: none; }
+  .speed-unit span, .controls > span, .controls kbd { display: none; }
   .touch-utility-icon { display: block; width: 18px; height: 18px; }
   .controls button { min-width: 64px; padding: 0 9px; gap: 6px; }
   .controls .control-label { margin: 0; text-transform: capitalize; }
@@ -94,8 +97,8 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
 
 /* Short landscape screens trade secondary readouts for a clear driving area. */
 @media (max-height: 560px) and (orientation: landscape) {
-  :root { --edge: 12px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 114.4px; }
-  .brand-caption, .weather, .location, #stick-help { display: none; }
+  :root { --edge: 6px; --header-clear: calc(var(--ui-top) + 60px); --stick-size: 114.4px; }
+  .brand-caption, .location, #stick-help { display: none; }
   .brand-mark { width: 32px; height: 32px; }
   .wordmark { font-size: 23px; }
   .journey-button { position: static; font-size: 11px; padding: 10px 12px; }

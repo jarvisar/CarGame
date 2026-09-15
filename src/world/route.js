@@ -20,9 +20,73 @@ export function seededRandom(seed) {
 export function roadX(s) { return 27 * Math.sin(s / 130) + 24 * Math.sin(s / 60 + .5) + 6 * Math.sin(s / 260 + 1.2); }
 export function roadDerivative(s) { return 27 / 130 * Math.cos(s / 130) + 24 / 60 * Math.cos(s / 60 + .5) + 6 / 260 * Math.cos(s / 260 + 1.2); }
 export function roadHeight(s) { return 24 + 6 * Math.sin(s / 173 + .5) + 3 * Math.sin(s / 83); }
-export function coastOffset(s) { return -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2); }
-export function beachWidth(s) { return 3 + 20 * smoothstep(-.15, .85, Math.sin(s / 137 + 1.1)); }
+function drivingCoastOffset(s) { return -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2); }
+function coastNoise(s, span, salt) {
+  const cell = Math.floor(s / span), t = smoothstep(0, 1, s / span - cell);
+  return lerp(randomAt(cell, salt), randomAt(cell + 1, salt), t);
+}
+function headlandCenter(index) { return index * 176 + 50 + randomAt(index, 1601) * 60; }
+export function headlandAmount(s) {
+  const cell = Math.floor(s / 176);
+  let amount = 0;
+  for (let i = cell - 1; i <= cell + 1; i++) {
+    const center = headlandCenter(i);
+    const span = s < center ? 38 + randomAt(i, 1602) * 28 : 45 + randomAt(i, 1603) * 30;
+    const profile = 1 - smoothstep(.05, 1, Math.abs(s - center) / span);
+    amount = Math.max(amount, profile * (18 + randomAt(i, 1604) * 14));
+  }
+  return amount;
+}
+export function coastOffset(s) { return drivingCoastOffset(s) - headlandAmount(s); }
+export function beachWidth(s) {
+  const cell = Math.floor(s / 176);
+  let pocket = 0;
+  for (let i = cell - 1; i <= cell + 1; i++) {
+    const left = headlandCenter(i), right = headlandCenter(i + 1);
+    const center = lerp(left, right, .43 + randomAt(i, 1661) * .14);
+    const span = (s < center ? center - left : right - center) * (.83 + randomAt(i, 1662) * .1);
+    const profile = 1 - smoothstep(.06, 1, Math.abs(s - center) / span);
+    pocket = Math.max(pocket, profile * (19 + randomAt(i, 1663) * 8));
+  }
+  // Sand accumulates in the recess between neighboring headlands. Unequal
+  // sides and widths create coves while leaving the rocky points legible.
+  return 6.5 + coastNoise(s, 83, 1664) * 2 + pocket;
+}
 export function shorelineOffset(s) { return coastOffset(s) - 10 - beachWidth(s) - 2.4; }
+
+function coastalShoulder(s) {
+  // A headland can rise above, or dip below, the roadside shelf. This changes
+  // the silhouette in broad masses instead of adding small surface noise.
+  return (coastNoise(s, 83, 1611) * 12 - 7) * smoothstep(-18, -29, coastOffset(s));
+}
+
+function cliffRib(s, height = 0) {
+  // Broad, tilted joints run from the cliff toe to its crown. Sampling one
+  // field at different heights creates connected buttresses and recesses.
+  const cell = Math.floor(s / 38);
+  let rib = 0;
+  for (let i = cell - 1; i <= cell + 1; i++) {
+    const center = i * 38 + 11 + randomAt(i, 1621) * 16;
+    const lean = (randomAt(i, 1622) - .5) * 13;
+    const width = 13 + randomAt(i, 1623) * 13;
+    const distance = Math.abs(s - center - height * lean) / width;
+    rib = Math.max(rib, (1 - smoothstep(.08, 1, distance)) * (.7 + randomAt(i, 1624) * .3));
+  }
+  return rib;
+}
+
+function cliffJoint(s, height) {
+  const cell = Math.floor(s / 13);
+  let joint = 0;
+  for (let i = cell - 2; i <= cell + 2; i++) {
+    const center = i * 13 + randomAt(i, 1651) * 7 + height * (randomAt(i, 1652) - .5) * 15;
+    const width = 5 + randomAt(i, 1653) * 5;
+    // An angular shoulder and a narrow recess, with the same fracture leaning
+    // through successive tiers. This relief belongs to the terrain surface.
+    joint = Math.max(joint, Math.max(0, 1 - Math.abs(s - center) / width));
+  }
+  return joint;
+}
 
 // Landmarks use world-space intervals, independently of streaming chunk boundaries.
 export function bridgeAt(s) {
@@ -77,8 +141,9 @@ function baseTerrainHeight(s, u) {
   if (u < beach - 7) return -3.2;
   if (u < beach) return lerp(-3.2, 1.2, smoothstep(beach - 7, beach, u));
   if (u < coast - 10) return 1.2;
-  if (u < coast) return lerp(1.2, h + 1.2 + ripple, smoothstep(coast - 10, coast, u));
-  if (u < -7) return h + (1.2 + ripple) * smoothstep(-7, coast, u);
+  if (u < coast) return lerp(1.2, h + 1.2 + ripple + coastalShoulder(s), smoothstep(coast - 10, coast, u));
+  if (u < -7) return h + (1.2 + ripple) * smoothstep(-7, coast, u)
+    + (u < -18 ? coastalShoulder(s) * smoothstep(-18, Math.min(-18.01, coast), u) : 0);
   if (u < 7) return h;
   const inland = smoothstep(8, 96, u);
   const hill = 17 + 24 * Math.sin(s / 112 + u / 87) ** 2 + 25 * Math.sin(s / 63 - u / 69) ** 2;
@@ -105,20 +170,91 @@ export function terrainHeight(s, u) {
 export function terrainColumns(s) {
   const c = coastOffset(s);
   const b = c - 10 - beachWidth(s);
-  return [-300, -220, -160, b - 35, b - 17, b - 7, b, c - 10, c - 4, c, (c - 7) / 2, -7, 0, 7, ...Array.from({ length: 23 }, (_, i) => 14 + i * 12)];
+  // Keep the established rock-foot shape independent of the wider sand coves.
+  const toeSpread = Math.min(4.5, 1.2 + 8 * smoothstep(-.15, .85, Math.sin(s / 137 + 1.1)) * (1 - headlandAmount(s) / 44));
+  const foot = c - 10 - toeSpread * cliffRib(s);
+  const crown = c - cliffRib(s, 1) * 4.8;
+  const lower = lerp(foot, crown, .18 + (1 - cliffJoint(s, .3)) * .24);
+  const upper = lerp(foot, crown, .49 + (1 - cliffJoint(s, .75)) * .29);
+  return [-300, -220, -160, b - 35, b - 17, b - 7, b, foot, lower, upper, crown, (c - 7) / 2, -7, 0, 7, ...Array.from({ length: 23 }, (_, i) => 14 + i * 12)];
 }
 export function terrainVertex(row, column) {
+  if (column === 9.5) {
+    const face = terrainVertex(row, 9), rim = terrainVertex(row, 10);
+    // A narrow rolling shoulder lets turf wrap over the crest. Sheltered
+    // recesses carry a wider lip; exposed ribs keep a thinner, steeper cap.
+    const exposure = cliffRib(rim.s, 1);
+    const t = .18 + exposure * .46 + coastNoise(rim.s, 17, 1691) * .12;
+    const drop = .4 + exposure * 1.2 + coastNoise(rim.s, 23, 1692) * .9;
+    const p = { column };
+    for (const axis of ['x', 'y', 'z', 's', 'u']) p[axis] = lerp(face[axis], rim[axis], t);
+    const detail = (1 - ravineAmount(p.s, p.u)) * smoothstep(1.05, 1.65, pondRadius(p.s, p.u));
+    p.y = lerp(p.y, Math.max(p.y, rim.y - drop), detail);
+    return p;
+  }
   const baseS = row * TERRAIN_STEP;
-  const s = baseS + ((column > 2 && column !== 11 && column !== 12 && column !== 13) ? (randomAt(row, column) - .5) * 5.6 : 0);
+  const seedRow = Number.isInteger(row) ? row : row * 2 + 1048576;
+  // The extra cliff shoulder does not reseed or move the road and inland hills.
+  const seedColumn = column > 8 ? column - 1 : column;
+  const cliff = column >= 6 && column <= 10;
+  const along = lerp(randomAt(Math.floor(row), 7), randomAt(Math.ceil(row), 7), row - Math.floor(row));
+  const jitter = cliff ? (along - .5) * 4.2
+    : (randomAt(seedRow, seedColumn) - .5) * 5.6;
+  const s = baseS + ((column > 2 && (column < 12 || column > 14)) ? jitter : 0);
   const columns = terrainColumns(s);
   let u = columns[column];
-  if (column >= 7 && column <= 9) u += (randomAt(row + 218, column) - .5) * 2.7;
-  if (column >= 14) u += (randomAt(row + 991, column) - .5) * Math.min(8, (u - 7) * .26);
+  if (column >= 7 && column <= 10) u += (randomAt(seedRow + 218, seedColumn) - .5) * (column === 10 ? .8 : .4);
+  if (column >= 15) u += (randomAt(seedRow + 991, seedColumn) - .5) * Math.min(8, (u - 7) * .26);
   const p = positionAt(s, u, groundHeight(s, u));
   const detail = smoothstep(1.05, 1.65, pondRadius(s, u)) * (1 - ravineAmount(s, u));
-  if (column >= 7 && column <= 9) p.y += (randomAt(row, column + 500) - .5) * 2.3 * detail;
-  if (column >= 16) p.y += (randomAt(row, column + 700) - .5) * (column > 18 ? 8 : 3) * detail;
+  if (column >= 7 && column <= 10) {
+    const height = (column - 7) / 3, rib = cliffRib(s, height);
+    const top = groundHeight(s, coastOffset(s));
+    const crown = top + (cliffRib(s, 1) * 5.5 - 2 + (randomAt(seedRow, 1631) - .5) * 4) * smoothstep(-18, -29, coastOffset(s));
+    const fracture = randomAt(seedRow, 1632);
+    // Stagger the breaks in height as well as depth. A high shoulder can meet
+    // a low neighboring slab, so no seam runs continuously along the wall.
+    const lower = .2 + fracture * .36 + rib * .06;
+    const upper = Math.max(lower + .13, .58 + randomAt(seedRow, 1633) * .35);
+    const fraction = column === 7 ? 0 : column === 8 ? lower : column === 9 ? upper : 1;
+    p.y = lerp(p.y, lerp(1.2, crown, fraction), detail);
+    p.y += (randomAt(seedRow, seedColumn + 500) - .5) * (column === 7 ? .6 : 2.3) * detail;
+    if (column === 10) {
+      const hollow = (1 - rib) * smoothstep(.2, .8, coastNoise(s, 29, 1693));
+      p.y -= hollow * 2.6 * detail;
+    }
+  }
+  if (column >= 17) p.y += (randomAt(seedRow, seedColumn + 700) - .5) * (column > 19 ? 8 : 3) * detail;
   return { ...p, s, u, column };
+}
+
+export function terrainCell(row, col) {
+  const a = terrainVertex(row, col), b = terrainVertex(row + 1, col);
+  const c = terrainVertex(row, col + 1), d = terrainVertex(row + 1, col + 1);
+  // Spend the extra faces on cliff joints. Transition triangles stitch those
+  // joints into the original coarse beach and meadow, with no open T-junctions.
+  if (col === 6) {
+    const m = terrainVertex(row + .5, 7);
+    return [[a, b, m], [a, m, c], [b, d, m]];
+  }
+  if (col === 10) {
+    const m = terrainVertex(row + .5, 10);
+    return [[a, m, c], [m, d, c], [m, b, d]];
+  }
+  if (col >= 7 && col <= 9) {
+    const e = terrainVertex(row + .5, col), f = terrainVertex(row + .5, col + 1);
+    if (col === 9) {
+      const lipA = terrainVertex(row, 9.5), lipB = terrainVertex(row + .5, 9.5), lipC = terrainVertex(row + 1, 9.5);
+      const stone = [[a, e, lipA], [e, lipB, lipA], [e, b, lipC], [e, lipC, lipB]];
+      const turf = [[lipA, lipB, c], [lipB, f, c], [lipB, lipC, d], [lipB, d, f]];
+      for (const tri of turf) tri.rimTurf = true;
+      return [...stone, ...turf];
+    }
+    return (row + col) % 2 ? [[a, e, c], [e, f, c], [e, b, d], [e, d, f]]
+      : [[a, e, f], [a, f, c], [e, b, f], [b, d, f]];
+  }
+  const seedCol = col > 8 ? col - 1 : col;
+  return (row + seedCol) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
 }
 
 export const coastalDrivingRoute = {
@@ -127,6 +263,6 @@ export const coastalDrivingRoute = {
   height: terrainHeight,
   bounds(s) {
     const onBridge = Math.abs(s - bridgeAt(s).center) < 49;
-    return onBridge ? [-4.65, 4.65] : [Math.max(coastOffset(s) + 6, -15), 17];
+    return onBridge ? [-4.65, 4.65] : [Math.max(drivingCoastOffset(s) + 6, -15), 17];
   },
 };

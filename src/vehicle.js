@@ -56,6 +56,7 @@ export class DrivingController {
     this.s = 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
+    this.audioTelemetry = { speed: 0, throttle: 0, brake: 0, offRoad: 0 };
     const pose = () => ({ position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), bodyPitch: 0, bodyRoll: 0, wheelSpin: 0, steer: 0 });
     this.previousPose = pose(); this.currentPose = pose();
     this.update(0, {});
@@ -134,6 +135,12 @@ export class DrivingController {
     this.bodyRoll = THREE.MathUtils.damp(this.bodyRoll, -this.steer * this.speed * .0022, 6, dt);
     this.bodyPitch = THREE.MathUtils.damp(this.bodyPitch, -clamp(acceleration, -15, 12) * .002, 5, dt);
     this.wheelSpin -= step / .48;
+    // Report actual driving effort for keyboard, analog triggers, and touch.
+    // This is read-only telemetry: sound never feeds back into driving physics.
+    this.audioTelemetry.speed = this.speed;
+    this.audioTelemetry.throttle = input.handbrake ? 0 : touch ? clamp((acceleration + (this.speed > .015 ? drag : 0)) / 11.3, 0, 1) : this.speed < -.3 ? brake : forward;
+    this.audioTelemetry.brake = input.handbrake ? 1 : touch ? clamp(-acceleration / 24, 0, 1) : this.speed < -.3 ? forward : brake;
+    this.audioTelemetry.offRoad = clamp((Math.abs(this.u) - 4.8) / .7, 0, 1);
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.quaternion.copy(this.car.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) this.currentPose[key] = this[key];
     // Resets and journey changes are teleports, so never blend from the old location.
