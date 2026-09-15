@@ -38,9 +38,9 @@ export function createRendering(canvas) {
   const framingOffset = new THREE.Vector3();
   const touchScreen = window.matchMedia('(any-pointer: coarse)');
   const sunOffset = new THREE.Vector3(-110, 240, 100);
-  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 115, label: 'Third-person view' }];
-  const activeCamera = () => view === 3 ? thirdPerson.camera : camera;
-  let initialized = false; let view = 1; let viewHeight = views[view].height; let previousOrigin = 0;
+  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 75, label: 'Extra close view' }, { height: 115, label: 'Third-person view', thirdPerson: true }];
+  const activeCamera = () => views[view].thirdPerson ? thirdPerson.camera : camera;
+  let initialized = false; let view = touchScreen.matches ? 2 : 1; let viewHeight = views[view].height; let previousOrigin = 0;
   let snowy = false;
   let journey = 'coast';
   const fogProfiles = {
@@ -52,7 +52,7 @@ export function createRendering(canvas) {
     const profile = fogProfiles[journey];
     // Keep the miniature views' atmosphere; fade only distant third-person scenery.
     // Matching the sky exactly lets fully faded terrain disappear without a seam.
-    if (view === 3) {
+    if (views[view].thirdPerson) {
       scene.fog.color.copy(scene.background);
       scene.fog.near = profile.thirdNear; scene.fog.far = profile.thirdFar;
     } else {
@@ -87,7 +87,7 @@ export function createRendering(canvas) {
     }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
-    if (view === 3) { thirdPerson.update(car, dt, touchActive); target.copy(car.position); }
+    if (views[view].thirdPerson) { thirdPerson.update(car, dt, touchActive); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
     fitSunShadow(activeCamera(), sun);
   }

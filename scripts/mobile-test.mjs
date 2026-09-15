@@ -11,6 +11,7 @@ try {
   await page.addInitScript(() => localStorage.setItem('coastline-install-dismissed-v2', String(Date.now())));
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
+  assert.equal(await page.evaluate(() => window.__coastline.rendering.viewLabel), 'Close view', 'mobile starts in Close view');
   await page.waitForTimeout(700);
   async function checkLayout(name) {
     const issues = await page.evaluate(() => {
@@ -81,7 +82,7 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick), undefined);
   checks.push('second-finger pause clears joystick and prevents stale input on resume');
   await page.locator('#view').tap();
-  assert.match(await page.locator('#view').getAttribute('aria-label'), /Close view/);
+  assert.match(await page.locator('#view').getAttribute('aria-label'), /Extra close view/);
   const heldStick = { ...center, y: center.y - 30 };
   await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [heldStick] });
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 1);
