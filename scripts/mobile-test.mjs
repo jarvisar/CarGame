@@ -101,7 +101,8 @@ try {
   assert.ok(Math.abs(turnRotation.reduce((dot, value, index) => dot + value * cameraRotation[index], 0)) < .999, 'camera follows while steering with the joystick held');
   const forwardSpeed = await page.evaluate(() => window.__coastline.vehicle.speed);
   const turnHeading = await page.evaluate(() => window.__coastline.vehicle.heading);
-  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y + 30 }] });
+  // A full reverse input also overcomes the extra drag if the turn leaves the road.
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y + stickRadius }] });
   await page.waitForFunction(speed => window.__coastline.vehicle.speed < speed, forwardSpeed);
   await page.waitForFunction(() => window.__coastline.vehicle.speed < -.5);
   assert.ok(await page.evaluate(heading => Math.cos(window.__coastline.vehicle.heading - heading) > .98, turnHeading), 'down brakes and reverses without flipping the car');
