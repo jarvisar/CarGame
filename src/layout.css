@@ -107,7 +107,7 @@ body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
   .welcome h1 { font-size: 32px; margin: 10px 0; }
   .welcome .eyebrow { display: none; }
   .welcome p { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
-  .bottom-bar, body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); justify-content: flex-end; }
+  .bottom-bar, body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); justify-content: flex-start; }
   .controls { position: fixed; top: auto; bottom: var(--ui-bottom); left: 50%; transform: translateX(-50%); }
   .controls > span, .controls kbd, .speed-unit span { display: none; }
   .speedometer > #speed { font-size: 30px; }
@@ -215,6 +215,7 @@ body[data-journey=snow] .location .speedometer { background: none; }
 #app:has(#pause-overlay:not([hidden])) .brand { display: none; }
 #app:has(.welcome.hidden, #pause-overlay:not([hidden])) .topbar { justify-content: flex-end; }
 body[data-controller=true] .drive-actions { display: none; }
+body[data-controller=true] .top-actions { top: 0; }
 body[data-journey=snow] .drive-actions { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] .drive-actions button { background: transparent; }
 body[data-journey=snow] .drive-actions button:hover { background: #304663e0; }
