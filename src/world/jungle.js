@@ -6,6 +6,8 @@ import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleColumns, jungleRows
   onRiver, cutHeight, gorgeWall, jungleGuardrail, sideFalls, jungleZones, jungleCrags, jungleNoise } from './jungle-route.js';
 import { riverMaterial, fallMaterial, foamMaterial, mistMaterial, valleyMistMaterial } from './jungle-water.js';
 import { animateWater } from './water.js';
+import { jungleDiscoveries, jungleDiscoveryClears } from './jungle-discoveries.js';
+import { buildJungleDiscoveries } from './jungle-discovery-scenery.js';
 import { terrainSampler } from './coastal-assets.js';
 import { jungleCrowns, emergentCrowns, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry,
   jungleBoulders, cliffBlocks } from './jungle-assets.js';
@@ -39,6 +41,13 @@ function streamShift(fall, u) {
   if (u > 0) return Math.sin(u * .19 + fall.s * 1.3) * 1.8 * smoothstep(12, 18, u);
   const rim = riverCenter(fall.s) + riverHalfWidth(fall.s) + 7;
   return Math.sin(u * .23 + fall.s) * 1.3 * smoothstep(rim + 1, rim + 6, u) * smoothstep(-10.3, -13, u);
+}
+// Fan out over the last few meters, matching the waterfall's world-space width.
+function streamHalfWidth(fall, u) {
+  const rim=riverCenter(fall.s)+riverHalfWidth(fall.s)+7;
+  const a=positionAt(fall.s-.5,rim),b=positionAt(fall.s+.5,rim);
+  const alongScale=Math.hypot(b.x-a.x,b.z-a.z);
+  return lerp(1.1,fall.width/(2*alongScale),1-smoothstep(rim+.6,rim+9,u));
 }
 // Each far-side creek rises its own fixed distance up the hillside.
 const creekLength = fall => 26 + randomAt(Math.round(fall.s), 2505) * 40;
@@ -107,7 +116,9 @@ export class JungleChunk {
     this.lips = riverLips(this.start, this.start + CHUNK_LENGTH);
     this.falls = sideFalls(this.start, this.start + CHUNK_LENGTH);
     this.features = { lips: this.lips.map(lip => lip.index) };
+    this.discoveries = jungleDiscoveries(this.start-30,this.start+CHUNK_LENGTH+30);
     this.buildTerrain(); this.buildWater(); this.buildMist(); this.buildRoad(); this.buildScenery();
+    buildJungleDiscoveries(this,this.discoveries);
     finalizeChunkTransforms(this.group);
   }
   addMesh(geometry, mat, name, shadows = false) {
@@ -277,7 +288,11 @@ export class JungleChunk {
     // An upward-facing ribbon through path points { s, u, y, half, turbulence }; the flow runs toward -u.
     const ribbon = path => {
       const cols = [-1, -.35, .35, 1];
-      const point = (p, f) => { const q = positionAt(p.s + f * p.half, p.u, p.y); return { x: q.x, y: q.y, z: q.z + this.start, coord: [-p.u, f * .45, p.turbulence] }; };
+      const point = (p, f) => {
+        const q = p.center ? {x:p.center.x+p.across.x*f*p.half, y:p.y, z:p.center.z+p.across.z*f*p.half}
+          : positionAt(p.s + f * p.half, p.u, p.y);
+        return { x: q.x, y: q.y, z: q.z + this.start, coord: [-p.u, f * .45, p.turbulence] };
+      };
       for (let i = 0; i < path.length - 1; i++) for (let j = 0; j < cols.length - 1; j++) {
         const a = point(path[i], cols[j]), b = point(path[i + 1], cols[j]), c = point(path[i], cols[j + 1]), d = point(path[i + 1], cols[j + 1]);
         for (let [p, q, r] of [[a, b, c], [b, d, c]]) {
@@ -288,7 +303,9 @@ export class JungleChunk {
       }
     };
     for (const fall of this.falls) {
-      const { s, width } = fall, rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s), rim = rc + hw + 7, top = jungleHeight(s, rim) + .4, half = width / 2;
+      const { s, width } = fall, rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s), rim = rc + hw + 7, half = width / 2;
+      const top = Math.max(jungleHeight(s,rim)+.4,groundAt(s,rim+.6,streamHalfWidth(fall,rim+.6))+.16);
+      const { along, across } = frameAt(s, rim), out = across.clone().negate(), lip = positionAt(s, rim - 1, top);
       // The creek starts as a trickle among stones and gathers toward the road, whitening where it tumbles.
       const length = creekLength(fall), creek = [];
       for (let k = 0, steps = Math.ceil(length / 1.25); k <= steps; k++) {
@@ -299,12 +316,16 @@ export class JungleChunk {
       ribbon(creek);
       const stream = [];
       for (let u = -10.35; u > rim + .6; u -= 1.25) {
-        const shift = streamShift(fall, u);
-        stream.push({ s: s + shift, u, y: groundAt(s + shift, u, 1.1) + .16, half: 1.1, turbulence: .06 });
+        const shift = streamShift(fall, u),spread=streamHalfWidth(fall,u),gather=1-smoothstep(rim+.6,rim+9,u);
+        const floor=groundAt(s+shift,u,spread)+.16;
+        stream.push({ s:s+shift,u,y:lerp(floor,Math.max(floor,top),1-smoothstep(rim+.6,rim+3,u)),
+          half:spread,turbulence:lerp(.06,.38,gather) });
       }
-      stream.push({ s, u: rim - .4, y: top, half: half * .92, turbulence: .22 });
+      // Share the exact back edge of the falling sheet: same center, width,
+      // height and crosswise direction, even where the road bends.
+      stream.push({s,u:rim-.3,y:top,half,turbulence:.42,across:along,
+        center:{x:lip.x-out.x*.7,z:lip.z-out.z*.7}});
       ribbon(stream);
-      const { along, across } = frameAt(s, rim), out = across.clone().negate(), lip = positionAt(s, rim - 1, top);
       const lipPoint = { x: lip.x, y: lip.y, z: lip.z + this.start }, height = top - level + .05, reach = 2.8 + height * .04;
       fallSheet(water, lipPoint, out, along, half, height, reach, s * .173);
       const foot = { x: lipPoint.x + out.x * (reach + .3), y: level + .09, z: lipPoint.z + out.z * (reach + .3) };
@@ -349,10 +370,12 @@ export class JungleChunk {
     const inStream = (s, u, margin = 0) => falls.some(f => Math.abs(s - f.s - streamShift(f, u)) < (u < 0 ? f.width * .6 : 1.4) + margin &&
       (u < 0 ? u < -9.6 && u > riverCenter(f.s) + riverHalfWidth(f.s) : u > 9.6 && u < 11.5 + creekLength(f)));
     const nearFall = (s, u, r) => falls.some(f => Math.abs(s - f.s) < f.width * .6 + r && u < -9.6 && u > riverCenter(f.s) + riverHalfWidth(f.s) - 3);
-    const open = (s, u, margin = 0) => Math.abs(u) > 9.6 + margin && !onRiver(s, u, 1.5 + margin) && !inStream(s, u, .6 + margin);
+    const discoveryClear = (s,u,radius=0) => jungleDiscoveryClears(s,u,this.discoveries,radius);
+    const open = (s, u, margin = 0) => Math.abs(u) > 9.6 + margin && !onRiver(s, u, 1.5 + margin) && !inStream(s, u, .6 + margin) && discoveryClear(s,u,margin);
     const spots = [];
-    const clear = (s, u, r) => spots.every(spot => Math.hypot(spot.s - s, spot.u - u) > spot.r + r);
+    const clear = (s, u, r) => discoveryClear(s,u,r) && spots.every(spot => Math.hypot(spot.s - s, spot.u - u) > spot.r + r);
     const vine = (s, u, top, length) => {
+      if (!discoveryClear(s,u,2)) return;
       if (Math.abs(u) < 9.8 || nearFall(s, u, 1.5)) return;
       const p = positionAt(s, u), floor = jungleHeight(s, u);
       length = Math.min(length, top - floor - 1);
@@ -361,6 +384,7 @@ export class JungleChunk {
     };
 
     const tree = (s, u, height, palette) => {
+      if (!discoveryClear(s,u,height*.55)) return;
       const p = ground(s, u), width = height * (.4 + random() * .18);
       trunks.push({ p: [p.x, p.y + height * .3, p.z], scale: [height * .045, height * .62, height * .045] });
       // Crowns deep in the forest skip the shadow pass; their shade lands on other canopy anyway.
@@ -372,6 +396,7 @@ export class JungleChunk {
       }
     };
     const emergent = (s, u, height, lean) => {
+      if (!discoveryClear(s,u,height*.65)) return;
       const p = ground(s, u), width = height * (.36 + random() * .1), angle = random() * 6.28;
       const tallHeight = Math.min(height + Math.max(0, height - 28) * 2, headroom(s, u, p.y));
       emergents[Math.floor(random() * emergents.length)].push({ p: [p.x, p.y - .1, p.z], scale: [height, tallHeight, height], r: [0, angle, 0] });
@@ -385,17 +410,20 @@ export class JungleChunk {
       }
     };
     const palm = (s, u, height) => {
+      if (!discoveryClear(s,u,height*.55)) return;
       const p = ground(s, u), w = height * .8, angle = random() * 6.28, variant = Math.floor(random() * junglePalms.length);
       palmTrunks[variant].push({ p: [p.x, p.y - .1, p.z], scale: [w, height, w], r: [0, angle, 0] });
       palmFronds[variant].push({ p: [p.x, p.y - .1, p.z], scale: [w, height, w], r: [0, angle, 0], color: pick(palmColors) });
       spots.push({ s, u, r: 1.2 });
     };
     const stone = (s, u, size, mossy, lift = null) => {
+      if (!discoveryClear(s,u,size)) return;
       const p = ground(s, u), variant = mossy ? 1 + Math.floor(random() * 2) : Math.floor(random() * 2);
       boulders[variant].push({ p: [p.x, lift ?? p.y + size * .28, p.z], scale: [size * (.8 + random() * .5), size * (.55 + random() * .55), size * (.7 + random() * .5)], r: [(random() - .5) * .4, random() * 6.28, (random() - .5) * .4], color: pick(stoneTints) });
     };
     // A column of rock standing on base; vines hang down the face turned to the camera.
     const rock = (s, u, base, height, width, depth, vineCount = 0, yaw = null) => {
+      if (!discoveryClear(s,u,Math.max(width,depth)*.7)) return;
       if (height < 1) return;
       const p = positionAt(s, u);
       cliffs[Math.floor(random() * cliffs.length)].push({ p: [p.x, base, p.z + this.start], scale: [width, height, depth], r: [(random() - .5) * .08, yaw ?? random() * 6.28, (random() - .5) * .08], color: pick(stoneTints) });
@@ -442,7 +470,7 @@ export class JungleChunk {
       const length = creekLength(fall);
       for (let u = -11.5; u > rim + 1; u -= 1.6 + random() * 1.4) {
         const shift = streamShift(fall, u);
-        stone(s + shift + (random() > .5 ? 1 : -1) * (1.5 + random() * .6), u, .5 + random() * .6, true);
+        stone(s + shift + (random() > .5 ? 1 : -1) * (streamHalfWidth(fall,u)+.4+random()*.6), u, .5 + random() * .6, true);
         spots.push({ s: s + shift, u, r: 1.8 });
       }
       for (let u = 12; u < 10.35 + length; u += 1.8 + random() * 1.6) {
