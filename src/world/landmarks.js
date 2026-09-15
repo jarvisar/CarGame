@@ -63,7 +63,7 @@ function buildPond(chunk, pond) {
       const points = coords.map(([t, v]) => positionAt(t, v, pond.level));
       for (const index of [0, 2, 1, 1, 2, 3]) {
         const p = points[index]; const radius = pondRadius(...coords[index], pond);
-        const color = new THREE.Color('#276d78').lerp(new THREE.Color('#72b8a5'), Math.min(1, radius));
+        const color = new THREE.Color('#246b94').lerp(new THREE.Color('#64bfca'), Math.min(1, radius));
         vertices.push(p.x, p.y, p.z + chunk.start); colors.push(color.r, color.g, color.b);
       }
     }

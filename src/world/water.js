@@ -60,7 +60,7 @@ export function createWaterMaterial(lake = false) {
 
 export function createSurfMaterial(moving = false) {
   // Thin foam surfaces need both sides visible, but not separate back/front passes.
-  const material = new THREE.MeshBasicMaterial({ color: '#eafaf1', transparent: true, opacity: .82, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
+  const material = new THREE.MeshBasicMaterial({ color: '#f4fdff', toneMapped: false, transparent: true, opacity: .96, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + `
@@ -87,15 +87,15 @@ export function createSurfMaterial(moving = false) {
       #include <color_fragment>
       float foamPatch = waterNoise(vWaterCoord / 4.0 + vec2(-coastTime * 0.06, coastTime * 0.04));
       float feather = smoothstep(0.0, 0.2, vSurfEdge) * (1.0 - smoothstep(0.35, 1.0, vSurfEdge));
-      diffuseColor.a *= ${moving ? 'vSurfFade *' : ''} feather * smoothstep(0.2, 0.72, foamPatch);
+      diffuseColor.a *= ${moving ? 'vSurfFade *' : ''} feather * (0.3 + 0.7 * smoothstep(0.2, 0.72, foamPatch));
     `);
   };
-  material.customProgramCacheKey = () => `coast-surf-${moving ? 'rolling' : 'wash'}-v3`;
+  material.customProgramCacheKey = () => `coast-surf-${moving ? 'rolling' : 'wash'}-v4`;
   return material;
 }
 
 export function createRockWashMaterial() {
-  const material = new THREE.MeshBasicMaterial({ color: '#e1f5ec', transparent: true, opacity: .67, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
+  const material = new THREE.MeshBasicMaterial({ color: '#effcff', toneMapped: false, transparent: true, opacity: .9, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true });
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + 'attribute vec2 rockWash; varying vec2 vRockWash;\n' + shader.vertexShader;

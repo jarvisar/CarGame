@@ -26,7 +26,8 @@ try {
       return { s: a.vehicle.s, chunks: a.world.chunks.size, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, calls: a.rendering.renderer.info.render.calls, triangles: a.rendering.renderer.info.render.triangles, features: [...a.world.chunks.values()].map(c => c.features) };
     });
     records.push(state);
-    assert.equal(state.chunks, 9); assert.ok(state.geometries <= 185); assert.equal(state.textures, 3);
+    assert.equal(state.chunks, 9); assert.ok(state.geometries <= 185);
+    assert.equal(state.textures, 9, 'three scenery textures plus six reusable AO textures');
     await page.screenshot({ path: `.artifacts/scenery-${s}.png` });
   }
   assert.ok(records.at(-1).geometries <= records[1].geometries + 2, 'returning to the same bridge must not leak GPU resources');
