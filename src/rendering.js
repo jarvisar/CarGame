@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fitSunShadow } from './shadows.js';
 import { PixelDensity } from './pixel-density.js';
+import { ThirdPersonCamera } from './third-person-camera.js';
 
 export function createRendering(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -30,12 +31,14 @@ export function createRendering(canvas) {
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 650; sun.shadow.normalBias = .65; sun.shadow.bias = -.0003; sun.shadow.radius = 2;
   scene.add(sun); scene.add(sun.target);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
+  const thirdPerson = new ThirdPersonCamera();
   const follow = new THREE.Vector3(); const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
   const cameraRight = new THREE.Vector3(cameraOffset.z, 0, -cameraOffset.x).normalize();
   const framingOffset = new THREE.Vector3();
   const sunOffset = new THREE.Vector3(-110, 240, 100);
-  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }];
+  const views = [{ height: 235, label: 'Scenic view' }, { height: 165, label: 'Medium view' }, { height: 115, label: 'Close view' }, { height: 115, label: 'Third-person view' }];
+  const activeCamera = () => view === 3 ? thirdPerson.camera : camera;
   let initialized = false; let view = 1; let viewHeight = views[view].height; let previousOrigin = 0;
   let snowy = false;
   const lookAhead = new THREE.Vector3(-24, 0, -46);
@@ -45,9 +48,10 @@ export function createRendering(canvas) {
     const aspect = width / height;
     const size = viewHeight * (aspect < 1 ? 1.12 : 1);
     camera.left = -size * aspect / 2; camera.right = size * aspect / 2; camera.top = size / 2; camera.bottom = -size / 2; camera.updateProjectionMatrix();
-    if (initialized) fitSunShadow(camera, sun);
+    thirdPerson.resize(aspect);
+    if (initialized) fitSunShadow(activeCamera(), sun);
   }
-  function update(car, dt, origin) {
+  function update(car, dt, origin, touchActive = false) {
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
     if (!initialized) { follow.copy(car.position); initialized = true; }
     follow.lerp(car.position, 1 - Math.exp(-dt * (reducedMotion ? 8 : 3)));
@@ -65,8 +69,9 @@ export function createRendering(canvas) {
     }
     // Fixed ocean-side azimuth and ~36° elevation preserve the reference's miniature view.
     camera.position.copy(target).add(cameraOffset); camera.lookAt(target);
+    if (view === 3) { thirdPerson.update(car, dt, touchActive); target.copy(car.position); }
     sun.position.copy(target).add(sunOffset); sun.target.position.copy(target);
-    fitSunShadow(camera, sun);
+    fitSunShadow(activeCamera(), sun);
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
   window.addEventListener('resize', () => { density.reset(); resizeCanvas(); resize(); }); resize();
@@ -89,5 +94,5 @@ export function createRendering(canvas) {
     renderer.toneMappingExposure = desert ? .92 : .97;
   }
   setJourney('coast');
-  return { renderer, scene, camera, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; return views[view].label; }, snap() { initialized = false; } };
+  return { renderer, scene, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
 }

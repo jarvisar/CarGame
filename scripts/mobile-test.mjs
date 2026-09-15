@@ -80,9 +80,34 @@ try {
   await page.locator('#resume').tap();
   assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick), undefined);
   checks.push('second-finger pause clears joystick and prevents stale input on resume');
+  await page.locator('#view').tap();
+  assert.match(await page.locator('#view').getAttribute('aria-label'), /Close view/);
+  const heldStick = { ...center, y: center.y - 30 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [heldStick] });
+  await page.waitForFunction(() => window.__coastline.vehicle.speed > 1);
+  const viewPoint = { ...await point('#view'), id: 2 };
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [heldStick, viewPoint] });
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [viewPoint] });
+  await page.waitForFunction(() => window.__coastline.rendering.camera.isPerspectiveCamera);
+  assert.match(await page.locator('#view').getAttribute('aria-label'), /Third-person view/);
+  assert.ok(await page.evaluate(() => window.__coastline.input.touchStick.pointer !== null));
+  const cameraRotation = await page.evaluate(() => window.__coastline.rendering.camera.quaternion.toArray());
+  await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...center, y: center.y + 30 }] });
+  await page.waitForTimeout(450);
+  const heldRotation = await page.evaluate(() => window.__coastline.rendering.camera.quaternion.toArray());
+  assert.ok(heldRotation.every((value, index) => Math.abs(value - cameraRotation[index]) < 1e-8), 'camera does not spin when dragging down');
+  assert.ok(await page.evaluate(() => window.__coastline.input.state.touchStick.y < -.5));
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForFunction(() => window.__coastline.vehicle.speed === 0);
+  checks.push('second-finger view change preserves joystick; third-person drag stays stable and release stops');
   for (const [width, height] of [[390, 844], [320, 568], [667, 375], [844, 390]]) {
     await page.setViewportSize({ width, height });
     await checkLayout(`driving ${width}x${height}`);
+    const projected = await page.evaluate(() => {
+      const app = window.__coastline;
+      return app.vehicle.car.position.clone().project(app.rendering.camera).toArray();
+    });
+    assert.ok(Math.abs(projected[0]) < .9 && Math.abs(projected[1]) < .8, 'third-person car stays visible after rotation');
     await page.screenshot({ path: `.artifacts/mobile-driving-${width}.png` });
     await page.locator('#pause').tap();
     await page.locator('#resume').tap();
@@ -94,6 +119,7 @@ try {
     await page.locator(`.journey-card[data-journey=${journey}]`).tap();
     await page.waitForFunction(id => window.__coastline.journey === id && !window.__coastline.changingJourney, journey);
     await checkLayout(`${journey} touch controls`);
+    assert.equal(await page.evaluate(() => window.__coastline.rendering.camera.isPerspectiveCamera), true);
     await page.screenshot({ path: `.artifacts/mobile-${journey}-ui.png` });
   }
   await page.evaluate(() => {

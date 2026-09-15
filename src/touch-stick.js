@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 export class TouchStick {
   constructor(element, onDrive) {
     this.element = element; this.onDrive = onDrive;
@@ -42,7 +44,7 @@ export class TouchStick {
 // Invert the terrain's local screen projection. Including terrain height and the
 // actual road coordinates keeps cardinal and diagonal drags aligned with pixels
 // even on slopes, bends, or after rotating/resizing the camera.
-export function touchDrivingInput(stick, camera, route, s, u) {
+export function touchDrivingInput(stick, camera, route, s, u, origin = 0) {
   const amount = Math.min(1, Math.hypot(stick.x, stick.y));
   if (!amount) return { amount: 0 };
   const step = .1, p = route.position(s, u), a = route.position(s + step, u), b = route.position(s, u + step);
@@ -50,8 +52,14 @@ export function touchDrivingInput(stick, camera, route, s, u) {
   const across = { x: (b.x - p.x) / step, y: (b.y - p.y) / step, z: (b.z - p.z) / step };
   camera.updateMatrixWorld();
   const m = camera.matrixWorld.elements;
-  const screenX = v => m[0] * v.x + m[1] * v.y + m[2] * v.z;
-  const screenY = v => m[4] * v.x + m[5] * v.y + m[6] * v.z;
+  // Perspective also changes scale with depth. Evaluate its local derivative
+  // at the car, in the same rebased coordinates used to render the scene.
+  const point = camera.isPerspectiveCamera
+    ? new THREE.Vector3(p.x, p.y + .13, p.z + origin).applyMatrix4(camera.matrixWorldInverse) : null;
+  if (point && point.z >= -.1) return { amount: 0 };
+  const depth = v => m[8] * v.x + m[9] * v.y + m[10] * v.z;
+  const screenX = v => m[0] * v.x + m[1] * v.y + m[2] * v.z - (point ? point.x / point.z * depth(v) : 0);
+  const screenY = v => m[4] * v.x + m[5] * v.y + m[6] * v.z - (point ? point.y / point.z * depth(v) : 0);
   const ax = screenX(along), ay = screenY(along), bx = screenX(across), by = screenY(across);
   const determinant = ax * by - ay * bx;
   if (Math.abs(determinant) < .001) return { amount: 0 };
