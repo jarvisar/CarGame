@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadHeight } from './route.js';
-import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleVertex, jungleHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverTurbulence, onRiver, cutHeight, jungleCrags, jungleNoise } from './jungle-route.js';
-import { riverMaterial, foamMaterial, mistMaterial } from './jungle-water.js';
+import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleVertex, jungleHeight, riverCenter, riverHalfWidth, riverLevel, riverBedLevel, riverLips, riverDams, riverTurbulence,
+  onRiver, cutHeight, gorgeWall, sideFalls, damAt, jungleZones, jungleCrags, jungleNoise } from './jungle-route.js';
+import { riverMaterial, fallMaterial, foamMaterial, mistMaterial, valleyMistMaterial } from './jungle-water.js';
 import { animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
-import { jungleCrowns, emergentCrown, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, tuftGeometry, jungleBoulders } from './jungle-assets.js';
+import { jungleCrowns, emergentCrowns, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry,
+  jungleBoulders, cliffBlocks } from './jungle-assets.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -19,18 +21,31 @@ const shrubMaterial = material('#ffffff');
 const barkMaterial = material('#6a5644');
 const palmBarkMaterial = material('#8b7657', { vertexColors: true });
 const stoneMaterial = material('#ffffff', { vertexColors: true, roughness: .95 });
-const vineMaterial = material('#55702f');
-const postMaterial = material('#e8e3d3');
-const capMaterial = material('#3a3f3b');
-const trunkGeometry = new THREE.CylinderGeometry(.5, .72, 1, 6);
+const railMaterial = material('#ffffff', { roughness: .7 });
+// Standing trunks end inside a crown and below the ground, so they need no caps; fallen logs do.
+const trunkGeometry = new THREE.CylinderGeometry(.5, .72, 1, 6, 1, true);
+const logGeometry = new THREE.CylinderGeometry(.5, .72, 1, 6);
 const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
-const vineGeometry = new THREE.CylinderGeometry(.5, .5, 1, 4);
-const postGeometry = new THREE.BoxGeometry(.24, 1, .24);
-const capGeometry = new THREE.BoxGeometry(.27, .16, .27);
+const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 registerChunkResources('jungle', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, canopyMaterial, frondMaterial,
-  shrubMaterial, barkMaterial, palmBarkMaterial, stoneMaterial, vineMaterial, postMaterial, capMaterial, trunkGeometry, shrubGeometry, vineGeometry,
-  postGeometry, capGeometry, jungleCrowns, emergentCrown, emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, tuftGeometry, jungleBoulders });
+  shrubMaterial, barkMaterial, palmBarkMaterial, stoneMaterial, railMaterial, trunkGeometry, logGeometry, shrubGeometry, boxGeometry, jungleCrowns, emergentCrowns,
+  emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry, jungleBoulders, cliffBlocks });
+
+// Streams wander: across the terrace toward the gorge wall, straightening at
+// the culvert and the lip, and down the far hillside toward the road.
+function streamShift(fall, u) {
+  if (u > 0) return Math.sin(u * .19 + fall.s * 1.3) * 1.8 * smoothstep(12, 18, u);
+  const rim = riverCenter(fall.s) + riverHalfWidth(fall.s) + 7;
+  return Math.sin(u * .23 + fall.s) * 1.3 * smoothstep(rim + 1, rim + 6, u) * smoothstep(-10.3, -13, u);
+}
+// Each far-side creek rises its own fixed distance up the hillside.
+const creekLength = fall => 26 + randomAt(Math.round(fall.s), 2505) * 40;
+// Horizontal unit vectors along the road (+s) and across it (+u) at a spot.
+function frameAt(s, u) {
+  const a = positionAt(s, u), b = positionAt(s + 1, u), c = positionAt(s, u + 1);
+  return { along: new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize(), across: new THREE.Vector3(c.x - a.x, 0, c.z - a.z).normalize() };
+}
 
 function geometryFrom(vertices, colors) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -54,19 +69,44 @@ function instances(group, geometry, mat, items, name, shadows = true) {
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   mesh.computeBoundingSphere(); group.add(mesh); return mesh;
 }
-// Quads over a parameter grid, each vertex carrying a three-component attribute.
+// Quads over a parameter grid, each vertex carrying its own attribute values.
 function sheet(vertices, coords, rows, cols, point) {
   for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < cols.length - 1; j++) {
     const a = point(rows[i], cols[j]), b = point(rows[i + 1], cols[j]), c = point(rows[i], cols[j + 1]), d = point(rows[i + 1], cols[j + 1]);
     for (const tri of [[a, b, c], [b, d, c]]) for (const v of tri) { vertices.push(v.x, v.y, v.z); coords.push(...v.coord); }
   }
 }
+// A waterfall leaving a lip heading `out`, spread along `across`: a short
+// run-in over the edge, then an arc clear of the rock that widens a little as
+// it drops `height`, the middle bulging forward, foaming toward the foot.
+function fallSheet(water, lip, out, across, half, height, reach, seed) {
+  sheet(water.sheets, water.sheetCoords, [-.1, 0, .05, .14, .28, .46, .66, .84, 1], [-1, -.6, -.2, .2, .6, 1], (t, f) => {
+    const drop = Math.max(0, t), forward = t < 0 ? t * 7 : (reach + .3 * (1 - f * f)) * Math.sqrt(drop), spread = half * (1 + .18 * drop) * f;
+    return { x: lip.x + out.x * forward + across.x * spread, y: lip.y - drop * height, z: lip.z + out.z * forward + across.z * spread, coord: [t * height, f, smoothstep(.55, 1, drop) * .85, seed] };
+  });
+}
+// Foam spreading from where falling water meets a pool, mostly away from the rock.
+function plunge(water, center, out, across, radius, seed) {
+  sheet(water.foam, water.foamCoords, [0, .3, .6, 1], [-1.9, -1.2, -.6, 0, .6, 1.2, 1.9], (r, a) => {
+    const d = radius * (.2 + r), x = Math.cos(a) * d, z = Math.sin(a) * d;
+    return { x: center.x + out.x * x + across.x * z, y: center.y, z: center.z + out.z * x + across.z * z,
+      coord: [d * 1.1 + seed, a * 2, (1 - smoothstep(.35, 1, r)) * (1 - smoothstep(1.2, 1.9, Math.abs(a)) * .85)] };
+  });
+}
+// Spray rising from the foot of a fall: two crossed, soft-edged veils.
+function spray(water, center, out, across, width, height, seed) {
+  for (const dir of [across, out]) sheet(water.mist, water.mistCoords, [0, .35, .7, 1], [-1, -.35, .35, 1], (h, f) => ({
+    x: center.x + dir.x * f * width, y: center.y + .2 + h * height, z: center.z + dir.z * f * width,
+    coord: [h * 3 + seed, f * 1.5 + seed, Math.sin(h * Math.PI) * (1 - Math.abs(f)) * .95] }));
+}
 
 export class JungleChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `jungle-chunk-${index}`; this.owned = [];
-    this.lips = riverLips(this.start, this.start + CHUNK_LENGTH); this.features = { lips: this.lips.map(lip => lip.index) };
-    this.buildTerrain(); this.buildRiver(); this.buildRoad(); this.buildScenery();
+    this.lips = riverLips(this.start, this.start + CHUNK_LENGTH); this.dams = riverDams(this.start, this.start + CHUNK_LENGTH);
+    this.falls = sideFalls(this.start, this.start + CHUNK_LENGTH);
+    this.features = { lips: this.lips.map(lip => lip.index), dams: this.dams.map(dam => dam.index) };
+    this.buildTerrain(); this.buildWater(); this.buildMist(); this.buildRoad(); this.buildScenery();
   }
   addMesh(geometry, mat, name, shadows = false) {
     const mesh = new THREE.Mesh(geometry, mat); mesh.name = name; mesh.castShadow = shadows; mesh.receiveShadow = true;
@@ -75,11 +115,11 @@ export class JungleChunk {
   buildTerrain() {
     const vertices = [], colors = [], ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3();
     const sampleRow = row => Array.from({ length: JUNGLE_COLUMN_COUNT }, (_, col) => jungleVertex(row, col));
-    const lips = riverLips(this.start - 24, this.start + CHUNK_LENGTH + 24);
+    const lips = riverLips(this.start - 24, this.start + CHUNK_LENGTH + 24), falls = sideFalls(this.start - 16, this.start + CHUNK_LENGTH + 16);
     const moss = new THREE.Color('#3d6f30'), brightMoss = new THREE.Color('#4c8238'), litter = new THREE.Color('#6b6541'), damp = new THREE.Color('#34602f');
-    const dirt = new THREE.Color('#a89b6f'), verge = new THREE.Color('#6d7e46');
-    const coolRock = new THREE.Color('#66746f'), warmRock = new THREE.Color('#8c8f7f'), fracture = new THREE.Color('#4d5652'), mossRock = new THREE.Color('#5a7d3c');
-    const mud = new THREE.Color('#6e6a4f'), wetStone = new THREE.Color('#87897b'), bed = new THREE.Color('#2f4d47'), lipRock = new THREE.Color('#6f7b78');
+    const dirt = new THREE.Color('#a89b6f'), verge = new THREE.Color('#6d7e46'), wetRock = new THREE.Color('#4f5550');
+    const coolRock = new THREE.Color('#8f877b'), warmRock = new THREE.Color('#aca190'), fracture = new THREE.Color('#665e56'), mossRock = new THREE.Color('#5a7d3c');
+    const mud = new THREE.Color('#6e6a4f'), wetStone = new THREE.Color('#8a8477'), bed = new THREE.Color('#2f4d47'), lipRock = new THREE.Color('#7a746b');
     const canopy = ['#2d6a2c', '#367a33', '#3f8a3a', '#28602b', '#4a9440'].map(c => new THREE.Color(c)), farHaze = new THREE.Color('#33604c');
     const light = new THREE.Vector3(-55, 245, 40).normalize();
     let current = sampleRow(this.start / JUNGLE_STEP);
@@ -96,9 +136,15 @@ export class JungleChunk {
           const cross = Math.abs(u), fromWater = Math.abs(u - riverCenter(s)) - riverHalfWidth(s);
           const exposure = Math.max(0, normal.dot(light)), steep = normal.y < .6, crag = jungleCrags(s, u);
           let color;
-          if (u < 0 && fromWater < 0) {
+          if (u < 0 && fromWater < 4.6 && damAt(s).amount > .2 && y > riverLevel(s) - .4) {
+            // A barrier's hump: grey rock furred with moss on every gentler face.
+            color = lipRock.clone().lerp(mossRock, smoothstep(.4, .8, normal.y) * (.6 + .4 * jungleNoise(s, u, 4, 2388))).lerp(brightMoss, smoothstep(.75, .95, normal.y) * .6);
+          } else if (u < 0 && fromWater < 0) {
             // Grey rock shows through the churn at each lip; elsewhere the bed is dark.
             color = (lips.some(lip => Math.abs(s - lip.s) < 9) ? lipRock : bed).clone();
+          } else if (u < 0 && steep && falls.some(fall => Math.abs(s - fall.s) < fall.width * .8 && u > riverCenter(fall.s) + riverHalfWidth(fall.s))) {
+            // The rock behind a side fall is dark and wet, with no moss.
+            color = wetRock.clone().lerp(fracture, jungleNoise(s, u, 2, 2389) * .5);
           } else if (u < 0 && fromWater < 4.6) {
             color = mud.clone().lerp(wetStone, jungleNoise(s, u, 5, 2382));
             if (normal.y > .8) color.lerp(mossRock, .35 * jungleNoise(s, u, 3, 2383) + .15);
@@ -115,7 +161,7 @@ export class JungleChunk {
           } else {
             const patch = jungleNoise(s, u, 23, 2386), fine = jungleNoise(s, u, 6, 2387);
             color = moss.clone().lerp(brightMoss, fine);
-            color.lerp(litter, smoothstep(.58, .8, patch) * .85);
+            color.lerp(litter, smoothstep(.6, .82, patch) * .55);
             if (u < 0) color.lerp(damp, .35 * (1 - smoothstep(4, 14, fromWater)));
           }
           color.multiplyScalar(.94 + facet * .12);
@@ -127,13 +173,30 @@ export class JungleChunk {
     this.terrain = this.addMesh(geometryFrom(vertices, colors), terrainMaterial, 'jungle-floor', true);
     this.sampleGround = terrainSampler(this.terrain);
   }
-  buildRiver() {
-    const vertices = [], colors = [], coords = [];
-    const across = [1, .82, .5, .17, -.17, -.5, -.82, -1];
+  // All water in a chunk shares four meshes: the river and streams, the falling
+  // sheets, foam, and spray and haze.
+  buildWater() {
+    const water = { surface: [], colors: [], coords: [], sheets: [], sheetCoords: [], foam: [], foamCoords: [], mist: [], mistCoords: [] };
+    this.buildRiver(water); this.buildCascades(water); this.buildStreams(water);
+    const river = geometryFrom(water.surface, water.colors); river.setAttribute('riverCoord', new THREE.Float32BufferAttribute(water.coords, 3)); river.boundingSphere.radius += 1;
+    this.addMesh(river, riverMaterial, 'jungle-river');
+    if (water.sheets.length) {
+      const falls = geometryFrom(water.sheets); falls.setAttribute('fallCoord', new THREE.Float32BufferAttribute(water.sheetCoords, 4)); falls.boundingSphere.radius += 1;
+      this.addMesh(falls, fallMaterial, 'waterfalls');
+    }
+    if (water.foam.length) {
+      const foam = geometryFrom(water.foam); foam.setAttribute('foamCoord', new THREE.Float32BufferAttribute(water.foamCoords, 3)); foam.boundingSphere.radius += 1;
+      this.addMesh(foam, foamMaterial, 'cascade-foam');
+    }
+    const haze = geometryFrom(water.mist); haze.setAttribute('foamCoord', new THREE.Float32BufferAttribute(water.mistCoords, 3)); haze.boundingSphere.radius += 2;
+    this.addMesh(haze, mistMaterial, 'river-mist');
+  }
+  buildRiver(water) {
+    const across = [1, .82, .5, .17, -.17, -.5, -.82, -1], color = new THREE.Color();
     const shallow = new THREE.Color('#62c9b6'), deep = new THREE.Color('#2b8b90');
-    // The surface runs under both bank rims, so the rising bank hides its edge.
+    // The surface runs under both bank rims, and under a gorge wall right to the cliff foot.
     const at = (s, k) => {
-      const f = across[k], u = riverCenter(s) + f * riverHalfWidth(s) + (k === 0 ? 1.05 : k === across.length - 1 ? -1.05 : 0);
+      const f = across[k], u = riverCenter(s) + f * riverHalfWidth(s) + (k === 0 ? 1.05 + 3.3 * gorgeWall(s) : k === across.length - 1 ? -1.05 : 0);
       const p = positionAt(s, u, riverLevel(s));
       return { x: p.x, y: p.y, z: p.z + this.start, s, f, turbulence: riverTurbulence(s) };
     };
@@ -143,42 +206,86 @@ export class JungleChunk {
         const [p, q, r] = tri;
         if ((q.z - p.z) * (r.x - p.x) - (q.x - p.x) * (r.z - p.z) < 0) tri = [p, r, q];
         for (const v of tri) {
-          vertices.push(v.x, v.y, v.z);
-          const color = shallow.clone().lerp(deep, Math.pow(1 - Math.min(1, Math.abs(v.f)), .7));
-          colors.push(color.r, color.g, color.b); coords.push(v.s, v.f, v.turbulence);
+          water.surface.push(v.x, v.y, v.z);
+          color.copy(shallow).lerp(deep, Math.pow(1 - Math.min(1, Math.abs(v.f)), .7));
+          // Streaks drift toward -s, the way the water runs.
+          water.colors.push(color.r, color.g, color.b); water.coords.push(-v.s, v.f, v.turbulence);
         }
       }
     }
-    const river = geometryFrom(vertices, colors);
-    river.setAttribute('riverCoord', new THREE.Float32BufferAttribute(coords, 3));
-    river.boundingSphere.radius += 1;
-    this.addMesh(river, riverMaterial, 'jungle-river');
-    const foam = [], foamCoords = [], mist = [], mistCoords = [];
-    for (const lip of this.lips) {
-      if (lip.drop < .6) continue;
-      const dir = lip.direction, hw = riverHalfWidth(lip.s), rc = riverCenter(lip.s);
-      const spot = (s, f, y) => { const p = positionAt(s, rc + f * hw, y); return { x: p.x, y: p.y, z: p.z + this.start }; };
-      const fs = [-1.02, -.6, -.2, .2, .6, 1.02], edge = f => 1 - smoothstep(.72, 1.02, Math.abs(f));
-      // The falling sheet, pushed just downstream of the water's own face.
-      sheet(foam, foamCoords, [0, .5, 1], fs, (t, f) => ({ ...spot(lip.s + dir * (t * RIVER_STEP + .12), f, lerp(lip.upper + .12, lip.lower + .1, t)), coord: [t * lip.drop * .5, f, edge(f)] }));
-      // Churn spreading through the plunge pool, and a light drawing-in above the lip.
-      sheet(foam, foamCoords, [RIVER_STEP, 4, 7, 11], fs, (d, f) => ({ ...spot(lip.s + dir * d, f, lip.lower + .1), coord: [d * .35 + lip.drop * .5, f, (1 - smoothstep(3, 11, d)) * edge(f)] }));
-      sheet(foam, foamCoords, [-3.5, -1.2, 0], fs, (d, f) => ({ ...spot(lip.s + dir * d, f, lip.upper + .1), coord: [d * .3, f, .6 * (1 - smoothstep(0, 3.5, -d)) * edge(f)] }));
-      if (lip.drop > 2) sheet(mist, mistCoords, [1, 4, 7, 10], [-1.3, -.45, .45, 1.3], (d, f) => ({ ...spot(lip.s + dir * d, f, lip.lower + 1.2 + Math.min(3, lip.drop * .35)),
-        coord: [d, f, Math.sin((d - 1) / 9 * Math.PI) * (1 - Math.abs(f) / 1.3) * Math.min(1, lip.drop / 5)] }));
-    }
     // Humid haze hangs low over the whole river.
     const rows = Array.from({ length: CHUNK_LENGTH / 8 + 1 }, (_, i) => this.start + i * 8);
-    sheet(mist, mistCoords, rows, [-1.35, -.5, .5, 1.35], (s, f) => {
-      const p = positionAt(s, riverCenter(s) + f * riverHalfWidth(s), riverLevel(s) + 2.4);
-      return { x: p.x, y: p.y, z: p.z + this.start, coord: [s * .5, f, .45 * (1 - Math.abs(f) / 1.35)] };
+    sheet(water.mist, water.mistCoords, rows, [-1.35, -.5, .5, 1.35], (s, f) => {
+      const p = positionAt(s, riverCenter(s) + f * riverHalfWidth(s), riverLevel(s) + 1.6);
+      return { x: p.x, y: p.y, z: p.z + this.start, coord: [s * .5, f, .32 * (1 - Math.abs(f) / 1.35) * (1 - damAt(s).amount)] };
     });
-    if (foam.length) {
-      const g = geometryFrom(foam); g.setAttribute('foamCoord', new THREE.Float32BufferAttribute(foamCoords, 3)); g.boundingSphere.radius += 1;
-      this.addMesh(g, foamMaterial, 'cascade-foam');
+  }
+  // Each lip pours a sheet toward -s, straight at the camera, into a churning pool.
+  buildCascades(water) {
+    const edge = f => 1 - smoothstep(.72, 1.02, Math.abs(f));
+    for (const lip of this.lips) {
+      if (lip.drop < .6) continue;
+      const hw = riverHalfWidth(lip.s), rc = riverCenter(lip.s), { along, across } = frameAt(lip.s, rc), out = along.clone().negate();
+      const spot = (s, f, y) => { const p = positionAt(s, rc + f * hw, y); return { x: p.x, y: p.y, z: p.z + this.start }; };
+      fallSheet(water, spot(lip.s + .1, 0, lip.upper + .07), out, across, hw * 1.02, lip.drop + .12, RIVER_STEP + .35, lip.index * 1.37);
+      const fs = [-1.02, -.6, -.2, .2, .6, 1.02], reach = 11 + Math.min(10, lip.drop * 1.2);
+      // Churn spreading downstream from the foot, and a light drawing-in above the lip.
+      sheet(water.foam, water.foamCoords, [RIVER_STEP + .4, 4, 7, 11, reach], fs, (d, f) => ({ ...spot(lip.s - d, f, lip.lower + .1), coord: [d * .35 + lip.drop * .5, f, (1 - smoothstep(3, reach, d)) * edge(f)] }));
+      sheet(water.foam, water.foamCoords, [-3.5, -1.2, 0], fs, (d, f) => ({ ...spot(lip.s - d, f, lip.upper + .1), coord: [d * .3, f, .6 * (1 - smoothstep(0, 3.5, -d)) * edge(f)] }));
+      if (lip.drop > 2) {
+        sheet(water.mist, water.mistCoords, [1, 4, 7, 10], [-1.3, -.45, .45, 1.3], (d, f) => ({ ...spot(lip.s - d, f, lip.lower + 1.2 + Math.min(3, lip.drop * .35)),
+          coord: [d, f, Math.sin((d - 1) / 9 * Math.PI) * (1 - Math.abs(f) / 1.3) * Math.min(1, lip.drop / 5)] }));
+        spray(water, spot(lip.s - 3, 0, lip.lower), out, across, hw * .85, 1 + Math.min(4, lip.drop * .45), lip.index);
+      }
     }
-    const haze = geometryFrom(mist); haze.setAttribute('foamCoord', new THREE.Float32BufferAttribute(mistCoords, 3)); haze.boundingSphere.radius += 1;
-    this.addMesh(haze, mistMaterial, 'river-mist');
+  }
+  // Every side fall has a whole stream: a creek down the far hillside to the
+  // culvert, a meander across the terrace, a fall down the gorge wall, and
+  // foam and spray where it meets the river.
+  buildStreams(water) {
+    const calm = new THREE.Color('#3fa99c'), white = new THREE.Color('#8fd9cb'), color = new THREE.Color(), ab = new THREE.Vector3(), ac = new THREE.Vector3();
+    const groundAt = (s, u, half) => {
+      let y = -Infinity;
+      for (const ds of [-half, 0, half]) { const q = positionAt(s + ds, u); y = Math.max(y, this.sampleGround(q.x, q.z + this.start) ?? jungleHeight(s + ds, u)); }
+      return y;
+    };
+    // An upward-facing ribbon through path points { s, u, y, half, turbulence }; the flow runs toward -u.
+    const ribbon = path => {
+      const cols = [-1, -.35, .35, 1];
+      const point = (p, f) => { const q = positionAt(p.s + f * p.half, p.u, p.y); return { x: q.x, y: q.y, z: q.z + this.start, coord: [-p.u, f * .45, p.turbulence] }; };
+      for (let i = 0; i < path.length - 1; i++) for (let j = 0; j < cols.length - 1; j++) {
+        const a = point(path[i], cols[j]), b = point(path[i + 1], cols[j]), c = point(path[i], cols[j + 1]), d = point(path[i + 1], cols[j + 1]);
+        for (let [p, q, r] of [[a, b, c], [b, d, c]]) {
+          ab.set(q.x - p.x, q.y - p.y, q.z - p.z); ac.set(r.x - p.x, r.y - p.y, r.z - p.z);
+          if (ab.cross(ac).y < 0) [q, r] = [r, q];
+          for (const v of [p, q, r]) { water.surface.push(v.x, v.y, v.z); water.coords.push(...v.coord); color.copy(calm).lerp(white, v.coord[2]); water.colors.push(color.r, color.g, color.b); }
+        }
+      }
+    };
+    for (const fall of this.falls) {
+      const { s, width } = fall, rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s), rim = rc + hw + 7, top = jungleHeight(s, rim) + .4, half = width / 2;
+      // The creek starts as a trickle among stones and gathers toward the road, whitening where it tumbles.
+      const length = creekLength(fall), creek = [];
+      for (let k = 0, steps = Math.ceil(length / 1.25); k <= steps; k++) {
+        const u = 10.35 + length * (1 - k / steps), t = k / steps, shift = streamShift(fall, u), y = groundAt(s + shift, u, .9) + .14;
+        const turbulence = creek.length ? Math.min(.8, Math.max(.05, (creek[creek.length - 1].y - y) * .45)) : .05;
+        creek.push({ s: s + shift, u, y, half: lerp(.35, .95, t), turbulence });
+      }
+      ribbon(creek);
+      const stream = [];
+      for (let u = -10.35; u > rim + .6; u -= 1.25) {
+        const shift = streamShift(fall, u);
+        stream.push({ s: s + shift, u, y: groundAt(s + shift, u, 1.1) + .16, half: 1.1, turbulence: .06 });
+      }
+      stream.push({ s, u: rim - .4, y: top, half: half * .92, turbulence: .22 });
+      ribbon(stream);
+      const { along, across } = frameAt(s, rim), out = across.clone().negate(), lip = positionAt(s, rim - 1, top);
+      const lipPoint = { x: lip.x, y: lip.y, z: lip.z + this.start }, height = top - level + .05, reach = 2.8 + height * .04;
+      fallSheet(water, lipPoint, out, along, half, height, reach, s * .173);
+      const foot = { x: lipPoint.x + out.x * (reach + .3), y: level + .09, z: lipPoint.z + out.z * (reach + .3) };
+      plunge(water, foot, out, along, half * 1.25 + 1.8, s * .31);
+      spray(water, foot, out, along, half * 1.1, 1.2 + height * .3, s * .07);
+    }
   }
   ribbon(ranges, lift, mat, name) {
     const vertices = [];
@@ -197,50 +304,59 @@ export class JungleChunk {
   }
   buildScenery() {
     const random = seededRandom(this.index + 77113);
-    const trunks = [], crowns = jungleCrowns.map(() => []), farCrowns = jungleCrowns.map(() => []), emergents = emergentTrunks.map(() => []), emergentCrowns = [], vines = [], vineLeaves = [];
-    const palmTrunks = junglePalms.map(() => []), palmFronds = junglePalms.map(() => []), ferns = [], leaves = [], shrubs = [], tufts = [];
-    const boulders = jungleBoulders.map(() => []), posts = [], caps = [], logs = [];
+    const trunks = [], crowns = jungleCrowns.map(() => []), farCrowns = jungleCrowns.map(() => []), emergents = emergentTrunks.map(() => []), emergentTops = emergentCrowns.map(() => []), vines = [];
+    const palmTrunks = junglePalms.map(() => []), palmFronds = junglePalms.map(() => []), ferns = [], leaves = [], bananas = [], bamboos = [], shrubs = [], tufts = [], lumps = [], lilies = [];
+    const boulders = jungleBoulders.map(() => []), cliffs = cliffBlocks.map(() => []), rails = [], railPosts = [], logs = [];
     const crownColors = ['#2c6429', '#33742f', '#3d8236', '#47903a', '#295c2a', '#529c40', '#397a33', '#3c8a3c'];
-    const darkCrowns = ['#275727', '#2c642c', '#224f24', '#31692e'];
-    const sunlitCrowns = ['#4d9440', '#57a047', '#3f8a38', '#5aa64a'];
-    const palmColors = ['#4f9a3a', '#5ca744', '#438f36', '#6bb04c'];
-    const fernColors = ['#4b8f3a', '#5a9c44', '#3f7f33', '#69a84d'];
-    const leafColors = ['#3f8a3a', '#4d9842', '#367a33'];
-    const shrubColors = ['#3f7a34', '#4a8a3b', '#357030', '#5b9a44'];
-    const stoneTints = ['#e6e9e2', '#d5dbd3', '#f0f2ec', '#c9d1c8'];
+    const darkCrowns = ['#275727', '#2c642c', '#224f24', '#31692e'], sunlitCrowns = ['#4d9440', '#57a047', '#3f8a38', '#5aa64a'];
+
+    const palmColors = ['#4f9a3a', '#5ca744', '#438f36', '#6bb04c'], fernColors = ['#4b8f3a', '#5a9c44', '#3f7f33', '#69a84d'], leafColors = ['#3f8a3a', '#4d9842', '#367a33'];
+    const bananaColors = ['#4f9d3c', '#5dab45', '#6ab94e', '#468f38'], bambooColors = ['#86a845', '#7a9e3f', '#98b04e', '#6f9a3c'], lilyColors = ['#4f8f3a', '#5b9b40', '#467f35'];
+    const vineColors = ['#5b9239', '#6aa244', '#4f8733'], shrubColors = ['#3f7a34', '#4a8a3b', '#357030', '#5b9a44'], stoneTints = ['#e6e9e2', '#d5dbd3', '#f0f2ec', '#c9d1c8'];
     const pick = list => list[Math.floor(random() * list.length)];
     const ground = (s, u) => { const p = positionAt(s, u); return { x: p.x, y: this.sampleGround(p.x, p.z + this.start) ?? jungleHeight(s, u), z: p.z + this.start }; };
     const slope = (s, u) => Math.hypot(jungleHeight(s, u + 1) - jungleHeight(s, u - 1), jungleHeight(s + 1, u) - jungleHeight(s - 1, u)) / 2;
-    // Near-side trees must stay below the camera's line of sight to the road;
+    // Near-side scenery must stay below the camera's line of sight to the road;
     // farther out and lower down on the slope there is more headroom.
     const headroom = (s, u, y) => u > 0 ? 60 : Math.max(0, -u * .78 - 4 + Math.max(0, roadHeight(s) - y) * .8);
-    const open = (s, u, margin = 0) => Math.abs(u) > 9.6 + margin && !onRiver(s, u, 1.5 + margin);
+    // Streams keep their channels clear, and nothing hangs in front of a fall.
+    const falls = sideFalls(this.start - 16, this.start + CHUNK_LENGTH + 16);
+    const inStream = (s, u, margin = 0) => falls.some(f => Math.abs(s - f.s - streamShift(f, u)) < (u < 0 ? f.width * .6 : 1.4) + margin &&
+      (u < 0 ? u < -9.6 && u > riverCenter(f.s) + riverHalfWidth(f.s) : u > 9.6 && u < 11.5 + creekLength(f)));
+    const nearFall = (s, u, r) => falls.some(f => Math.abs(s - f.s) < f.width * .6 + r && u < -9.6 && u > riverCenter(f.s) + riverHalfWidth(f.s) - 3);
+    const open = (s, u, margin = 0) => Math.abs(u) > 9.6 + margin && !onRiver(s, u, 1.5 + margin) && !inStream(s, u, .6 + margin);
     const spots = [];
     const clear = (s, u, r) => spots.every(spot => Math.hypot(spot.s - s, spot.u - u) > spot.r + r);
+    const vine = (s, u, top, length) => {
+      if (Math.abs(u) < 9.8 || nearFall(s, u, 1.5)) return;
+      const p = positionAt(s, u), floor = jungleHeight(s, u);
+      length = Math.min(length, top - floor - 1);
+      if (length < 1.5) return;
+      vines.push({ p: [p.x, top, p.z + this.start], scale: [.9 + random() * .5, length, .9 + random() * .5], r: [0, random() * 6.28, 0], color: pick(vineColors) });
+    };
+
     const tree = (s, u, height, palette) => {
       const p = ground(s, u), width = height * (.4 + random() * .18);
       trunks.push({ p: [p.x, p.y + height * .3, p.z], scale: [height * .045, height * .62, height * .045] });
       // Crowns deep in the forest skip the shadow pass; their shade lands on other canopy anyway.
       (Math.abs(u) > 70 ? farCrowns : crowns)[Math.floor(random() * crowns.length)].push({ p: [p.x, p.y + height * .42, p.z], scale: [width, height * .58, width], r: [0, random() * 6.28, 0], color: pick(palette) });
       spots.push({ s, u, r: width * .45 });
+      if (height > 10 && Math.abs(u) < 90 && random() < .4) for (let i = 0, count = 2 + Math.floor(random() * 3); i < count; i++) {
+        const a = random() * 6.28, r = width * (.45 + random() * .4);
+        vine(s + Math.sin(a) * r, u + Math.cos(a) * r, p.y + height * .55, height * (.2 + random() * .25));
+      }
     };
     const emergent = (s, u, height, lean) => {
       const p = ground(s, u), width = height * (.36 + random() * .1), angle = random() * 6.28;
-      // Stretch the larger giants upward while preserving crown spread and camera clearance.
       const tallHeight = Math.min(height + Math.max(0, height - 28) * 2, headroom(s, u, p.y));
       emergents[Math.floor(random() * emergents.length)].push({ p: [p.x, p.y - .1, p.z], scale: [height, tallHeight, height], r: [0, angle, 0] });
       const c = positionAt(s, u - lean), top = p.y + tallHeight * .78;
-      emergentCrowns.push({ p: [c.x, top, c.z + this.start], scale: [width, width, width], r: [0, angle, 0], color: pick(sunlitCrowns) });
+      emergentTops[Math.floor(random() * emergentTops.length)].push({ p: [c.x, top, c.z + this.start], scale: [width, width, width], r: [0, angle, 0], color: pick(sunlitCrowns) });
       spots.push({ s, u, r: width * .6 });
-      // Lianas hang from the underside of the crown, some almost to the floor.
-      for (let i = 0, count = 3 + Math.floor(random() * 5); i < count; i++) {
-        const a = random() * 6.28, r = width * (.3 + random() * .55), length = Math.min(4 + random() * 9, top - p.y - 1.5);
-        // Lianas over the road would brush the car; keep them beyond the verges.
-        if (Math.abs(u - lean + Math.cos(a) * r) < 9.8) continue;
-        if (length < 3) continue;
-        const x = c.x + Math.cos(a) * r, z = c.z + this.start + Math.sin(a) * r;
-        vines.push({ p: [x, top - width * .08 - length / 2, z], scale: [.11, length, .11], r: [(random() - .5) * .08, 0, (random() - .5) * .08] });
-        vineLeaves.push({ p: [x, top - width * .08 - length, z], scale: [.42, .32, .42], r: [0, a, 0], color: '#4f8a38' });
+      // Curtains of lianas hang from the rim of the crown, some almost to the floor.
+      for (let i = 0, count = 8 + Math.floor(random() * 7); i < count; i++) {
+        const a = random() * 6.28, r = width * (.45 + random() * .5);
+        vine(s + Math.sin(a) * r, u - lean + Math.cos(a) * r, top + width * .06, 3 + random() * 11);
       }
     };
     const palm = (s, u, height) => {
@@ -253,24 +369,117 @@ export class JungleChunk {
       const p = ground(s, u), variant = mossy ? 1 + Math.floor(random() * 2) : Math.floor(random() * 2);
       boulders[variant].push({ p: [p.x, lift ?? p.y + size * .28, p.z], scale: [size * (.8 + random() * .5), size * (.55 + random() * .55), size * (.7 + random() * .5)], r: [(random() - .5) * .4, random() * 6.28, (random() - .5) * .4], color: pick(stoneTints) });
     };
-    // Emergent giants beside the road throw their crowns and shadows across it.
-    for (let k = 0; k < 3; k++) {
-      const s = this.start + 10 + k * 42 + random() * 24, u = 10.5 + random() * 5;
-      if (random() < .3 || slope(s, u) > 2.2) continue;
-      emergent(s, u, 24 + random() * 9, 3 + random() * 3);
+    // A column of rock standing on base; vines hang down the face turned to the camera.
+    const rock = (s, u, base, height, width, depth, vineCount = 0) => {
+      if (height < 1) return;
+      const p = positionAt(s, u);
+      cliffs[Math.floor(random() * cliffs.length)].push({ p: [p.x, base, p.z + this.start], scale: [width, height, depth], r: [(random() - .5) * .08, random() * 6.28, (random() - .5) * .08], color: pick(stoneTints) });
+      for (let i = 0; i < vineCount; i++) vine(s + (random() - .5) * width * .6, u - depth * .5, base + height * (.9 + random() * .08), height * (.3 + random() * .45));
+    };
+    const plant = (list, p, size, colors, stretch = 1) => list.push({ p: [p.x, p.y, p.z], scale: [size, size * stretch, size], r: [0, random() * 6.28, 0], color: pick(colors) });
+    const clump = (s, u, height) => { const p = ground(s, u); plant(bamboos, { ...p, y: p.y - .2 }, height * .85, bambooColors, 1.18); spots.push({ s, u, r: height * .16 }); };
+    // Rock columns build the gorge wall: a front row standing in the water and a
+    // ragged rear row breaking the rim, leaving a notch wherever a stream falls.
+    for (let s = this.start + random() * 3; s < this.start + CHUNK_LENGTH; s += 3.6 + random() * 2.6) {
+      const wall = gorgeWall(s);
+      if (wall < .3) continue;
+      const rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s), rim = rc + hw + 7, face = jungleHeight(s, rim) - level;
+      const width = 4 + random() * 3, height = (face + 1.2) * (.76 + random() * .3) * wall, u = rc + hw + 1.2 + random() * 1.6;
+      if (!nearFall(s, u, width * .5 + .3)) {
+        rock(s, u, level - 1.6, height, width, 3 + random() * 1.6, random() < .6 ? 1 + Math.floor(random() * 2) : 0);
+        if (height < face - 1.5 && random() < .7) plant(random() < .6 ? ferns : bananas, { ...positionAt(s, u, level - 1.6 + height), z: positionAt(s, u).z + this.start }, .8 + random() * .7, fernColors);
+        if (random() < .3) rock(s + (random() - .5) * 3, u - 1.5 - random(), level - 1.8, height * (.3 + random() * .25), width * .6, 2.2, 0);
+      }
+      const back = rim - 1.2 + random() * 2.2, backWidth = 3.5 + random() * 3;
+      if (random() < .75 * wall && !nearFall(s, back, backWidth * .5 + .3)) rock(s + (random() - .5) * 2, back, level + 1, (face - .3 + random() * 2.2) * wall, backWidth, 3 + random() * 2, random() < .35 ? 1 : 0);
+      spots.push({ s, u: rim, r: 2.5 });
     }
-    for (let i = 0; i < 6; i++) {
-      const s = this.start + random() * CHUNK_LENGTH;
-      const u = i < 4 ? 40 + random() * 85 : -100 - random() * 50;
+    // Rocks frame each side fall at the lip and at its foot; culverts carry the
+    // stream under the road, and stones line the creek and the terrace stream.
+    for (const fall of this.falls) {
+      const { s, width } = fall, rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s), rim = rc + hw + 7, top = jungleHeight(s, rim), half = width / 2;
+      for (const side of [-1, 1]) {
+        const w = 2.6 + random() * 1.2, offset = half * 1.12 + w * .5 - .4;
+        rock(s + side * offset, rim - 1, top - 1.5, 2.6 + random() * 2, w, 2.8, 0);
+        rock(s + side * (offset + .3), rc + hw + 2.2, level - 1.4, (top - level) * (.72 + random() * .22) + 1.4, w + .8, 3.2, 0);
+        const a = positionAt(s - 1, side * 10), b = positionAt(s + 1, side * 10), yaw = Math.atan2(b.x - a.x, b.z - a.z), y = roadHeight(s);
+        const wallAt = positionAt(s, side * 10.05, y - .5), mouth = positionAt(s, side * 10.3, y - .62);
+        rails.push({ p: [wallAt.x, wallAt.y, wallAt.z + this.start], scale: [.45, 1.1, 3.2], r: [0, yaw, 0] });
+        railPosts.push({ p: [mouth.x, mouth.y, mouth.z + this.start], scale: [.08, .5, 1.3], r: [0, yaw, 0] });
+      }
+      const length = creekLength(fall);
+      for (let u = -11.5; u > rim + 1; u -= 1.6 + random() * 1.4) {
+        const shift = streamShift(fall, u);
+        stone(s + shift + (random() > .5 ? 1 : -1) * (1.5 + random() * .6), u, .5 + random() * .6, true);
+        spots.push({ s: s + shift, u, r: 1.8 });
+      }
+      for (let u = 12; u < 10.35 + length; u += 1.8 + random() * 1.6) {
+        const shift = streamShift(fall, u), t = (u - 10.35) / length;
+        stone(s + shift + (random() > .5 ? 1 : -1) * (lerp(1.3, .7, t) + random() * .5), u, .4 + random() * .7, true);
+        if (random() < .5) plant(ferns, ground(s + shift + (random() > .5 ? 1 : -1) * (2 + random()), u), .8 + random() * .6, fernColors);
+        spots.push({ s: s + shift, u, r: 1.6 });
+      }
+      for (let i = 0; i < 3; i++) stone(s + streamShift(fall, 10.35 + length) + (random() - .5) * 3, 10.8 + length + random() * 1.5, .9 + random() * .8, true);
+    }
+    // Each barrier is a jumble of mossy rock overgrown with palms, bananas and
+    // ferns; lily pads float on the calm pool it holds back.
+    for (const dam of this.dams) {
+      const rc = riverCenter(dam.s), hw = riverHalfWidth(dam.s);
+      for (let i = 0; i < 8; i++) {
+        const s = dam.s + (random() - .5) * 10, u = rc + (random() * 2 - 1) * hw * 1.15, p = ground(s, u), size = 2.4 + random() * 2.8;
+        rock(s, u, p.y - 1.4, 2 + random() * 3.6, size, size * (.7 + random() * .4), random() < .4 ? 1 : 0);
+      }
+      for (let i = 0; i < 60; i++) {
+        const s = dam.s + (random() - .5) * 17, u = rc + (random() * 2 - 1) * hw * 1.35, p = ground(s, u), kind = random();
+        if (p.y < riverLevel(s) + .5 || u > -9.6) continue;
+        if (kind < .1) palm(s, u, Math.min(headroom(s, u, p.y), 6 + random() * 5));
+        else if (kind < .2 && clear(s, u, 1.5)) tree(s, u, Math.min(headroom(s, u, p.y), 4.5 + random() * 4), crownColors);
+        else if (kind < .45) plant(bananas, p, Math.min(1.8 + random() * 1.6, headroom(s, u, p.y)), bananaColors);
+        else if (kind < .75) plant(ferns, p, .9 + random() * .8, fernColors);
+        else { const size = 1 + random() * 1.4; shrubs.push({ p: [p.x, p.y + size * .3, p.z], scale: [size, size * .7, size], r: [0, random() * 6.28, .1], color: pick(shrubColors) }); }
+      }
+      for (let i = 0; i < 18; i++) {
+        const s = dam.s + 15 + random() * 30, u = rc + (random() * 2 - 1) * riverHalfWidth(s) * .85, p = positionAt(s, u, riverLevel(s) + .04), size = .45 + random() * .6;
+        if (riverTurbulence(s) < .02) lilies.push({ p: [p.x, p.y, p.z + this.start], scale: [size, 1, size], r: [0, random() * 6.28, 0], color: pick(lilyColors) });
+      }
+    }
+    // Lily pads also gather in calm water near the banks.
+    for (let i = 0; i < 24; i++) {
+      const s = this.start + random() * CHUNK_LENGTH, hw = riverHalfWidth(s);
+      if (riverTurbulence(s) > .02 || damAt(s).amount > .02) continue;
+      const p = positionAt(s, riverCenter(s) + (random() > .5 ? 1 : -1) * hw * (.6 + random() * .35), riverLevel(s) + .04), size = .4 + random() * .5;
+      lilies.push({ p: [p.x, p.y, p.z + this.start], scale: [size, 1, size], r: [0, random() * 6.28, 0], color: pick(lilyColors) });
+    }
+    // Mossy crags break through the forest as blocky outcrops.
+    for (let i = 0; i < 40; i++) {
+      const s = this.start + random() * CHUNK_LENGTH, u = (random() > .5 ? 1 : -1) * (26 + random() * 120);
+      const crag = jungleCrags(s, u);
+      if (crag < 4 || slope(s, u) < .6 || !clear(s, u, 1)) continue;
+      const p = ground(s, u), size = 2.6 + random() * 3.2;
+      rock(s, u, p.y - 1.8, 3 + crag * (.25 + random() * .25), size, size * (.7 + random() * .4), random() < .5 ? 1 : 0);
+      spots.push({ s, u, r: size * .55 });
+    }
+    // Emergent giants beside the road throw their crowns and shadows across it;
+    // in the giant stretches they stand close enough to roof the road over.
+    for (let k = 0; k < 7; k++) {
+      const s = this.start + 4 + k * 18 + random() * 12, u = 10.5 + random() * 5, giants = jungleZones(s).giants;
+      if (random() > (k % 2 ? .1 : .7) + giants * .85 || slope(s, u) > 2.2 || !open(s, u) || !clear(s, u, 3)) continue;
+      emergent(s, u, 24 + random() * 9 + giants * 4, 3 + random() * 3);
+    }
+    for (let i = 0; i < 10; i++) {
+      const s = this.start + random() * CHUNK_LENGTH, u = i < 7 ? 40 + random() * 85 : -100 - random() * 50;
+      if (i >= 4 && i < 7 && random() > .25 + jungleZones(s).giants) continue;
       const p = ground(s, u), height = Math.min(22 + random() * 10, headroom(s, u, p.y));
       if (height < 16 || !open(s, u) || slope(s, u) > 2 || !clear(s, u, 6)) continue;
       emergent(s, u, height, 0);
     }
     for (let i = 0; i < 360; i++) {
-      const s = this.start + random() * CHUNK_LENGTH, u = 11 + random() ** 1.35 * 128;
+      const s = this.start + random() * CHUNK_LENGTH, u = 11 + random() ** 1.35 * 128, zones = jungleZones(s);
       const grove = jungleNoise(s, u, 29, 2271);
+      // Palm groves and bamboo thickets push the broadleaf trees back from the road.
+      if (u < 50 && random() < zones.palms * .6 + zones.bamboo * .45) continue;
       if (random() > .3 + grove * .8 || !open(s, u) || slope(s, u) > 1.9 || (jungleCrags(s, u) > 3 && slope(s, u) > 1.2) || !clear(s, u, 1)) continue;
-      tree(s, u, (5.5 + random() ** 1.2 * 10) * (1 - smoothstep(60, 130, u) * .35), grove > .6 ? darkCrowns : crownColors);
+      tree(s, u, (5.5 + random() ** 1.2 * 10) * (1 - smoothstep(60, 130, u) * .35) * (1 + zones.giants * .25), grove > .6 ? darkCrowns : crownColors);
     }
     for (let i = 0; i < 90; i++) {
       const s = this.start + random() * CHUNK_LENGTH, bankTop = riverCenter(s) + riverHalfWidth(s) + 4;
@@ -281,51 +490,76 @@ export class JungleChunk {
     }
     for (let i = 0; i < 260; i++) {
       const s = this.start + random() * CHUNK_LENGTH, farTop = riverCenter(s) - riverHalfWidth(s) - 4;
-      const u = i < 190 ? farTop - 2 - random() ** 1.2 * 80 : -135 - random() * 125;
+      const u = i < 190 ? farTop - 4 - random() ** 1.2 * 78 : -135 - random() * 125;
       const p = ground(s, u);
-      // Trees on the far bank stay short near the water so the river stays visible.
-      const height = Math.min(headroom(s, u, p.y), i < 190 ? 4 + (farTop - u) * .55 : 30, 5.5 + random() * 10);
+      // Trees on the camera-side bank stay short near the water so the river and gorge wall show.
+      const height = Math.min(headroom(s, u, p.y), i < 190 ? 2.5 + (farTop - u) * .45 : 30, 5.5 + random() * 10);
       if (height < 3.8 || slope(s, u) > 2.1 || !open(s, u) || !clear(s, u, .6)) continue;
       tree(s, u, height, jungleNoise(s, u, 29, 2271) > .6 ? darkCrowns : crownColors);
     }
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 70; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = 130 + random() * 130;
       if (slope(s, u) > 2.4 || !clear(s, u, 2)) continue;
       tree(s, u, 9 + random() * 7, darkCrowns);
     }
-    // Cheap single-lobe crowns texture the bumpy distant hills on both sides.
-    const lumps = [];
-    for (let i = 0; i < 170; i++) {
-      const s = this.start + random() * CHUNK_LENGTH, u = (random() > .45 ? 1 : -1) * (105 + random() * 190);
-      if (u > 0 && u < 130) continue;
-      const p = ground(s, u), size = 4 + random() * 5;
+    // Cheap single-lobe crowns texture the distant hills and fill steep gaps between the trees.
+    for (let i = 0; i < 500; i++) {
+      const near = i >= 270, s = this.start + random() * CHUNK_LENGTH;
+      const u = near ? 16 + random() * 114 : (random() > .35 ? 1 : -1) * (105 + random() * 190);
+      if (near ? !open(s, u, 1) || (slope(s, u) < 1.3 && random() < .7) : u > 0 && u < 130) continue;
+      const p = ground(s, u), size = near ? 2.2 + random() * 2.6 : 4 + random() * 5;
       lumps.push({ p: [p.x, p.y + size * .2, p.z], scale: [size, size * .8, size], r: [0, random() * 6.28, 0], color: pick(darkCrowns) });
     }
-    for (let i = 0; i < 50; i++) {
-      const s = this.start + random() * CHUNK_LENGTH, rc = riverCenter(s), hw = riverHalfWidth(s), kind = random();
-      const u = kind < .4 ? rc + hw + 5 + random() * 7 : kind < .7 ? rc - hw - 5 - random() * 9 : 10.5 + random() * 30;
-      const p = ground(s, u), height = Math.min(headroom(s, u, p.y), 6 + random() * 5);
+    // Palms crowd the far verge and both riverbanks, far more thickly in the palm groves.
+    for (let i = 0; i < 190; i++) {
+      const s = this.start + random() * CHUNK_LENGTH, rc = riverCenter(s), hw = riverHalfWidth(s), kind = random(), palms = jungleZones(s).palms;
+      if (random() > .5 + palms * .5) continue;
+      const u = kind < .3 ? rc + hw + 5 + random() * 9 : kind < .5 ? rc - hw - 3 - random() * 12 : kind < .78 ? 10.5 + random() * (8 + palms * 30) : kind < .9 ? -12 - random() * 6 : 18 + random() * 60;
+      const p = ground(s, u), height = Math.min(headroom(s, u, p.y), 7 + random() * (6 + palms * 4));
       if (height < 4.5 || slope(s, u) > 2.4 || !open(s, u) || !clear(s, u, 1.5)) continue;
       palm(s, u, height);
     }
-    // Ferns, broad leaves, shrubs and grass fill the floor and crowd the verges.
+    // Bamboo thickets lean over the verges and banks in their own stretches.
+    for (let i = 0; i < 60; i++) {
+      const s = this.start + random() * CHUNK_LENGTH, bamboo = jungleZones(s).bamboo, kind = random();
+      if (random() > .02 + bamboo * .95) continue;
+      const u = kind < .45 ? 11.5 + random() * 14 : kind < .7 ? -12 - random() * 12 : kind < .85 ? riverCenter(s) - riverHalfWidth(s) - 3 - random() * 8 : 25 + random() * 45;
+      const p = ground(s, u), height = Math.min(headroom(s, u, p.y) * 1.05, 8 + random() * 6);
+      if (height < 4 || slope(s, u) > 2.2 || !open(s, u, .5) || !clear(s, u, 1)) continue;
+      clump(s, u, height);
+    }
+    // The terrace above the wall is thick with undergrowth, palms and banana plants.
+    for (let i = 0; i < 60; i++) {
+      const s = this.start + random() * CHUNK_LENGTH;
+      if (gorgeWall(s) < .4) continue;
+      const u = lerp(-10.8, riverCenter(s) + riverHalfWidth(s) + 9, random()), p = ground(s, u), kind = random(), room = headroom(s, u, p.y);
+      if (slope(s, u) > 1.8 || !open(s, u, .6)) continue;
+      if (kind < .4) { const size = Math.min(1.2 + random() * 1.4, room * .7); shrubs.push({ p: [p.x, p.y + size * .3, p.z], scale: [size, size * .7, size * .9], r: [0, random() * 6.28, .1], color: pick(shrubColors) }); }
+      else if (kind < .75 && room > 2) plant(bananas, p, Math.min(1.8 + random() * 1.4, room), bananaColors);
+      else plant(ferns, p, .9 + random() * .8, fernColors);
+    }
+    // Ferns, broad leaves, banana plants, shrubs and grass fill the floor and crowd the verges.
     const floorSpot = (i, share) => {
       const s = this.start + random() * CHUNK_LENGTH, rc = riverCenter(s), hw = riverHalfWidth(s), kind = i / share;
       if (kind < .45) return [s, (random() > .5 ? 1 : -1) * (9.7 + random() * 3.5)];
       if (kind < .7) return [s, random() > .5 ? rc + hw + 1.5 + random() * 5 : rc - hw - 1.5 - random() * 5];
       return [s, (random() > .5 ? 1 : -1) * (10 + random() * 90)];
     };
-    for (let i = 0; i < 460; i++) {
-      const [s, u] = floorSpot(i, 460);
+    for (let i = 0; i < 420; i++) {
+      const [s, u] = floorSpot(i, 420);
       if (!open(s, u) || slope(s, u) > 2.5) continue;
-      const p = ground(s, u), size = .8 + random() * .9;
-      ferns.push({ p: [p.x, p.y, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: pick(fernColors) });
+      plant(ferns, ground(s, u), .8 + random() * .9, fernColors);
     }
     for (let i = 0; i < 120; i++) {
       const [s, u] = floorSpot(i, 120);
       if (!open(s, u, .5) || slope(s, u) > 2.2) continue;
-      const p = ground(s, u), size = 1.2 + random() * 1.1;
-      leaves.push({ p: [p.x, p.y, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: pick(leafColors) });
+      plant(leaves, ground(s, u), 1.2 + random() * 1.1, leafColors);
+    }
+    for (let i = 0; i < 110; i++) {
+      const [s, u] = floorSpot(i, 110);
+      if (!open(s, u, 1.6) || slope(s, u) > 2.1 || !clear(s, u, .3)) continue;
+      const p = ground(s, u), size = Math.min(2.1 + random() * 1.7, headroom(s, u, p.y));
+      if (size >= 1.6) plant(bananas, { ...p, y: p.y - .05 }, size, bananaColors, .9 + random() * .25);
     }
     for (let i = 0; i < 170; i++) {
       const s = this.start + random() * CHUNK_LENGTH, u = (random() > .5 ? 1 : -1) * (10.5 + random() * 110);
@@ -333,20 +567,20 @@ export class JungleChunk {
       const p = ground(s, u), size = .9 + random() * 1.5;
       shrubs.push({ p: [p.x, p.y + size * .3, p.z], scale: [size, size * .7, size * .9], r: [0, random() * 6.28, .1], color: pick(shrubColors) });
     }
-    for (let i = 0; i < 120; i++) {
-      const [s, u] = floorSpot(i, 120);
+    for (let i = 0; i < 90; i++) {
+      const [s, u] = floorSpot(i, 90);
       if (!open(s, u) || slope(s, u) > 2.5) continue;
-      const p = ground(s, u), size = .7 + random() * .8;
-      tufts.push({ p: [p.x, p.y, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: random() > .5 ? '#7fa04c' : '#94ad55' });
+      plant(tufts, ground(s, u), .7 + random() * .8, ['#7fa04c', '#94ad55']);
     }
     // Boulders line the banks, crowd each lip, and break through the slopes.
     for (let s = this.start + 2; s < this.start + CHUNK_LENGTH; s += 5) {
       const rc = riverCenter(s), hw = riverHalfWidth(s);
+      if (damAt(s).amount > .1) continue;
       for (let i = 0, count = 1 + Math.floor(random() * 3); i < count; i++) {
-        const side = random() > .5 ? 1 : -1, wet = random() < .35;
-        const u = rc + side * (wet ? hw * (.55 + random() * .4) : hw + .8 + random() * 3.2), t = s + random() * 4;
+        const side = random() > .5 ? 1 : -1, wet = random() < .35, t = s + random() * 4;
+        const u = rc + side * (wet ? hw * (.55 + random() * .4) : hw + .8 + random() * 3.2);
         const size = .5 + random() ** 1.5 * 1.9;
-        stone(t, u, size, !wet && random() > .3, wet ? riverLevel(t) - .3 + size * .35 : null);
+        stone(t, u, size, !wet && random() > .3, wet || onRiver(t, u) ? riverLevel(t) - .3 + size * .35 : null);
       }
     }
     for (const lip of this.lips) {
@@ -354,7 +588,12 @@ export class JungleChunk {
       for (let i = 0; i < 8; i++) {
         const f = -1.15 + i * 2.3 / 7 + (random() - .5) * .2, size = 1.1 + random() * 2.1;
         const s = lip.s + (random() - .5) * 1.6, u = rc + f * hw, p = ground(s, u);
-        stone(s, u, size, Math.abs(f) > .9, Math.max(p.y + size * .3, lip.upper - size * .3));
+        // Stones inside the sheet stay low so the water pours over them.
+        stone(s, u, Math.abs(f) < .85 ? size * .6 : size, Math.abs(f) > .9, Math.max(p.y + size * .3, lip.upper - size * (Math.abs(f) < .85 ? .45 : .3)));
+      }
+      for (let i = 0; i < 5; i++) {
+        const s = lip.s - 3 - random() * 8, u = rc + (random() * 2 - 1) * hw * .8, size = .7 + random() * 1.2;
+        stone(s, u, size, false, lip.lower - .25 + size * .3);
       }
     }
     for (let i = 0; i < 45; i++) {
@@ -364,7 +603,7 @@ export class JungleChunk {
       stone(s, u, size, random() > .4);
     }
     for (let s = this.start + 3; s < this.start + CHUNK_LENGTH; s += 6) {
-      if (cutHeight(s) < 2.4 || random() > .6) continue;
+      if (cutHeight(s) < 2.4 || random() > .6 || inStream(s, 12, 1)) continue;
       stone(s + random() * 3, 11 + random() * 3.5, .7 + random() * 1.1, random() > .5);
     }
     // Fallen, moss-covered trunks lie across the floor.
@@ -375,32 +614,65 @@ export class JungleChunk {
       const direction = new THREE.Vector3(Math.cos(angle), .04, Math.sin(angle)).normalize();
       logs.push({ p: [p.x, p.y + radius * .8, p.z], scale: [radius * 1.4, length, radius * 1.4], q: new THREE.Quaternion().setFromUnitVectors(up, direction), color: '#8ea36a' });
     }
-    // White marker posts guard the river side where the road stands high above the water.
-    for (let s = this.start + 4; s < this.start + CHUNK_LENGTH; s += 12) {
-      if (roadHeight(s) - riverLevel(s) < 9 || riverCenter(s) + riverHalfWidth(s) + 4 < -34) continue;
-      const p = positionAt(s, -7.7, roadHeight(s));
-      posts.push({ p: [p.x, p.y + .5, p.z + this.start], scale: [1, 1.05, 1] });
-      caps.push({ p: [p.x, p.y + 1.05, p.z + this.start], scale: [1, 1, 1] });
-    }
+    this.buildGuardrail(rails, railPosts);
     instances(this.group, trunkGeometry, barkMaterial, trunks, 'jungle-trunks');
     jungleCrowns.forEach((g, i) => { instances(this.group, g, canopyMaterial, crowns[i], 'jungle-canopy'); instances(this.group, g, canopyMaterial, farCrowns[i], 'jungle-canopy-far', false); });
     emergentTrunks.forEach((g, i) => instances(this.group, g, barkMaterial, emergents[i], 'emergent-trunks'));
-    instances(this.group, emergentCrown, canopyMaterial, emergentCrowns, 'emergent-crowns');
-    instances(this.group, vineGeometry, vineMaterial, vines, 'lianas', false);
-    instances(this.group, shrubGeometry, shrubMaterial, vineLeaves, 'liana-leaves', false);
+    emergentCrowns.forEach((g, i) => instances(this.group, g, canopyMaterial, emergentTops[i], 'emergent-crowns'));
+    instances(this.group, vineGeometry, frondMaterial, vines, 'lianas', false);
     junglePalms.forEach((palmShape, i) => {
       instances(this.group, palmShape.trunk, palmBarkMaterial, palmTrunks[i], 'palm-trunks');
       instances(this.group, palmShape.fronds, frondMaterial, palmFronds[i], 'palm-fronds');
     });
+    instances(this.group, bambooGeometry, frondMaterial, bamboos, 'bamboo');
     instances(this.group, fernGeometry, frondMaterial, ferns, 'ferns', false);
     instances(this.group, bigLeafGeometry, frondMaterial, leaves, 'broad-leaves');
+    instances(this.group, bananaGeometry, frondMaterial, bananas, 'banana-plants', false);
     instances(this.group, shrubGeometry, shrubMaterial, shrubs, 'undergrowth');
     instances(this.group, shrubGeometry, shrubMaterial, lumps, 'distant-canopy', false);
     instances(this.group, tuftGeometry, frondMaterial, tufts, 'grass-tufts', false);
+    instances(this.group, lilyGeometry, frondMaterial, lilies, 'lily-pads', false);
     jungleBoulders.forEach((g, i) => instances(this.group, g, stoneMaterial, boulders[i], 'mossy-boulders'));
-    instances(this.group, trunkGeometry, barkMaterial, logs, 'fallen-logs');
-    instances(this.group, postGeometry, postMaterial, posts, 'marker-posts');
-    instances(this.group, capGeometry, capMaterial, caps, 'marker-caps');
+    cliffBlocks.forEach((g, i) => instances(this.group, g, stoneMaterial, cliffs[i], 'gorge-rocks'));
+    instances(this.group, logGeometry, barkMaterial, logs, 'fallen-logs');
+    instances(this.group, boxGeometry, railMaterial, [...rails.map(item => ({ ...item, color: '#b3b9b7' })), ...railPosts.map(item => ({ ...item, color: '#6f7674' }))], 'guardrails');
+  }
+  buildGuardrail(rails, posts) {
+    const guarded = s => gorgeWall(s) > .25 || (roadHeight(s) - riverLevel(s) > 9 && riverCenter(s) + riverHalfWidth(s) + 4 > -36);
+    const point = (s, u, lift) => { const p = positionAt(s, u, roadHeight(s) + lift); return new THREE.Vector3(p.x, p.y, p.z + this.start); };
+    const side = new THREE.Vector3(), normal = new THREE.Vector3(), basis = new THREE.Matrix4();
+    const beam = (a, b) => {
+      const direction = b.clone().sub(a), length = direction.length();
+      direction.normalize(); side.crossVectors(direction, up).normalize(); normal.crossVectors(side, direction);
+      const q = new THREE.Quaternion().setFromRotationMatrix(basis.makeBasis(side, direction, normal));
+      rails.push({ p: a.clone().add(b).multiplyScalar(.5).toArray(), scale: [.07, length + .06, .3], q });
+    };
+    for (let s = Math.ceil(this.start / 4) * 4; s < this.start + CHUNK_LENGTH; s += 4) {
+      if (!guarded(s)) continue;
+      posts.push({ p: point(s, -8.12, .36).toArray(), scale: [.15, .8, .15] });
+      if (guarded(s + 4)) beam(point(s, -7.98, .6), point(s + 4, -7.98, .6));
+      else beam(point(s, -7.98, .6), point(s + 3, -8.4, .1));
+      if (!guarded(s - 4)) beam(point(s - 3, -8.4, .1), point(s, -7.98, .6));
+    }
+  }
+  // Humid mist drifts in patches just above the canopy on both sides of the
+  // valley and pools lower toward the mountains, whose peaks rise clear of it.
+  buildMist() {
+    const vertices = [], coords = [];
+    const rows = Array.from({ length: CHUNK_LENGTH / 16 + 1 }, (_, i) => this.start + i * 16);
+    const veil = (s, u) => {
+      const road = roadHeight(s), terrain = jungleHeight(s, u), cross = Math.abs(u);
+      // Well clear of the crowns, and never dipping into the gorge, so trees do not cut hard edges through it.
+      const y = Math.max(terrain + 38 + 4 * Math.sin(s / 97 + u / 53), u > 0 ? road + 62 + 9 * Math.sin(s / 173 + u / 131) : road + 44);
+      const fade = smoothstep(u > 0 ? 45 : 110, u > 0 ? 95 : 160, cross) * (1 - smoothstep(u > 0 ? 400 : 240, u > 0 ? 460 : 290, cross)) * (1 - smoothstep(road + 70, road + 100, terrain));
+      const p = positionAt(s, u, y);
+      // The camera looks through the near veil, so it stays thinner.
+      return { x: p.x, y: p.y, z: p.z + this.start, coord: [s * .05, u * .02, fade * (u > 0 ? 1 : .55)] };
+    };
+    sheet(vertices, coords, rows, [45, 70, 95, 125, 160, 200, 245, 295, 350, 405, 460], veil);
+    sheet(vertices, coords, rows, [-290, -250, -210, -175, -145, -120, -105], veil);
+    const g = geometryFrom(vertices); g.setAttribute('foamCoord', new THREE.Float32BufferAttribute(coords, 3)); g.boundingSphere.radius += 10;
+    this.addMesh(g, valleyMistMaterial, 'valley-mist');
   }
   dispose() {
     this.group.removeFromParent(); for (const g of this.owned) g.dispose();

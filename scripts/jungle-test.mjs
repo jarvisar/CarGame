@@ -36,7 +36,7 @@ try {
         rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(),
         rivers: names['jungle-river'] ?? 0, floors: names['jungle-floor'] ?? 0, crowns: names['emergent-crowns'] ?? 0, foam: names['cascade-foam'] ?? 0, oceans: names['animated-ocean'] ?? 0, nightEffects: names['snow-night-effects'] ?? 0 };
     });
-    assert.equal(result.chunks, 9); assert.equal(result.rivers, 9); assert.equal(result.floors, 9); assert.equal(result.crowns, 9);
+    assert.equal(result.chunks, 9); assert.equal(result.rivers, 9); assert.equal(result.floors, 9); assert.ok(result.crowns >= 9);
     assert.ok(result.foam >= 5); assert.equal(result.oceans, 0); assert.equal(result.nightEffects, 0);
     assert.ok(result.geometry < 200); assert.ok(Math.abs(result.carZ) < 1030);
     assert.deepEqual(result.scale, initial.scale); assert.equal(result.top, initial.top);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadHeight, roadX } from '../src/world/route.js';
-import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, POOL_SPAN, jungleColumns, jungleVertex, jungleHeight, jungleDrivingRoute, riverLevel, riverBedLevel, riverLips, riverCenter, riverHalfWidth, jungleMountains, jungleCrags } from '../src/world/jungle-route.js';
+import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, POOL_SPAN, jungleColumns, jungleVertex, jungleHeight, jungleDrivingRoute, riverLevel, riverBedLevel, riverLips, riverDams, damAt, sideFalls, riverCenter, riverHalfWidth, jungleMountains, jungleCrags } from '../src/world/jungle-route.js';
 import { JungleWorld, JungleChunk } from '../src/world/jungle.js';
 import { waterClock } from '../src/world/water.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -15,8 +15,9 @@ test('jungle columns stay ordered, the road stays flat and the river sits in its
     for (const u of [-7, 0, 7]) assert.equal(jungleHeight(s, u), roadHeight(s));
     const rc = riverCenter(s), hw = riverHalfWidth(s), level = riverLevel(s);
     assert.ok(level < roadHeight(s) - 5 && level > roadHeight(s) - 26, `river level ${level} at ${s}`);
-    assert.ok(jungleHeight(s, rc) < level - 1.5, `river bed above the water at ${s}`);
-    assert.ok(jungleHeight(s, rc + hw + 4) > level + 1 && jungleHeight(s, rc - hw - 4) > level + 1, `submerged bank at ${s}`);
+    if (damAt(s).amount === 0) assert.ok(jungleHeight(s, rc) < level - 1.5, `river bed above the water at ${s}`);
+    // Under a gorge wall the water reaches the cliff foot; the camera-side bank always stands clear.
+    assert.ok(jungleHeight(s, rc + hw + 4) > level - .7 && jungleHeight(s, rc - hw - 4) > level + 1, `submerged bank at ${s}`);
     assert.ok(jungleHeight(s, 100) > roadHeight(s) + 5);
     // Camera-side terrain must stay below the line of sight to the road.
     for (const u of [-100, -160, -250, -400]) assert.ok(jungleHeight(s, u) - roadHeight(s) < -u * .55, `near hill blocks the road at ${s}, ${u}`);
@@ -29,14 +30,15 @@ test('jungle columns stay ordered, the road stays flat and the river sits in its
 });
 
 test('river pools are terraced by rocky lips fixed in world space', () => {
-  const lips = riverLips(-4000, 4000);
-  assert.ok(lips.length > 50);
-  for (let i = 1; i < lips.length; i++) {
-    const spacing = lips[i].s - lips[i - 1].s;
+  const lips = riverLips(-4000, 4000), dams = riverDams(-4000, 4000), boundaries = [...lips, ...dams].sort((a, b) => a.s - b.s);
+  assert.ok(lips.length > 50 && dams.length > 3 && dams.length < lips.length / 3);
+  for (let i = 1; i < boundaries.length; i++) {
+    const spacing = boundaries[i].s - boundaries[i - 1].s;
     assert.ok(spacing >= 50 && spacing <= POOL_SPAN + 60, `pool spacing ${spacing}`);
-    assert.ok(lips[i].s % 2 === 0);
+    assert.ok(boundaries[i].s % 2 === 0);
   }
-  assert.ok(lips.filter(lip => lip.drop > 1.5).length > lips.length * .55, 'most lips are visible cascades');
+  assert.ok(lips.every(lip => lip.drop >= 1 && lip.direction === -1), 'every lip falls toward -s, down the screen');
+  assert.ok(lips.filter(lip => lip.drop > 4).length > lips.length * .06, 'some lips are tall falls');
   for (const lip of lips) {
     assert.ok(Math.abs(riverLevel(lip.s) - lip.upper) < 1e-9, `the lip at ${lip.s} holds the upper pool`);
     assert.ok(Math.abs(riverLevel(lip.s + lip.direction * 2) - lip.lower) < 1e-9);
@@ -46,6 +48,22 @@ test('river pools are terraced by rocky lips fixed in world space', () => {
   for (let chunk = -30; chunk < 30; chunk++) {
     for (const local of riverLips(chunk * CHUNK_LENGTH, chunk * CHUNK_LENGTH + CHUNK_LENGTH)) assert.ok(lips.some(lip => lip.s === local.s && lip.index === local.index));
   }
+});
+
+test('the river never runs backwards; barriers close each reach and a waterfall feeds the next', () => {
+  const dams = riverDams(-12000, 12000);
+  for (let s = -12000; s < 12000; s += 2) {
+    if (dams.some(dam => Math.abs(dam.s - s) < 4)) continue;
+    assert.ok(riverLevel(s) <= riverLevel(s + 2) + 1e-9, `water climbs toward -s at ${s}`);
+  }
+  const falls = sideFalls(-12000, 12000);
+  for (const dam of dams) {
+    const rc = riverCenter(dam.s);
+    assert.ok(dam.below > dam.above - 1, `barrier at ${dam.s} does not hold back a higher pool downstream`);
+    for (const d of [-6, 0, 6]) assert.ok(jungleHeight(dam.s + d, rc) > Math.max(dam.above, dam.below) + .5, `water pours over the barrier at ${dam.s + d}`);
+    assert.ok(falls.some(fall => fall.source && Math.abs(fall.s - (dam.s - 16)) < 1e-9), `no waterfall feeds the reach below ${dam.s}`);
+  }
+  assert.ok(falls.filter(fall => !fall.source).length > 30);
 });
 
 test('misty mountains and crags are deterministic and continuous', () => {
@@ -78,7 +96,7 @@ test('jungle drive stays grounded and within the verges', () => {
 });
 
 test('jungle chunks keep scenery off the road, build the river and dispose cleanly', () => {
-  const overhead = new Set(['emergent-crowns', 'lianas', 'liana-leaves', 'marker-posts', 'marker-caps']);
+  const overhead = new Set(['emergent-crowns', 'lianas', 'guardrails']);
   for (const index of [-3, 0, 7]) {
     const chunk = new JungleChunk(index), names = new Set(), position = new THREE.Vector3(), matrix = new THREE.Matrix4();
     const road = Array.from({ length: CHUNK_LENGTH + 21 }, (_, i) => { const s = chunk.start - 10 + i; return [roadX(s), -(s - chunk.start)]; });
@@ -92,8 +110,8 @@ test('jungle chunks keep scenery off the road, build the river and dispose clean
         assert.ok(Number.isFinite(position.y));
       }
     });
-    for (const name of ['jungle-floor', 'jungle-river', 'river-mist', 'jungle-road', 'jungle-canopy', 'emergent-crowns', 'palm-fronds', 'ferns', 'mossy-boulders']) assert.ok(names.has(name), `${name} missing from chunk ${index}`);
-    assert.equal(names.has('cascade-foam'), chunk.lips.some(lip => lip.drop >= .6));
+    for (const name of ['jungle-floor', 'jungle-river', 'river-mist', 'valley-mist', 'jungle-road', 'jungle-canopy', 'emergent-crowns', 'lianas', 'palm-fronds', 'banana-plants', 'ferns', 'mossy-boulders']) assert.ok(names.has(name), `${name} missing from chunk ${index}`);
+    assert.equal(names.has('cascade-foam'), chunk.lips.some(lip => lip.drop >= .6) || chunk.falls.length > 0);
     assert.ok(chunk.terrain.geometry.attributes.position.count > 3000);
     chunk.dispose();
   }

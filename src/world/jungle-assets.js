@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { randomAt } from './route.js';
+import { randomAt, smoothstep, lerp } from './route.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 function geometry(vertices, colors) {
@@ -54,9 +54,10 @@ function crown(seed, { lobes = 5, spread = .55, flat = 1, size = [.5, .75] } = {
   merged.translate(0, -box.min.y, 0); merged.scale(1 / radius, 1 / radius, 1 / radius);
   merged.computeBoundingBox();
   const top = merged.boundingBox.max.y, position = merged.attributes.position, color = merged.attributes.color;
+  // Sunlit tops warm toward lime while the undersides stay a deep green.
   for (let i = 0; i < position.count; i++) {
-    const shade = color.getX(i) * (.64 + .42 * Math.pow(position.getY(i) / top, .8));
-    color.setXYZ(i, shade, shade, shade);
+    const height = position.getY(i) / top, shade = color.getX(i) * (.62 + .44 * Math.pow(height, .8)), warm = Math.pow(height, 1.8);
+    color.setXYZ(i, shade * (1 + .32 * warm), shade * (1 + .07 * warm), shade * (1 - .2 * warm));
   }
   merged.computeVertexNormals(); merged.computeBoundingSphere();
   return merged;
@@ -144,11 +145,12 @@ function boulder(seed, moss) {
       const angle = i / sides * Math.PI * 2, r = radius * (.76 + randomAt(seed * 17 + i, 2361) * .42);
       return [Math.cos(angle) * r + layer * (seed % 2 ? .1 : -.07), y + (randomAt(seed * 17 + i, 2362 + layer) - .5) * .28, Math.sin(angle) * r];
     }));
-  const stone = new THREE.Color('#aab2ab'), shade = new THREE.Color('#76837e'), green = new THREE.Color('#5f8f42');
+  const stone = new THREE.Color('#ada89c'), shade = new THREE.Color('#78746b'), green = new THREE.Color('#5f8f42');
   const a = new THREE.Vector3(), b = new THREE.Vector3();
+  // The rings run clockwise seen from above, so faces are emitted p, r, q to point outward.
   const face = (p, q, r) => {
-    vertices.push(...p, ...q, ...r);
-    a.set(q[0] - p[0], q[1] - p[1], q[2] - p[2]); b.set(r[0] - p[0], r[1] - p[1], r[2] - p[2]);
+    vertices.push(...p, ...r, ...q);
+    a.set(r[0] - p[0], r[1] - p[1], r[2] - p[2]); b.set(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
     const normalY = a.cross(b).normalize().y;
     const color = shade.clone().lerp(stone, .35 + Math.max(0, normalY) * .5 + randomAt(seed, vertices.length + 2363) * .15);
     color.lerp(green, moss * Math.pow(Math.max(0, normalY), .6) * (.55 + randomAt(seed, vertices.length + 2364) * .45));
@@ -166,6 +168,108 @@ function boulder(seed, moss) {
   }
   return geometry(vertices, colors);
 }
+// Columnar rock for the gorge walls and crags: tall faceted sides in warm
+// grey, darker toward the foot, with moss spilling over the top.
+function cliffBlock(seed) {
+  const sides = 6 + seed % 2, vertices = [], colors = [];
+  const ring = (y, radius, layer) => Array.from({ length: sides }, (_, i) => {
+    const angle = (i + (randomAt(seed * 13 + i, 2381) - .5) * .55) / sides * Math.PI * 2;
+    const r = radius * (.76 + randomAt(seed * 13 + i, 2382 + layer) * .38);
+    return [Math.cos(angle) * r + layer * .02, y + (randomAt(seed * 13 + i, 2387 + layer) - .5) * .06 * layer, Math.sin(angle) * r];
+  });
+  const rings = [ring(0, .56, 0), ring(.5, .52, 1), ring(.88, .47, 2), ring(.98, .32, 3)];
+  const stone = new THREE.Color('#c2baab'), shade = new THREE.Color('#8b8275'), foot = new THREE.Color('#5f5951'), green = new THREE.Color('#5e8e3b');
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), n = new THREE.Vector3();
+  let facet = 0;
+  const face = (p, q, r) => {
+    a.set(q[0] - p[0], q[1] - p[1], q[2] - p[2]); b.set(r[0] - p[0], r[1] - p[1], r[2] - p[2]); n.crossVectors(a, b).normalize();
+    const cx = (p[0] + q[0] + r[0]) / 3, cy = (p[1] + q[1] + r[1]) / 3, cz = (p[2] + q[2] + r[2]) / 3;
+    if (n.x * cx + n.y * (cy - .5) + n.z * cz < 0) { [q, r] = [r, q]; n.negate(); }
+    vertices.push(...p, ...q, ...r);
+    const vertical = randomAt(seed * 7 + Math.floor(facet++ / 2), 2391);
+    const color = foot.clone().lerp(shade, smoothstep(0, .45, cy)).lerp(stone, (.25 + vertical * .5) * smoothstep(.2, .9, cy));
+    color.lerp(green, smoothstep(.3, .75, n.y) * (.6 + randomAt(seed, facet + 2392) * .4));
+    for (let i = 0; i < 3; i++) colors.push(color.r, color.g, color.b);
+  };
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides;
+    for (let layer = 0; layer < 3; layer++) {
+      face(rings[layer][i], rings[layer][j], rings[layer + 1][i]);
+      face(rings[layer][j], rings[layer + 1][j], rings[layer + 1][i]);
+    }
+    face([.03, 1.03, -.02], rings[3][i], rings[3][j]);
+  }
+  return geometry(vertices, colors);
+}
+
+// Banana plants: a short stem and long paddle leaves that arch out and droop.
+function banana(seed) {
+  const vertices = [], colors = [], count = 6;
+  for (let i = 0; i < count; i++) {
+    const angle = i * 2.399963 + seed, dir = [Math.cos(angle), Math.sin(angle)], side = [-dir[1], dir[0]];
+    const young = i === count - 1, reach = young ? .3 : .7 + randomAt(seed, i + 2401) * .35, base = .38 + i * .025;
+    const peak = young ? 1.05 : .72 + randomAt(seed, i + 2402) * .16, tip = young ? .95 : .3 + randomAt(seed, i + 2403) * .25;
+    const spine = [0, .3, .7, 1].map(t => ({ x: dir[0] * reach * t, y: lerp(base, peak, Math.sin(Math.min(1, t * 1.6) * Math.PI / 2)) - (peak - tip) * t * t, z: dir[1] * reach * t }));
+    blade(vertices, colors, spine, [.02, .14, .15, .02], side, .88 + randomAt(seed, i + 2404) * .22, .05);
+  }
+  // A pair of crossed ribbons stands in for the stem.
+  for (const side of [[1, 0], [0, 1]]) blade(vertices, colors, [{ x: 0, y: 0, z: 0 }, { x: 0, y: .45, z: 0 }], [.07, .05], side, .62, 0);
+  return geometry(vertices, colors);
+}
+
+// Hanging vines: two crossed ribbons, a unit long, with leaves alternating
+// down their length so the strands still read from the scenic camera.
+function vineStrand() {
+  const vertices = [], colors = [];
+  for (const side of [[1, 0], [0, 1]]) {
+    blade(vertices, colors, [{ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }], [.14, .05], side, .9, 0);
+    for (let k = 0; k < 2; k++) {
+      const y = -.25 - k * .42 - side[1] * .12, flip = (k + side[0]) % 2 ? 1 : -1;
+      blade(vertices, colors, [{ x: 0, y, z: 0 }, { x: side[0] * .3 * flip, y: y - .05, z: side[1] * .3 * flip }], [.12, .02], [side[1], side[0]], 1.05, 0);
+    }
+  }
+  return geometry(vertices, colors);
+}
+
+// Bamboo: a clump of culms arching outward from a tight base, each carrying
+// sprays of narrow leaves along its upper half.
+function bamboo(seed) {
+  const parts = [], vertices = [], colors = [];
+  for (let i = 0; i < 7; i++) {
+    const angle = i * 2.399963 + seed, dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+    const lean = .1 + randomAt(seed, i + 2701) * .28, height = .62 + randomAt(seed, i + 2702) * .38, foot = dir.clone().multiplyScalar(.04 + randomAt(seed, i + 2703) * .1);
+    const at = t => foot.clone().addScaledVector(dir, lean * t ** 1.7).add({ x: 0, y: height * t, z: 0 });
+    const stations = [0, .5, 1].map(at);
+    for (let k = 0; k < 2; k++) {
+      const direction = stations[k + 1].clone().sub(stations[k]);
+      const culm = new THREE.CylinderGeometry(.008 - k * .002, .011 - k * .002, direction.length() * 1.02, 4, 1, true);
+      culm.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
+      culm.translate(...stations[k].clone().add(stations[k + 1]).multiplyScalar(.5).toArray()); parts.push(tinted(culm, .78 + k * .05));
+    }
+    for (const t of [.62, 1]) {
+      const node = at(t);
+      for (let j = 0; j < 2; j++) {
+        const a = angle + (j - .5) * 1.3 + randomAt(seed * 3 + i, j + 2704) * .4, out = [Math.cos(a), Math.sin(a)], length = .15 + randomAt(seed, i * 3 + j + 2705) * .09;
+        blade(vertices, colors, [node, { x: node.x + out[0] * length * .55, y: node.y - .01, z: node.z + out[1] * length * .55 }, { x: node.x + out[0] * length, y: node.y - .06, z: node.z + out[1] * length }],
+          [.003, .022, .002], [-out[1], out[0]], .95 + randomAt(seed, i + j + 2706) * .15, 0);
+      }
+    }
+  }
+  parts.push(geometry(vertices, colors));
+  return finish(parts);
+}
+
+// A lily pad: a flat disc with a notch cut to its centre.
+function lilyPad() {
+  const vertices = [], colors = [], segments = 9;
+  for (let i = 0; i < segments - 1; i++) {
+    const a = (i + .5) / segments * Math.PI * 2, b = (i + 1.5) / segments * Math.PI * 2, shade = .9 + (i % 3) * .06;
+    vertices.push(0, .02, 0, Math.cos(b), 0, Math.sin(b), Math.cos(a), 0, Math.sin(a));
+    for (let k = 0; k < 3; k++) colors.push(shade, shade, shade);
+  }
+  return geometry(vertices, colors);
+}
+
 function tuft() {
   const vertices = [], colors = [];
   for (let i = 0; i < 6; i++) {
@@ -177,7 +281,7 @@ function tuft() {
 }
 
 export const jungleCrowns = [crown(1), crown(2, { lobes: 6, spread: .62 }), crown(3, { lobes: 4, spread: .5, size: [.55, .8] }), crown(5, { lobes: 7, spread: .7, flat: .62, size: [.45, .68] })];
-export const emergentCrown = crown(4, { lobes: 10, spread: .84, flat: .42, size: [.42, .62] });
+export const emergentCrowns = [crown(4, { lobes: 10, spread: .84, flat: .42, size: [.42, .62] }), crown(6, { lobes: 13, spread: .9, flat: .34, size: [.36, .52] })];
 export const emergentTrunks = [emergentTrunk(1), emergentTrunk(2)];
 const palms = [palmTrunk(1), palmTrunk(2)];
 export const junglePalms = palms.map((palm, i) => ({ trunk: palm.geometry, fronds: palmFronds(i + 1, palm.lean) }));
@@ -185,3 +289,8 @@ export const fernGeometry = fern(1);
 export const bigLeafGeometry = bigLeaf(1);
 export const tuftGeometry = tuft();
 export const jungleBoulders = [boulder(1, 0), boulder(2, .75), boulder(3, 1)];
+export const cliffBlocks = [cliffBlock(1), cliffBlock(2)];
+export const bananaGeometry = banana(1);
+export const vineGeometry = vineStrand();
+export const bambooGeometry = bamboo(1);
+export const lilyGeometry = lilyPad();
