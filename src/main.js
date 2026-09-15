@@ -5,6 +5,7 @@ import './layout.css';
 import { createRendering } from './rendering.js';
 import { JOURNEYS } from './journeys.js';
 import { SEED, journeyStart } from './world/route.js';
+import { ChunkWorker } from './world/chunk-source.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic } from './traffic.js';
 import { Input } from './input.js';
@@ -23,6 +24,7 @@ let toastTimer; let sceneReady = false;
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
 async function boot() {
+  let chunkWorker;
   try {
     const rendering = createRendering($('#scene'));
     const { renderer, scene, camera } = rendering;
@@ -30,14 +32,15 @@ async function boot() {
     window.addEventListener('resize', () => { needsRender = true; });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) needsRender = true; });
     let journey = 'coast';
-    let world = new JOURNEYS.coast.World(scene);
-    let changingJourney = false, journeyWasPaused = false;
+    chunkWorker = new ChunkWorker();
+    let world = new JOURNEYS.coast.World(scene, chunkWorker.source('coast'));
+    let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast); const audio = new DriveAudio();
     const journeyDialog = $('#journey-dialog');
-    scene.add(vehicle.car); world.update(vehicle.s);
+    scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s);
-    function start() { if (paused) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
+    function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
       audio.setPaused(paused);
@@ -73,7 +76,8 @@ async function boot() {
       let nextWorld;
       try {
         await new Promise(resolve => setTimeout(resolve, 320));
-        nextWorld = new JOURNEYS[id].World(scene);
+        nextWorld = new JOURNEYS[id].World(scene, chunkWorker.source(id));
+        await nextWorld.chunkSource.prepare(savedJourneys[id].s);
         nextWorld.update(savedJourneys[id].s);
         if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
         else renderer.compile(scene, camera);
@@ -191,7 +195,7 @@ async function boot() {
     window.addEventListener('focus', () => audio.setHidden(document.hidden));
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
     window.addEventListener('keydown', () => audio.unlock(), { capture: true });
-    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) void audio.dispose().catch(() => {}); });
+    window.addEventListener('pagehide', event => { audio.setHidden(true); if (!event.persisted) { chunkWorker.dispose(); void audio.dispose().catch(() => {}); } });
     window.addEventListener('pageshow', () => { audio.setHidden(document.hidden); needsRender = true; });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
@@ -232,12 +236,15 @@ async function boot() {
       }
       requestAnimationFrame(frame);
     }
+    await world.chunkSource.prepare(vehicle.s);
+    world.update(vehicle.s);
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, camera);
     else renderer.compile(scene, camera);
+    changingJourney = false;
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, vehicle, traffic, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
-  } catch (error) { console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+  } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

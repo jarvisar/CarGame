@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { bridgeAt, pondAt, pondRadius, roadHeight, groundHeight, positionAt, CHUNK_LENGTH } from './route.js';
 import { createWaterMaterial } from './water.js';
 
 const bridgeMaterial = new THREE.MeshStandardMaterial({ color: '#d8c9ab', emissive: '#766b54', emissiveIntensity: .08, roughness: 1, flatShading: true, side: THREE.DoubleSide });
 const lakeMaterial = createWaterMaterial(true);
+registerChunkResources('landmarks', { bridgeMaterial, lakeMaterial });
 
 function geometry(vertices, colors) {
   const result = new THREE.BufferGeometry();

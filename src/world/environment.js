@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondAt, pondRadius, ravineAmount, groundHeight, mountainHeight, bridgeAt, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
@@ -52,6 +53,10 @@ grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
 grassGeometry.computeVertexNormals();
 const grassMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 1 });
 const matrix = new THREE.Object3D();
+registerChunkResources('coast', { terrainMaterial, waterMaterial, roadMaterial, shoulderMaterial, lineMaterial, centerMaterial,
+  foamMaterial, rollingSurfMaterial, rockWashMaterial, leavesMaterial, pineMaterial, trunkMaterial, rockMaterial, cragMaterial,
+  postMaterial, capMaterial, grassMaterial, trunkGeometry, shrubGeometry, rockGeometry, postGeometry, capGeometry, grassGeometry,
+  coastalPines, coastalCrags, coastalCypress });
 
 function geometryFrom(positions, colors) {
   const g = new THREE.BufferGeometry();
@@ -108,7 +113,7 @@ function addRockWash(rock, phase, vertices, washCoords, shape = rockGeometry) {
   }
 }
 
-class Chunk {
+export class CoastalChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = [];
     this.buildTerrain(); this.buildWater(); this.buildRoad(); buildLandmarks(this); this.buildScenery();
@@ -446,17 +451,18 @@ class Chunk {
 }
 
 export class CoastalWorld {
-  constructor(scene) { this.scene = scene; this.chunks = new Map(); this.origin = 0; this.center = null; }
+  constructor(scene, chunkSource = null) { this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null; }
   update(s) {
     const center = Math.floor(s / CHUNK_LENGTH);
     this.origin = Math.floor(s / 1024) * 1024;
     if (center !== this.center) {
       // Both directions are retained. Streaming begins well outside the visible area.
       for (let i = center - 3; i <= center + 5; i++) {
-        if (!this.chunks.has(i)) { const chunk = new Chunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
+        if (!this.chunks.has(i)) { const chunk = this.chunkSource?.take(i) ?? new CoastalChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
       }
-      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { chunk.dispose(); this.chunks.delete(i); }
+      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { this.chunkSource?.retain(i, chunk); chunk.dispose(); this.chunks.delete(i); }
       this.center = center;
+      this.chunkSource?.prefetch(center, this.chunks);
     }
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
   }
@@ -464,5 +470,5 @@ export class CoastalWorld {
     animateWater(time, this.origin);
     for (const chunk of this.chunks.values()) chunk.birds?.update(time);
   }
-  dispose() { for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
+  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
 }

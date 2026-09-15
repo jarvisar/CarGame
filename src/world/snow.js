@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
 import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowHeight, snowRoadHeight, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
@@ -23,6 +24,8 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
+registerChunkResources('snow', { terrainMaterial, snowMaterial, rockMaterial, stoneMaterial, pineMaterial, metalMaterial,
+  barkMaterial, roadMaterial, lineMaterial, edgeMaterial, glowMaterial, boxGeometry, rockGeometry, poleGeometry, alpinePines, alpineRockVariants });
 
 function headlightPattern() {
   // Two soft, symmetric lobes projected by one light; no extra shadow pass.
@@ -63,7 +66,7 @@ function instances(group, geo, mat, items, name) {
   mesh.computeBoundingSphere(); group.add(mesh);
 }
 
-class SnowChunk {
+export class SnowChunk {
   constructor(index) {
     this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `snow-chunk-${index}`; this.owned = [];
     this.buildTerrain();
@@ -268,8 +271,8 @@ class SnowChunk {
 }
 
 export class SnowWorld {
-  constructor(scene) {
-    this.scene = scene; this.chunks = new Map(); this.origin = 0; this.center = null;
+  constructor(scene, chunkSource = null) {
+    this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null;
     this.effects = new THREE.Group(); this.effects.name = 'snow-night-effects'; scene.add(this.effects);
     // A fixed pool lights only nearby lamps, with no additional shadow maps.
     this.lights = Array.from({ length: 7 }, () => { const light = new THREE.PointLight('#ffb76b', 340, 40, 2); this.effects.add(light); return light; });
@@ -304,9 +307,10 @@ export class SnowWorld {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     const center = Math.floor(s / CHUNK_LENGTH);
     if (center !== this.center) {
-      for (let i = center - 3; i <= center + 5; i++) if (!this.chunks.has(i)) { const chunk = new SnowChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
-      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { chunk.dispose(); this.chunks.delete(i); }
+      for (let i = center - 3; i <= center + 5; i++) if (!this.chunks.has(i)) { const chunk = this.chunkSource?.take(i) ?? new SnowChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
+      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { this.chunkSource?.retain(i, chunk); chunk.dispose(); this.chunks.delete(i); }
       this.center = center;
+      this.chunkSource?.prefetch(center, this.chunks);
     }
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
@@ -336,6 +340,7 @@ export class SnowWorld {
     this.snowfall.update(time, anchor, this.origin);
   }
   dispose() {
+    this.chunkSource?.dispose();
     for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); this.effects.removeFromParent();
     this.snowfall.dispose();
     this.headlight.map.dispose(); this.headlight.dispose();

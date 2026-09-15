@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, smoothstep } from './route.js';
 import { alpineLake, snowPosition, LAKE_LEVEL } from './snow-route.js';
 
@@ -49,6 +50,7 @@ mist.onBeforeCompile = shader => {
   `);
 };
 mist.customProgramCacheKey = () => 'alpine-lake-mist-v1';
+registerChunkResources('lake', { water, ice, mist });
 
 function makeGeometry(vertices, coords) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));

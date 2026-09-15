@@ -1,6 +1,6 @@
-import { resolveWorldSeed } from './generation.js';
+import { resolveWorldSeed, workerSeed } from './generation.js';
 
-export const SEED = resolveWorldSeed(globalThis.location?.search);
+export const SEED = workerSeed ?? resolveWorldSeed(globalThis.location?.search);
 export const CHUNK_LENGTH = 128;
 export const TERRAIN_STEP = 8;
 export const ROAD_HALF_WIDTH = 5.5;

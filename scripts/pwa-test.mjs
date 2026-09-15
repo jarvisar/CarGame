@@ -36,6 +36,25 @@ async function checkProduction(base) {
   const url = `http://127.0.0.1:${server.address().port}${base}`;
   const profile = await mkdtemp(path.resolve('.artifacts/pwa-browser-'));
   const context = await chromium.launchPersistentContext(profile, launchOptions);
+  await context.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.__chunkWorkerCheck = { seed: null, readySeed: null, chunks: 0, errors: [] };
+    window.Worker = class extends NativeWorker {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener('message', ({ data }) => {
+          if (data.type === 'ready') window.__chunkWorkerCheck.readySeed = data.seed;
+          if (data.type === 'chunk') window.__chunkWorkerCheck.chunks++;
+          if (data.type === 'error') window.__chunkWorkerCheck.errors.push(data.message);
+        });
+        this.addEventListener('error', event => window.__chunkWorkerCheck.errors.push(event.message));
+      }
+      postMessage(data, ...rest) {
+        if (data.type === 'init') window.__chunkWorkerCheck.seed = data.seed;
+        super.postMessage(data, ...rest);
+      }
+    };
+  });
   for (const page of context.pages()) await page.close();
   const errors = [];
   context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
@@ -44,6 +63,10 @@ async function checkProduction(base) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    await page.waitForFunction(() => window.__chunkWorkerCheck.chunks >= 9);
+    const worker = await page.evaluate(() => window.__chunkWorkerCheck);
+    assert.equal(worker.readySeed, worker.seed, 'production worker must use the page seed before building scenery');
+    assert.deepEqual(worker.errors, []);
     await page.waitForFunction(() => navigator.serviceWorker.controller);
     await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
     await page.setViewportSize({ width: 393, height: 851 });
@@ -79,6 +102,8 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
+    await page.waitForFunction(() => window.__chunkWorkerCheck.chunks >= 9);
+    assert.deepEqual(await page.evaluate(() => window.__chunkWorkerCheck.errors), [], 'worker bundle must be available offline');
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Dismissal survives reload');
     // All journey assets are available even when switching for the first time offline.
     for (const journey of await page.locator('button[data-journey]').evaluateAll(buttons => buttons.map(button => button.dataset.journey))) {

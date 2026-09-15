@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, desertColumns, desertVertex, desertPosition, desertHeight, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
 
@@ -97,8 +98,10 @@ for (let i = 0; i < 7; i++) {
   triangle(slabPositions, null, { x: 0, y: -.42, z: 0 }, slabRings[0][i], slabRings[0][next], null, 0, false);
 }
 const slabGeometry = geometry(slabPositions);
+registerChunkResources('desert', { groundMaterial, rockMaterial, barkMaterial, plantMaterial, asphaltMaterial, sandMaterial,
+  edgeMaterial, centerMaterial, stoneGeometry, bushGeometry, trunkGeometry, cactusGeometry, leafGeometry, agaveGeometry, grassGeometry, slabGeometry });
 
-class DesertChunk {
+export class DesertChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.owned = []; this.vertices = new Map();
     this.group.name = `desert-chunk-${index}`;
@@ -528,18 +531,19 @@ class DesertChunk {
 }
 
 export class DesertWorld {
-  constructor(scene) { this.scene = scene; this.chunks = new Map(); this.origin = 0; this.center = null; }
+  constructor(scene, chunkSource = null) { this.scene = scene; this.chunkSource = chunkSource; this.chunks = new Map(); this.origin = 0; this.center = null; }
   update(s) {
     const center = Math.floor(s / CHUNK_LENGTH); this.origin = Math.floor(s / 1024) * 1024;
     if (center !== this.center) {
       for (let i = center - 3; i <= center + 5; i++) {
-        if (!this.chunks.has(i)) { const chunk = new DesertChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
+        if (!this.chunks.has(i)) { const chunk = this.chunkSource?.take(i) ?? new DesertChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
       }
-      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { chunk.dispose(); this.chunks.delete(i); }
+      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { this.chunkSource?.retain(i, chunk); chunk.dispose(); this.chunks.delete(i); }
       this.center = center;
+      this.chunkSource?.prefetch(center, this.chunks);
     }
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
   }
   animate() {}
-  dispose() { for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
+  dispose() { this.chunkSource?.dispose(); for (const chunk of this.chunks.values()) chunk.dispose(); this.chunks.clear(); }
 }

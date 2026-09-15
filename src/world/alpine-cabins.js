@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { randomAt } from './route.js';
 import { alpineLake, snowHeight, snowPosition } from './snow-route.js';
 
@@ -24,6 +25,7 @@ const vertices = [
   1,0,1, 1,0,-1, 0,1,-1, 1,0,1, 0,1,-1, 0,1,1,
 ];
 const gable = new THREE.BufferGeometry(); gable.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); gable.computeVertexNormals();
+registerChunkResources('cabins', { wood, snow, dark, glass, box, gable });
 
 export function buildAlpineCabin(index, start) {
   const cabin = alpineCabin(index), p = snowPosition(cabin.s, cabin.u, cabin.y);

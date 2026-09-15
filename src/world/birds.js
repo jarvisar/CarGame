@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { registerChunkResources } from './chunk-resources.js';
 import { positionAt, shorelineOffset, randomAt } from './route.js';
 import { waterClock } from './water.js';
 
@@ -23,6 +24,7 @@ material.onBeforeCompile = shader => {
   `);
 };
 material.customProgramCacheKey = () => 'coastal-gull-v1';
+registerChunkResources('birds', { geometry, material });
 const transform = new THREE.Object3D();
 
 export class CoastalBirds {

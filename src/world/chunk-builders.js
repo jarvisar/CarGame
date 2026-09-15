@@ -1,0 +1,14 @@
+import { CoastalChunk } from './environment.js';
+import { DesertChunk } from './desert.js';
+import { SnowChunk } from './snow.js';
+import { packChunk } from './chunk-transfer.js';
+export { SEED } from './route.js';
+
+const builders = { coast: CoastalChunk, desert: DesertChunk, snow: SnowChunk };
+export function buildChunk(journey, index) {
+  const Builder = builders[journey];
+  if (!Builder || !Number.isSafeInteger(index)) throw new Error('Invalid chunk request');
+  const chunk = new Builder(index);
+  try { return packChunk(chunk); }
+  finally { chunk.dispose(); }
+}
