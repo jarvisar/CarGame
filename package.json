@@ -5,9 +5,9 @@
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1",
+    "preview": "vite preview --host",
     "test": "node --import ./tests/world-seed.js --test tests/*.test.js",
     "test:browser": "node scripts/browser-test.mjs",
     "test:ao": "node scripts/ambient-occlusion-test.mjs",
