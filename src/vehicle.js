@@ -2,13 +2,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, coastalDrivingRoute } from './world/route.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
+import { CARS, DEFAULT_CAR, carEntry, carStats } from './cars.js';
+import { createShapeCar } from './car-models.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
   mesh.position.set(...location); mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh;
 }
-export function createCar() {
+export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
   const car = new THREE.Group();
   const body = new THREE.Group(); car.add(body);
   const paint = mat('#d96143'); const roof = mat('#f5e8c8'); const glass = mat('#36545a', { roughness: .3, metalness: .16 });
@@ -80,21 +82,34 @@ export function createCar() {
     wheels.push({ pivot, wheel, hub, front: z < 0 });
   }
   // Reuse the model and its materials so repeated route changes stay bounded.
-  function setAppearance(journey) {
-    paint.color.set({ coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a' }[journey] ?? '#d96143');
-    surfboard.visible = journey === 'coast'; spare.visible = journey === 'desert'; roofBox.visible = journey === 'snow'; cargo.visible = journey === 'jungle';
+  // A chosen trim ignores the route; the default car follows it.
+  function applyTrim(journey) {
+    const kit = entry.trim ?? journey;
+    paint.color.set({ coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a' }[kit] ?? '#d96143');
+    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle';
     rack.visible = surfboard.visible || roofBox.visible || cargo.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
-  setAppearance('coast');
+  applyTrim('coast');
   car.traverse(stableShadowDepth);
-  return { car, body, wheels, nightLights, setAppearance };
+  function disposeModel() {
+    const materials = new Set();
+    car.traverse(object => { if (object.isMesh) { object.geometry.dispose(); materials.add(object.material); } });
+    for (const material of materials) material.dispose();
+  }
+  return { car, body, wheels, nightLights, applyTrim, disposeModel };
+}
+
+export function createCar(id = DEFAULT_CAR) {
+  const entry = carEntry(id);
+  return entry.kind === 'classic' ? createClassicCar(entry) : createShapeCar(entry);
 }
 
 export class DrivingController {
-  constructor(route = coastalDrivingRoute, state = {}) {
+  constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR) {
     this.route = route;
-    const model = createCar(); Object.assign(this, model);
+    this.night = false; this.journeyId = 'coast';
+    this.setCar(carId, { rebuild: false });
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
@@ -103,8 +118,27 @@ export class DrivingController {
     this.previousPose = pose(); this.currentPose = pose();
     this.update(0, {});
   }
+  // Swapping cars keeps the drive going: same place, same road, new machine.
+  setCar(id, { rebuild = true } = {}) {
+    const carId = CARS[id] ? id : DEFAULT_CAR;
+    const previous = this.car, parent = previous?.parent ?? null;
+    this.disposeModel?.();
+    previous?.removeFromParent();
+    this.carId = carId;
+    Object.assign(this, createCar(carId));
+    const { width, length } = carEntry(carId).shape;
+    this.spec = { name: carId, width, length };
+    this.stats = carStats(carId);
+    parent?.add(this.car);
+    this.setNight(this.night); this.setAppearance(this.journeyId);
+    if (!rebuild) return;
+    this.speed = clamp(this.speed, -this.stats.reverseSpeed, this.stats.topSpeed);
+    this.wheelSpin = 0;
+    this.update(0, {});
+  }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
-  setNight(enabled) { for (const light of this.nightLights) light.material.emissiveIntensity = enabled ? light.night : light.day; }
+  setNight(enabled) { this.night = enabled; for (const light of this.nightLights) light.material.emissiveIntensity = enabled ? light.night : light.day; }
+  setAppearance(journey) { this.journeyId = journey; this.applyTrim(journey); }
   setRoute(route, state = {}) {
     this.route = route; this.s = state.s ?? 24; this.distance = state.distance ?? 0;
     this.pitch = 0; this.roll = 0; this.bodyPitch = 0; this.bodyRoll = 0; this.reset();
@@ -140,28 +174,29 @@ export class DrivingController {
   update(dt, input) {
     this.copyPose(this.previousPose, this.currentPose);
     const { frame: roadFrame, position: positionAt, height: terrainHeight } = this.route;
+    const stats = this.stats;
     const touch = input.touchDrive;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
     const offRoad = Math.abs(this.u) > 5.1;
     let acceleration = 0;
-    if (forward) acceleration += forward * (this.speed < -.3 ? 19 : 11.3);
-    if (brake) acceleration -= brake * (this.speed > .3 ? 20 : 6.5);
-    if (input.handbrake) acceleration -= Math.sign(this.speed) * 27;
+    if (forward) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
+    if (brake) acceleration -= brake * (this.speed > .3 ? stats.braking : stats.creep);
+    if (input.handbrake) acceleration -= Math.sign(this.speed) * stats.handbrake;
     const drag = .7 + .0095 * this.speed * this.speed + (offRoad ? 4.2 : 0);
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
     if (touch) {
       this.speed = Math.abs(this.speed);
-      const targetSpeed = touch.amount * (offRoad ? 15 : 28);
-      acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -24, 11.3) : 0;
+      const targetSpeed = touch.amount * (offRoad ? stats.offRoad : stats.topSpeed);
+      acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -stats.touchBraking, stats.acceleration) : 0;
       if (touch.amount) this.heading = touch.heading;
     }
     const oldSpeed = this.speed;
-    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -7, offRoad ? 15 : 28);
+    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, offRoad ? stats.offRoad : stats.topSpeed);
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);
-    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 / (1 + Math.abs(this.speed) * .105)) * dt;
+    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * stats.grip / (1 + Math.abs(this.speed) * .105)) * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // A gentle alignment assist makes long bends relaxed; steering always wins.
     if (!touch && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
@@ -191,8 +226,8 @@ export class DrivingController {
     // Report actual driving effort for keyboard, analog triggers, and touch.
     // This is read-only telemetry: sound never feeds back into driving physics.
     this.audioTelemetry.speed = this.speed;
-    this.audioTelemetry.throttle = input.handbrake ? 0 : touch ? clamp((acceleration + (this.speed > .015 ? drag : 0)) / 11.3, 0, 1) : this.speed < -.3 ? brake : forward;
-    this.audioTelemetry.brake = input.handbrake ? 1 : touch ? clamp(-acceleration / 24, 0, 1) : this.speed < -.3 ? forward : brake;
+    this.audioTelemetry.throttle = input.handbrake ? 0 : touch ? clamp((acceleration + (this.speed > .015 ? drag : 0)) / stats.acceleration, 0, 1) : this.speed < -.3 ? brake : forward;
+    this.audioTelemetry.brake = input.handbrake ? 1 : touch ? clamp(-acceleration / stats.touchBraking, 0, 1) : this.speed < -.3 ? forward : brake;
     this.audioTelemetry.offRoad = clamp((Math.abs(this.u) - 4.8) / .7, 0, 1);
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.quaternion.copy(this.car.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) this.currentPose[key] = this[key];

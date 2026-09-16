@@ -66,6 +66,43 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), false);
   await button(7, 0); await frames(); await button(7, 1); await frames();
   assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), 1);
+  // The garage: right stick press opens it, the grid is crossed along and by
+  // row, A selects, and the drive carries on from the same place.
+  await button(7, 0); await frames();
+  await press(10); await frames();
+  assert.equal(await page.locator('#car-dialog').isVisible(), true, 'right stick press opens the garage');
+  const focused = () => page.evaluate(() => document.activeElement?.dataset?.car ?? null);
+  assert.equal(await focused(), 'auto');
+  await press(15); await frames();
+  const second = await focused();
+  assert.ok(second && second !== 'auto', `right moves along the grid (${second})`);
+  await press(14); await frames();
+  assert.equal(await focused(), 'auto', 'left returns along the grid');
+  await press(13); await frames();
+  const below = await focused();
+  assert.ok(below && below !== 'auto', `down leaves the first row (${below})`);
+  await press(13); await frames();
+  const lower = await focused();
+  assert.notEqual(lower, below, 'down keeps moving by row');
+  const drop = await page.evaluate(([a, b]) => {
+    const top = id => document.querySelector(`[data-car="${id}"]`).getBoundingClientRect().top;
+    return top(b) - top(a);
+  }, [below, lower]);
+  assert.ok(drop > 1, `down moves to a later row (${drop}px)`);
+  await press(12); await frames();
+  assert.equal(await focused(), below, 'up returns to the row above');
+  const garageStart = await page.evaluate(() => window.__coastline.vehicle.s);
+  await press(0); await frames();
+  assert.equal(await page.locator('#car-dialog').isVisible(), false, 'A selects a car and closes the garage');
+  assert.equal(await page.evaluate(() => window.__coastline.carId), below);
+  const rolled = Math.abs(await page.evaluate(() => window.__coastline.vehicle.s) - garageStart);
+  assert.ok(rolled < 5, `choosing a car keeps the place, not a teleport (${rolled}m)`);
+  await press(10); await frames();
+  assert.equal(await page.locator('#car-dialog').isVisible(), true);
+  await press(1); await frames();
+  assert.equal(await page.locator('#car-dialog').isVisible(), false, 'B closes the garage');
+  await page.evaluate(() => window.__coastline.chooseCar('auto')); await frames();
+  await button(7, 1); await frames();
   await page.evaluate(() => { window.testPads = []; });
   await page.waitForFunction(() => document.body.dataset.controller === 'false');
   assert.equal(await page.evaluate(() => window.__coastline.paused), true);
@@ -87,5 +124,5 @@ try {
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   await page.keyboard.up('w');
   assert.deepEqual(errors, []);
-  console.log('Controller detection, analog driving, reverse, shortcuts, menus, disconnect/reconnect, focus loss, touch visibility and keyboard fallback passed (simulated gamepad).');
+  console.log('Controller detection, analog driving, reverse, shortcuts, menus, garage grid navigation, disconnect/reconnect, focus loss, touch visibility and keyboard fallback passed (simulated gamepad).');
 } finally { await browser.close(); }

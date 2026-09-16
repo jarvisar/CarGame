@@ -122,7 +122,7 @@ export class Traffic {
     for (const car of this.vehicles) {
       if (Math.abs(car.s - player.s) > 9) continue;
       const p = player.groundedPosition;
-      const contact = trafficContact({ x: p.x, z: p.z, heading: player.heading, halfWidth: 1, halfLength: 1.96 },
+      const contact = trafficContact({ x: p.x, z: p.z, heading: player.heading, halfWidth: player.spec.width / 2, halfLength: player.spec.length / 2 },
         { x: car.position.x, z: car.position.z, heading: car.heading, halfWidth: car.spec.width / 2, halfLength: car.spec.length / 2 });
       if (!contact) continue;
       const vx = Math.sin(player.heading) * player.speed - Math.sin(car.heading) * car.speed;

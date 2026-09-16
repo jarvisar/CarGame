@@ -20,13 +20,15 @@ try {
     await page.evaluate(() => window.__coastline.action('pause'));
     async function showState(state) {
       await page.evaluate(state => {
-        const welcome = document.querySelector('#welcome'), pause = document.querySelector('#pause-overlay'), dialog = document.querySelector('#journey-dialog');
-        if (dialog.open) dialog.close();
+        const welcome = document.querySelector('#welcome'), pause = document.querySelector('#pause-overlay');
+        const dialog = document.querySelector('#journey-dialog'), garage = document.querySelector('#car-dialog');
+        for (const open of [dialog, garage]) if (open.open) open.close();
         welcome.classList.toggle('hidden', state !== 'menu');
         pause.hidden = state !== 'pause';
         document.querySelector('#pause').setAttribute('aria-pressed', String(state === 'pause'));
         if (state === 'chooser') dialog.showModal();
-        welcome.scrollTop = 0; pause.scrollTop = 0; dialog.scrollTop = 0;
+        if (state === 'garage') garage.showModal();
+        welcome.scrollTop = 0; pause.scrollTop = 0; dialog.scrollTop = 0; garage.scrollTop = 0;
       }, state);
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     }
@@ -36,24 +38,30 @@ try {
         const visible = el => el && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none';
         const rect = el => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
         const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
-        const selectors = state === 'chooser' ? ['.journey-dialog-heading', '#journey-heading', '#journey-description', '.journey-options', '.journey-note'] : ['.brand', '#change-journey', '#fullscreen', '#sound', '#pause', '.controls', '.location', '.speedometer', '#touch-stick', '#stick-help', ...(state === 'menu' ? ['#welcome'] : [])];
+        const dialogState = state === 'chooser' || state === 'garage';
+        const panel = state === 'garage' ? '#car-dialog' : '#journey-dialog';
+        const selectors = dialogState
+          ? [`${panel} .chooser-heading`, `${panel} .chooser-title`, `${panel} .garage-title`, `${panel} .chooser-intro`, `${panel} .chooser-options`, `${panel} .chooser-note`]
+          : ['.brand', '#change-journey', '#fullscreen', '#sound', '#pause', '.controls', '.location', '.speedometer', '#touch-stick', '#stick-help', ...(state === 'menu' ? ['#welcome'] : [])];
         const items = selectors.map(selector => ({ selector, element: document.querySelector(selector) })).filter(item => visible(item.element)).map(item => ({ ...item, rect: rect(item.element) }));
         for (let i = 0; i < items.length; i++) {
           const a = items[i];
-          if (state !== 'chooser' && (a.rect.left < -1 || a.rect.right > innerWidth + 1 || a.rect.top < -1 || a.rect.bottom > innerHeight + 1)) issues.push(`${a.selector} outside viewport`);
+          if (!dialogState && (a.rect.left < -1 || a.rect.right > innerWidth + 1 || a.rect.top < -1 || a.rect.bottom > innerHeight + 1)) issues.push(`${a.selector} outside viewport`);
           for (const b of items.slice(i + 1)) if (!a.element.contains(b.element) && !b.element.contains(a.element) && overlaps(a.rect, b.rect)) issues.push(`${a.selector} overlaps ${b.selector}`);
         }
-        const buttons = state === 'menu' ? ['#start', '#change-journey', '#sound'] : state === 'pause' ? ['#resume', '#change-journey', '#sound', '#pause'] : state === 'chooser' ? ['#close-journeys'] : ['#view', '#reset', '#pause', '#sound', '#change-journey'];
-        if (state !== 'chooser') buttons.push('#fullscreen');
+        const buttons = state === 'menu' ? ['#start', '#change-journey', '#sound'] : state === 'pause' ? ['#resume', '#change-car', '#change-journey', '#sound', '#pause'] : state === 'chooser' ? ['#close-journeys'] : state === 'garage' ? ['#close-cars'] : ['#view', '#reset', '#pause', '#sound', '#change-journey'];
+        if (!dialogState) buttons.push('#fullscreen');
         for (const selector of buttons) {
           const el = document.querySelector(selector);
           if (document.body.dataset.controller === 'true' && ['#view', '#reset', '#pause', '#change-journey'].includes(selector)) continue;
           if (!visible(el)) { issues.push(`${selector} required action hidden`); continue; }
+          // Long panels scroll, so judge a control where the player would meet it.
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           const r = rect(el), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
           if (!el.contains(hit)) issues.push(`${selector} covered or clipped by ${hit?.id || hit?.className}`);
           if (r.width < 43 || r.height < 43) issues.push(`${selector} target below 44px`);
         }
-        for (const selector of ['#welcome', '#journey-dialog', '#pause-overlay']) {
+        for (const selector of ['#welcome', '#journey-dialog', '#car-dialog', '#pause-overlay']) {
           const el = document.querySelector(selector);
           if (visible(el) && el.scrollWidth > el.clientWidth + 1) issues.push(`${selector} horizontal overflow`);
         }
@@ -77,7 +85,7 @@ try {
     }
     for (const [width, height] of viewports) {
       await page.setViewportSize({ width, height });
-      for (const state of ['menu', 'driving', 'pause', 'chooser']) {
+      for (const state of ['menu', 'driving', 'pause', 'chooser', 'garage']) {
         await showState(state);
         await audit(`${mode}-${width}x${height}-${state}`, state);
       }
@@ -109,14 +117,17 @@ try {
           help.textContent = 'On iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen. Keep Open as Web App on if shown, then tap Add.';
         }
       }, variant);
-      for (const state of ['menu', 'driving', 'pause', 'chooser']) {
+      for (const state of ['menu', 'driving', 'pause', 'chooser', 'garage']) {
         await showState(state);
         await audit(`${mode}-${variant.name}-${state}`, state);
       }
-      await page.locator('.journey-card').last().scrollIntoViewIfNeeded();
-      const close = page.locator('#close-journeys');
-      assert.ok(await close.isVisible());
-      await close.click();
+      for (const [panel, closer] of [['#journey-dialog', '#close-journeys'], ['#car-dialog', '#close-cars']]) {
+        await showState(panel === '#car-dialog' ? 'garage' : 'chooser');
+        await page.locator(`${panel} .chooser-card`).last().scrollIntoViewIfNeeded();
+        const close = page.locator(closer);
+        assert.ok(await close.isVisible());
+        await close.click();
+      }
     }
     await page.close();
   }

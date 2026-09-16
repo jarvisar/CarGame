@@ -67,16 +67,22 @@ test('scene shortcut works paused and consumes presses made in a modal', () => {
 
 test('chooser routes controller inputs to navigation without driving', () => {
   const { input, device, actions } = fixture();
-  for (const [index, action] of [[15, 'menuNext'], [12, 'menuPrevious'], [0, 'menuConfirm'], [1, 'menuClose'], [8, 'menuClose'], [4, 'fullscreen']]) {
+  for (const [index, action] of [[15, 'menuNext'], [14, 'menuPrevious'], [12, 'menuUp'], [13, 'menuDown'], [0, 'menuConfirm'], [1, 'menuClose'], [8, 'menuClose'], [10, 'menuClose'], [4, 'fullscreen']]) {
     hold(device, index); input.update({ menu: true }); input.update({ menu: true });
     assert.equal(actions.at(-1), action);
     assert.deepEqual(input.state, {});
     hold(device, index, 0); input.update({ menu: true });
   }
-  assert.equal(actions.length, 6);
+  assert.equal(actions.length, 9);
   device.axes[0] = 1; input.update({ menu: true }); input.update({ menu: true });
   assert.equal(actions.at(-1), 'menuNext');
-  assert.equal(actions.length, 7);
+  device.axes[0] = 0; input.update({ menu: true });
+  // The stick's two axes are separate menu directions, so a grid can be crossed by row.
+  device.axes[1] = 1; input.update({ menu: true }); input.update({ menu: true });
+  assert.equal(actions.at(-1), 'menuDown');
+  device.axes[1] = -1; input.update({ menu: true }); input.update({ menu: true });
+  assert.equal(actions.at(-1), 'menuUp');
+  assert.equal(actions.length, 12);
 });
 
 test('focus loss and menus consume held inputs until the controller returns to neutral', () => {

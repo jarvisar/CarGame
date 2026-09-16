@@ -2,9 +2,12 @@ import './style.css';
 import './journey.css';
 import './ui.css';
 import './layout.css';
+import './car.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
+import { CARS, CAR_IDS, DEFAULT_CAR, carEntry, carMeters } from './cars.js';
+import { carArt } from './car-art.js';
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
@@ -19,10 +22,15 @@ import { setupControlHelp, controlHelpDismissed } from './control-help.js';
 setupControlHelp();
 
 const $ = selector => document.querySelector(selector);
+const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
 let toastTimer; let sceneReady = false;
+// The chosen car outlives the visit; routes and mileage do not.
+const carStorageKey = 'coastline-car';
+let carId = DEFAULT_CAR;
+try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
 async function boot() {
@@ -55,8 +63,9 @@ async function boot() {
     let world = new JOURNEYS.coast.World(scene, chunkWorker.source('coast'));
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
-    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast); const audio = new DriveAudio();
-    const journeyDialog = $('#journey-dialog');
+    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId); const audio = new DriveAudio();
+    const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog');
+    const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s);
     function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
@@ -77,8 +86,47 @@ async function boot() {
       document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
+    function buildCarCards() {
+      const current = '<span class="chooser-current">CURRENT CAR</span>';
+      $('.car-options').innerHTML = CAR_IDS.map(id => {
+        const entry = CARS[id];
+        // The plain row stands for whichever car the road brings: no portrait
+        // and no meters, so it sits above the fleet as a single line.
+        if (entry.plain) return `<button type="button" class="chooser-card car-card car-card-plain" data-car="${id}" aria-current="false">`
+          + `<span class="chooser-card-title">${entry.name}</span>${current}</button>`;
+        const meters = carMeters(id).map(({ label, level }) =>
+          `<span class="car-meter"><span>${label}</span><span class="car-meter-track"><span style="width:${level}%"></span></span></span>`).join('');
+        return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${entry.paint}">`
+          + carArt(id)
+          + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}</span>`
+          + `<span class="car-meters">${meters}</span>${current}</span></button>`;
+      }).join('');
+      for (const button of carDialog.querySelectorAll('[data-car]')) button.addEventListener('click', () => chooseCar(button.dataset.car));
+    }
+    function updateCarUi() {
+      for (const button of carDialog.querySelectorAll('[data-car]')) button.setAttribute('aria-current', String(button.dataset.car === carId));
+      $('#current-car').textContent = carEntry(carId).name;
+      $('#change-car').setAttribute('aria-label', `Open the garage. Currently driving the ${carEntry(carId).name}`);
+    }
+    // Swapping cars needs no new scenery, so the drive simply carries on.
+    function chooseCar(id) {
+      carDialog.close();
+      if (id === carId || !CARS[id]) return;
+      carId = id;
+      try { localStorage.setItem(carStorageKey, id); } catch { /* Still drive it for this visit. */ }
+      vehicle.setCar(id); vehicle.render(1, world.origin);
+      rendering.update(vehicle.car, 0, world.origin);
+      updateCarUi(); updateHud(); needsRender = true;
+      toast(`${carEntry(id).name} selected`);
+    }
+    function openCars() {
+      if (changingJourney || openChooser()) return;
+      journeyWasPaused = paused; setPaused(true); $('#pause-overlay').hidden = true;
+      carDialog.showModal();
+      carDialog.querySelector(`[data-car="${carId}"]`).focus();
+    }
     function openJourneys() {
-      if (changingJourney || journeyDialog.open) return;
+      if (changingJourney || openChooser()) return;
       journeyWasPaused = paused; setPaused(true); $('#pause-overlay').hidden = true;
       journeyDialog.showModal();
       journeyDialog.querySelector(`[data-journey="${journey}"]`).focus();
@@ -86,13 +134,13 @@ async function boot() {
     async function changeJourney(id, { regenerate = false } = {}) {
       if (changingJourney || !JOURNEYS[id]) return;
       if (id === journey && !regenerate) { journeyDialog.close(); return; }
-      if (!journeyDialog.open) journeyWasPaused = paused;
+      if (!openChooser()) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
       // Building and compiling the next route says nothing about how it runs,
       // and the new route may afford a level the last one could not.
       graphics.relax();
       audio.setPaused(true);
-      $('#journey-transition').classList.add('active'); journeyDialog.close();
+      $('#journey-transition').classList.add('active'); journeyDialog.close(); carDialog.close();
       $('#pause-overlay').hidden = true;
       savedJourneys[journey] = { s: vehicle.s, distance: vehicle.distance };
       const nextState = regenerate ? freshSceneStart(vehicle.s) : savedJourneys[id];
@@ -125,6 +173,31 @@ async function boot() {
         $('#journey-transition').classList.remove('active');
       }
     }
+    // Cards are laid out in a grid that changes with the viewport and holds one
+    // full-width row, so up and down follow the rendered geometry rather than a
+    // column count. A single row of cards steps along itself instead.
+    function moveChooserFocus(chooser, name) {
+      const cards = [...chooser.querySelectorAll('[data-journey], [data-car]')];
+      if (!cards.length) return;
+      const index = Math.max(0, cards.indexOf(document.activeElement)), current = cards[index];
+      const step = name === 'menuNext' || name === 'menuDown' ? 1 : -1;
+      if (name === 'menuUp' || name === 'menuDown') {
+        const box = current.getBoundingClientRect();
+        const x = box.left + box.width / 2, y = box.top + box.height / 2;
+        let best = null, bestCost = Infinity;
+        for (const card of cards) {
+          if (card === current) continue;
+          const other = card.getBoundingClientRect();
+          const dy = other.top + other.height / 2 - y;
+          if (Math.abs(dy) < 4 || Math.sign(dy) !== step) continue;
+          // Nearest row first, then the card closest to the same column.
+          const cost = Math.abs(dy) + Math.abs(other.left + other.width / 2 - x) * 2;
+          if (cost < bestCost) { bestCost = cost; best = card; }
+        }
+        if (best) { best.focus(); return; }
+      }
+      cards[(index + step + cards.length) % cards.length].focus();
+    }
     async function action(name, routeNumber) {
       if (name === 'fps') {
         fpsCounter.hidden = !fpsCounter.hidden;
@@ -138,14 +211,11 @@ async function boot() {
         await changeJourney(id);
         return;
       }
-      if (journeyDialog.open) {
-        if (name === 'menuClose') journeyDialog.close();
-        if (name === 'menuNext' || name === 'menuPrevious') {
-          const cards = [...journeyDialog.querySelectorAll('[data-journey]')];
-          const index = cards.indexOf(document.activeElement);
-          cards[(index + (name === 'menuNext' ? 1 : cards.length - 1)) % cards.length].focus();
-        }
-        if (name === 'menuConfirm' && journeyDialog.contains(document.activeElement)) document.activeElement.click();
+      const chooser = openChooser();
+      if (chooser) {
+        if (name === 'menuClose') chooser.close();
+        if (MENU_MOVES.includes(name)) moveChooserFocus(chooser, name);
+        if (name === 'menuConfirm' && chooser.contains(document.activeElement)) document.activeElement.click();
         return;
       }
       if (name === 'nextJourney') {
@@ -154,6 +224,7 @@ async function boot() {
         return;
       }
       if (name === 'journey') { openJourneys(); return; }
+      if (name === 'car') { openCars(); return; }
       if (name === 'drive') start();
       if (name === 'pause') setPaused(!paused);
       if (name === 'reset') { await changeJourney(journey, { regenerate: true }); return; }
@@ -180,6 +251,8 @@ async function boot() {
       if (!connected && started && !paused) setPaused(true);
     });
     $('#change-journey').addEventListener('click', openJourneys);
+    $('#change-car').addEventListener('click', openCars);
+    $('#close-cars').addEventListener('click', () => carDialog.close());
     $('#next-journey').addEventListener('click', event => {
       if (event.pointerType !== 'touch') action('nextJourney');
     });
@@ -217,12 +290,14 @@ async function boot() {
       if (event.pointerType === 'touch') { event.preventDefault(); action('nextJourney'); }
     });
     $('#close-journeys').addEventListener('click', () => journeyDialog.close());
-    journeyDialog.addEventListener('close', () => { if (!changingJourney) setPaused(journeyWasPaused || document.hidden); });
-    journeyDialog.addEventListener('click', event => {
-      if (event.target !== journeyDialog) return;
-      const rect = journeyDialog.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) journeyDialog.close();
-    });
+    for (const dialog of [journeyDialog, carDialog]) {
+      dialog.addEventListener('close', () => { if (!changingJourney) setPaused(journeyWasPaused || document.hidden); });
+      dialog.addEventListener('click', event => {
+        if (event.target !== dialog) return;
+        const rect = dialog.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+      });
+    }
     document.querySelectorAll('button[data-journey]').forEach(button => button.addEventListener('click', () => changeJourney(button.dataset.journey)));
     for (const name of ['pause', 'reset', 'view', 'sound']) $(`#${name}`).addEventListener('click', event => {
       if (['pause', 'view'].includes(name) && event.pointerType === 'touch') return;
@@ -234,8 +309,8 @@ async function boot() {
     });
     $('#start').addEventListener('click', () => { start(); if (!controlHelpDismissed()) toast(input.gamepad.connected ? 'Left stick to steer · RT / R2 gas · LT / L2 brake' : window.matchMedia('(any-pointer: coarse)').matches ? 'Drag the stick where you want to go · release to stop' : 'W / ↑ to accelerate · S / ↓ to brake'); });
     $('#resume').addEventListener('click', () => setPaused(false));
-    document.addEventListener('visibilitychange', () => { audio.setHidden(document.hidden); if (document.hidden) { if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); } frameClock.suspend(); });
-    window.addEventListener('blur', () => { audio.setHidden(true); if (journeyDialog.open || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
+    document.addEventListener('visibilitychange', () => { audio.setHidden(document.hidden); if (document.hidden) { if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); input.clear(); } frameClock.suspend(); });
+    window.addEventListener('blur', () => { audio.setHidden(true); if (openChooser() || changingJourney) journeyWasPaused = true; if (started) setPaused(true); });
     window.addEventListener('focus', () => audio.setHidden(document.hidden));
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true, passive: true });
     window.addEventListener('keydown', () => audio.unlock(), { capture: true });
@@ -270,7 +345,7 @@ async function boot() {
       if (hud.speed.textContent !== speed) hud.speed.textContent = speed;
       if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
       if (hud.gear.textContent !== gear) hud.gear.textContent = gear;
-      hud.fill.style.width = `${Math.min(Math.abs(vehicle.speed) / 28, 1) * 100}%`;
+      hud.fill.style.width = `${Math.min(Math.abs(vehicle.speed) / vehicle.stats.topSpeed, 1) * 100}%`;
     }
     function updateViewUi() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
@@ -293,7 +368,7 @@ async function boot() {
       traffic.update(dt, vehicle);
     };
     function frame(timestamp) {
-      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: journeyDialog.open });
+      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: Boolean(openChooser()) });
       frameClock.tick(timestamp, !paused, simulate);
       const dt = frameClock.dt;
       if (!paused) {
@@ -317,13 +392,14 @@ async function boot() {
     }
     await world.chunkSource.prepare(vehicle.s);
     world.update(vehicle.s);
+    buildCarCards(); updateCarUi();
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
     else renderer.compile(scene, rendering.camera);
     changingJourney = false;
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, get carId() { return carId; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

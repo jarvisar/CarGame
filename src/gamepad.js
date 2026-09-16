@@ -28,9 +28,12 @@ export class GamepadInput {
     }
     if (!pad) { this.state = {}; return; }
     const buttons = pad.buttons.map((_, index) => buttonValue(pad, index) > .5);
-    // Treat stick directions as menu buttons so they fire once per tilt.
-    buttons[17] = (pad.axes[0] ?? 0) < -.5 || (pad.axes[1] ?? 0) < -.5;
-    buttons[18] = (pad.axes[0] ?? 0) > .5 || (pad.axes[1] ?? 0) > .5;
+    // Treat stick directions as menu buttons so they fire once per tilt. The two
+    // axes stay apart so a grid of cards can be crossed by row as well as along.
+    buttons[17] = (pad.axes[0] ?? 0) < -.5;
+    buttons[18] = (pad.axes[0] ?? 0) > .5;
+    buttons[19] = (pad.axes[1] ?? 0) < -.5;
+    buttons[20] = (pad.axes[1] ?? 0) > .5;
     const pressed = index => buttons[index] && !this.previousButtons[index];
     const steer = deadzone(pad.axes[0]);
     const state = {
@@ -49,22 +52,25 @@ export class GamepadInput {
     // fire once and Start can resume the game without a keyboard or touchscreen.
     this.state = paused ? {} : state;
     const pause = pressed(9), view = pressed(2), reset = pressed(3), nextJourney = pressed(5);
-    const journey = pressed(8), fullscreen = pressed(4), fps = pressed(11);
+    const journey = pressed(8), fullscreen = pressed(4), fps = pressed(11), car = pressed(10);
     const back = pressed(1), confirm = pressed(0);
-    const previous = pressed(12) || pressed(14) || pressed(17);
-    const next = pressed(13) || pressed(15) || pressed(18);
+    const previous = pressed(14) || pressed(17), next = pressed(15) || pressed(18);
+    const up = pressed(12) || pressed(19), down = pressed(13) || pressed(20);
     this.previousButtons = buttons;
     if (fps) this.onAction('fps');
     if (fullscreen) { this.onAction('fullscreen'); return; }
     if (menu) {
       this.state = {};
-      if (journey || back) this.onAction('menuClose');
+      if (journey || car || back) this.onAction('menuClose');
       else if (previous) this.onAction('menuPrevious');
       else if (next) this.onAction('menuNext');
+      else if (up) this.onAction('menuUp');
+      else if (down) this.onAction('menuDown');
       else if (confirm) this.onAction('menuConfirm');
       return;
     }
     if (journey) { this.onAction('journey'); return; }
+    if (car) { this.onAction('car'); return; }
     if (pause) { this.onAction('pause'); return; }
     if (nextJourney) { this.onAction('nextJourney'); return; }
     if (paused) return;

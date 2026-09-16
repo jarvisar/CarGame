@@ -11,8 +11,8 @@
 .topbar { top: var(--ui-top); left: var(--ui-left); right: var(--ui-right); gap: 12px; }
 .top-actions { gap: 8px; }
 body[data-controller=true] #app :is(.controls, #pause, #change-journey) { display: none !important; }
-#journey-dialog > .controller-hint { margin: 0 0 12px; }
-.journey-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
+.chooser > .controller-hint { margin: 0 0 12px; }
+.chooser-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
 #app:has(.welcome.hidden) .brand,
@@ -22,7 +22,7 @@ body[data-controller=true] #app :is(.controls, #pause, #change-journey) { displa
 #app:has(.welcome.hidden, #pause-overlay:not([hidden]), dialog[open], #journey-transition.active) .vignette { display: none; }
 #app:has(.welcome:not(.hidden)) :is(.bottom-bar, .touch-controls, #pause),
 #app:has(#pause-overlay:not([hidden])) :is(.bottom-bar, .touch-controls, .welcome),
-#app:has(#journey-dialog[open]) :is(.topbar, .bottom-bar, .touch-controls, .welcome, #pause-overlay, #toast) { visibility: hidden; pointer-events: none; }
+#app:has(.chooser[open]) :is(.topbar, .bottom-bar, .touch-controls, .welcome, #pause-overlay, #toast) { visibility: hidden; pointer-events: none; }
 #app:has(.welcome:not(.hidden)) #pause { display: none; }
 #app:has(#pause-overlay:not([hidden])) #pause { display: grid; visibility: visible; pointer-events: auto; }
 .welcome {
@@ -61,13 +61,13 @@ body[data-controller=true] #app :is(.controls, #pause, #change-journey) { displa
 #toast { top: var(--header-clear); max-width: calc(100% - var(--ui-left) - var(--ui-right)); width: max-content; white-space: normal; text-align: center; line-height: 1.5; }
 #app:has(.welcome:not(.hidden)) #toast { display: none; }
 
-#journey-dialog { width: min(930px, calc(100% - var(--ui-left) - var(--ui-right))); max-height: calc(100dvh - var(--ui-top) - var(--ui-bottom)); padding: 20px; overscroll-behavior: contain; scrollbar-width: thin; }
-.journey-dialog-heading { position: sticky; top: -20px; z-index: 1; padding: 4px 0; background: #f6f5ea; }
-body[data-journey=desert] .journey-dialog-heading { background: #fff2dd; }
-body[data-journey=snow] .journey-dialog-heading { background: #1c2b41; }
-body[data-journey=jungle] .journey-dialog-heading { background: #203a27; }
-.journey-options { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.journey-card { min-width: 0; }
+.chooser { width: min(930px, calc(100% - var(--ui-left) - var(--ui-right))); max-height: calc(100dvh - var(--ui-top) - var(--ui-bottom)); padding: 20px; overscroll-behavior: contain; scrollbar-width: thin; }
+.chooser-heading { position: sticky; top: -20px; z-index: 1; padding: 4px 0; background: #f6f5ea; }
+body[data-journey=desert] .chooser-heading { background: #fff2dd; }
+body[data-journey=snow] .chooser-heading { background: #1c2b41; }
+body[data-journey=jungle] .chooser-heading { background: #203a27; }
+.chooser-options { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.chooser-card { min-width: 0; }
 
 @media (any-pointer: coarse) {
   #next-journey { display: none; }
@@ -91,10 +91,10 @@ body[data-journey=jungle] .journey-dialog-heading { background: #203a27; }
   .location { gap: 7px; max-width: 65%; }
   .location-sub { font-size: 11px; margin-top: 3px; }
   .speedometer > #speed { font-size: 34px; }
-  #journey-dialog { padding: 16px; }
-  .journey-dialog-heading { top: -16px; }
-  .journey-options { grid-template-columns: 1fr; }
-  .journey-card { grid-template-columns: 88px minmax(0, 1fr); }
+  .chooser { padding: 16px; }
+  .chooser-heading { top: -16px; }
+  .chooser-options { grid-template-columns: 1fr; }
+  .chooser-card { grid-template-columns: 88px minmax(0, 1fr); }
 }
 
 /* Short landscape screens trade secondary readouts for a clear driving area. */
@@ -114,11 +114,11 @@ body[data-journey=jungle] .journey-dialog-heading { background: #203a27; }
   .speedometer > #speed { font-size: 30px; }
   .pause-overlay h2 { font-size: 32px; margin-top: 8px; }
   .pause-overlay p { margin: 8px 0 12px; }
-  .journey-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .journey-card { display: block; }
-  .journey-art, .journey-note { display: none; }
-  #journey-description { margin-bottom: 12px; font-size: 12px; }
-  #journey-heading { margin-top: 4px; font-size: 30px; }
+  .chooser-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .chooser-card { display: block; }
+  .chooser-art, .chooser-note { display: none; }
+  .chooser-intro { margin-bottom: 12px; font-size: 12px; }
+  .chooser-title { margin-top: 4px; font-size: 30px; }
 }
 @media (max-width: 600px) and (max-height: 560px) {
   .welcome .eyebrow { display: none; }
@@ -246,5 +246,5 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
 
 /* Four route cards: two columns on mid-width screens before the single mobile column. */
 @media (min-width: 761px) and (max-width: 960px) {
-  .journey-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chooser-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

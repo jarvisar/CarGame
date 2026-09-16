@@ -23,16 +23,16 @@ body[data-controller=true] :is(.touch-controls, .touch-hint, .start-hint) { disp
 body[data-controller=true] .controller-hint { display: block; }
 
 /* Shared polish: readable panels and comfortable controls on every screen. */
-.icon-button, .journey-dialog-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
+.icon-button, .chooser-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
 .journey-button, .start-button { min-height: 44px; }
 .journey-button { font-size: 12px; }
 .controls { padding: 3px 10px; }
 .controls button { min-height: 44px; padding: 0 5px; }
 .controls .control-label { font-size: 12px; }
-.journey-card-description { font-size: 12px; line-height: 1.6; opacity: .85; }
-.journey-current { font-size: 9px; letter-spacing: 1.3px; }
-.journey-note { font-size: 12px; line-height: 1.6; }
-#journey-description { font-size: 14px; }
+.chooser-card-description { font-size: 12px; line-height: 1.6; opacity: .85; }
+.chooser-current { font-size: 9px; letter-spacing: 1.3px; }
+.chooser-note { font-size: 12px; line-height: 1.6; }
+.chooser-intro { font-size: 14px; }
 .start-button { font-size: 14px; }
 .pause-overlay p { font-size: 14px; }
 .pwa-install-button, #pwa-install-invitation .pwa-install-button { min-height: 44px; }
@@ -59,7 +59,7 @@ body[data-controller=true] .controller-hint { display: block; }
 }
 
 @media (any-pointer: coarse) {
-  .icon-button, .journey-dialog-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
+  .icon-button, .chooser-heading .icon-button { width: 44px; height: 44px; flex-shrink: 0; }
   .journey-button, .start-button { min-height: 44px; }
   .start-hint, .controls > span, .controls kbd { display: none; }
   .touch-hint { display: block; margin-top: 14px; font-size: 12px; line-height: 1.6; }
@@ -80,7 +80,7 @@ body[data-controller=true] .controller-hint { display: block; }
   .wordmark { font-size: 25px; }
   .brand-caption { letter-spacing: 1.4px; }
   .top-actions { gap: 8px; }
-  .icon-button, .journey-dialog-heading .icon-button { width: 44px; height: 44px; }
+  .icon-button, .chooser-heading .icon-button { width: 44px; height: 44px; }
   .journey-button { position: absolute; top: 56px; right: 0; min-height: 44px; padding: 10px 12px; font-size: 11px; }
   .welcome { left: calc(16px + var(--safe-left)); top: max(calc(132px + var(--safe-top)), 25%); bottom: calc(186px + var(--safe-bottom)); transform: none; width: 360px; max-width: calc(100% - 32px - var(--safe-left) - var(--safe-right)); height: fit-content; max-height: calc(100% - 318px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; padding: 22px; border: 1px solid #ffffff70; border-radius: 16px; background: #f9f8eedb; backdrop-filter: blur(12px); }
   .welcome.hidden { transform: translateY(8px); pointer-events: none; }
@@ -103,16 +103,16 @@ body[data-controller=true] .controller-hint { display: block; }
   .pause-overlay .start-button { min-height: 48px; font-size: 14px; }
   body[data-journey=snow] .welcome { background: #17273ee8; border-color: #93acc64a; }
   body[data-journey=jungle] .welcome { background: #1c3423e8; border-color: #9cbf8f4a; }
-  #journey-dialog { width: calc(100% - 24px - var(--safe-left) - var(--safe-right)); max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); padding: 16px; overscroll-behavior: contain; }
-  #journey-description { font-size: 13px; margin-bottom: 18px; }
-  .journey-options { grid-template-columns: 1fr; gap: 12px; }
-  .journey-card { display: grid; grid-template-columns: 92px 1fr; }
-  .journey-art { height: 100%; min-height: 112px; object-fit: cover; }
-  .journey-card-copy { padding: 14px 12px; }
-  .journey-card-title { font-size: 14px; }
-  .journey-card-description { font-size: 12px; line-height: 1.5; opacity: .85; }
-  .journey-current { font-size: 8px; letter-spacing: 1px; margin-top: 10px; }
-  .journey-note { font-size: 11px; line-height: 1.5; }
+  .chooser { width: calc(100% - 24px - var(--safe-left) - var(--safe-right)); max-height: calc(100dvh - 24px - var(--safe-top) - var(--safe-bottom)); padding: 16px; overscroll-behavior: contain; }
+  .chooser-intro { font-size: 13px; margin-bottom: 18px; }
+  .chooser-options { grid-template-columns: 1fr; gap: 12px; }
+  .chooser-card { display: grid; grid-template-columns: 92px 1fr; }
+  .chooser-art { height: 100%; min-height: 112px; object-fit: cover; }
+  .chooser-card-copy { padding: 14px 12px; }
+  .chooser-card-title { font-size: 14px; }
+  .chooser-card-description { font-size: 12px; line-height: 1.5; opacity: .85; }
+  .chooser-current { font-size: 8px; letter-spacing: 1px; margin-top: 10px; }
+  .chooser-note { font-size: 11px; line-height: 1.5; }
 }
 
 @media (max-width: 760px) and (any-pointer: coarse) {
@@ -169,12 +169,12 @@ body[data-journey=jungle] #touch-stick.active .stick-thumb { background: #a9d48f
   .pause-overlay { padding: calc(64px + var(--safe-top)) 24px calc(16px + var(--safe-bottom)); justify-content: flex-start; }
   .pause-overlay h2 { font-size: 32px; margin-top: 10px; }
   .pause-overlay p { margin: 8px 0 14px; }
-  #journey-dialog { max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); }
-  .journey-options { grid-template-columns: repeat(4, 1fr); }
-  .journey-card { display: block; }
-  .journey-art { height: 70px; min-height: 0; }
-  .journey-card-copy { padding: 10px; }
-  .journey-card-title { font-size: 13px; }
+  .chooser { max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); }
+  .chooser-options { grid-template-columns: repeat(4, 1fr); }
+  .chooser-card { display: block; }
+  .chooser-art { height: 70px; min-height: 0; }
+  .chooser-card-copy { padding: 10px; }
+  .chooser-card-title { font-size: 13px; }
 }
 
 /* Graphics settings live in the pause overlay, the one panel every input

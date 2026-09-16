@@ -12,7 +12,7 @@ Coastal gulls have slightly larger, brighter silhouettes. Their offshore loops c
 
 The Pacific scene follows a Monterey-inspired palette of sage and olive grass, pale granite, deep blue ocean, and turquoise shallows. Projecting headlands alternate with recessed sandy coves. Connected cliff fractures, damp rock feet, and fallen slabs give the shoreline structure, while larger offshore stacks have smaller broken companions and animated foam at their bases. The hills open into meadows before rising to overlapping rocky peaks; sheltered valleys ease down to the viaduct inlets. A shared habitat field groups darker fir groves and their understory, with branching Monterey pines inland and broad wind-shaped cypresses on the bluffs. Warm sunlight and cool sky fill keep the terrain facets readable.
 
-The highway and its occasional ocean overlooks are asphalt, with double yellow center lines, narrow pale shoulders, selective metal guardrails, parking bays, and sea-facing benches. Turnout aprons flatten the actual terrain and keep planting clear of the pavement. Broad grassy bluffs use a two-dimensional mesh of smaller facets to avoid stretched, striped triangles between the cliff and road. Wide beaches add a single intermediate row of broad facets, with quieter sand colors to avoid long alternating stripes. Terrain uses 1,632–1,664 triangles per chunk; scenery samples the rendered mesh for grounding and streams within the same nine-chunk budget. Geometry and shared procedural materials add the details without downloaded assets or additional textures.
+The highway and its occasional ocean overlooks are asphalt, with double yellow center lines, narrow pale shoulders, selective metal guardrails, parking bays, and sea-facing benches. A guardrail is solid: the car is stopped by the rails it can see, while open shoulders stay soft. See [Coastal guardrails](#coastal-guardrails). Turnout aprons flatten the actual terrain and keep planting clear of the pavement. Broad grassy bluffs use a two-dimensional mesh of smaller facets to avoid stretched, striped triangles between the cliff and road. Wide beaches add a single intermediate row of broad facets, with quieter sand colors to avoid long alternating stripes. Terrain uses 1,632–1,664 triangles per chunk; scenery samples the rendered mesh for grounding and streams within the same nine-chunk budget. Geometry and shared procedural materials add the details without downloaded assets or additional textures.
 
 Pacific discoveries are deliberately sparse: an isolated lighthouse with a small keeper cottage, an occasional wooden landing with a moored rowboat, and rare offshore whales. Lighthouses use jittered 12.3 km districts, docks 7.2 km districts, and whales 20.5 km districts; unsuitable or selected empty districts are skipped, and structures keep their distance from each other. Paved overlooks now use roughly 1.9 km districts with gaps. Docks search for wide beaches with dry approaches and a stable shoreline, independently of inlet and bridge locations. All placements stay fixed for each world seed. Ponds use the same broad terrain facets as the surrounding hills. A wider raised bank contains the water without local subdivisions, and the waterline is clipped to those exact faces. Muted flat water colors follow the terrain facets rather than creating a smooth halo.
 
@@ -45,7 +45,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. For a production build, run `npm run build`, then `npm run preview`.
+Open the local URL printed by Vite. The server binds every interface, so the **Network** address it also prints (`http://192.168.x.x:5173`) opens the game on a phone or tablet on the same Wi-Fi, which is the only way to judge how it really runs on a handset. On Windows, allow Node through the firewall for private networks when prompted. For a production build, run `npm run build`, then `npm run preview`.
 
 ## Desktop app
 
@@ -96,6 +96,7 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 - **R:** reset the scene in a fresh area with zero mileage
 - **N:** switch to the next scene, cycling through all routes while preserving each route’s progress
 - **1–4:** jump straight to a route by its number
+- **C:** open the garage
 - **P / Escape:** pause / resume
 - **O:** toggle soft ambient shading.
 - **M:** toggle driving sound and route ambience.
@@ -103,9 +104,17 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 
 On touch devices, tap **Let’s drive**, then drag the right-side virtual joystick toward the direction you want the car to move **on screen**. Up moves toward the top of the screen, regardless of the car's previous heading. Drag farther for more speed; release to stop. Camera orientation and terrain slope are accounted for, while roadside limits still apply. This directional driving mode only applies to the touch joystick; keyboard and physical controller steering retain their existing behavior and can start a drive directly. Leaving the tab pauses the drive.
 
-The pause screen also holds the graphics settings; see [Graphics quality](#graphics-quality). Driving controls and the combined area/distance/speed readout stay hidden on menus and pause screens. During a drive, the three-line readout sits in the bottom-left corner and the joystick sits at the bottom right. Short landscape screens hide repeated control help and compact the toolbar. Safe-area insets and available viewport height govern panel sizing; long menu and installation content scrolls inside its panel.
+The pause screen also holds the garage and the graphics settings; see [Cars](#cars) and [Graphics quality](#graphics-quality). Driving controls and the combined area/distance/speed readout stay hidden on menus and pause screens. During a drive, the three-line readout sits in the bottom-left corner and the joystick sits at the bottom right. Short landscape screens hide repeated control help and compact the toolbar. Safe-area insets and available viewport height govern panel sizing; long menu and installation content scrolls inside its panel.
 
 Third-person view uses car-style touch controls: push up to accelerate, left/right to steer, and down to brake or reverse. Release to stop. The camera follows turns smoothly while driving and softens terrain bumps; the other views retain screen-direction joystick controls. A second finger can tap View while driving.
+
+### Cars
+
+**Garage** in the pause screen opens the car chooser, alongside the graphics settings; `C` opens it directly from anywhere, including the menu. It is deliberately not in the driving toolbar, which stays down to view, route and reset. Eleven cars share the roads: **Default**, which wears each route's own paint and kit as you travel and is listed without a portrait or meters because it is whichever car the road brings; the four route cars on their own — the **Coastline Wagon**, **Canyon Runner**, **Alpine Tourer** and **Jungle Expedition**; the five shapes that also drive in traffic — **City Hatch**, **Highway Sedan**, **Estate Wagon**, **Work Pickup** and **Delivery Van**; and the **Cape GT**, a low coupe that exists only in the chooser and is never spawned into traffic or used as a route's own car.
+
+They are all the same kind of relaxed tourer. Top speed, acceleration, braking, steering and off-road pace differ by about a tenth either side of the original coastal wagon, enough to feel like a different car without turning the drive into a driving model: the hatchback turns in fastest, the pickup and van take longest to wind up, the alpine car brakes best, and the desert and jungle cars hold on best off the tarmac. The Cape GT is the one exception, reaching 74 mph against the wagon's 63. Each card shows the car and three meters drawn from those numbers.
+
+Choosing a car swaps the model where you stand: the route, position, mileage, speed and camera all continue, with the speed clipped to the new car's limit. The choice is kept in `localStorage` and applies to every route. The chooser pauses driving, and Escape, the close button, or a click outside dismisses it.
 
 ### Controllers
 
@@ -120,6 +129,9 @@ Basic support uses the browser's [Gamepad API](https://w3c.github.io/gamepad/) f
 - **Top face button (Xbox Y / PlayStation Triangle):** reset the scene in a fresh area.
 - **RB / R1 (right shoulder):** next scene, including while paused.
 - **Select / Back / View:** open the scenery chooser. Use the D-pad or stick to highlight a route, A / Cross to select, and B / Circle or Select to close.
+
+In either chooser, left and right step along the cards while up and down move between rows, following the cards as they are actually laid out, so a grid is crossed by row and a single row of routes still steps along itself. The stick's two axes are separate menu directions for the same reason.
+- **Right stick press (R3):** open the garage, from a drive or from the pause screen, with the same A / Cross and B / Circle handling.
 - **LB / L1 (left shoulder):** toggle fullscreen. Browsers may require a tap on the fullscreen icon or the F key to enter fullscreen; controller requests are handled without interrupting the game if denied.
 
 The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route button hide while a controller is detected and returns when it disconnects. Disconnecting during a drive pauses the game. Release held controls before resuming after a menu or focus change. Use Change Route on touchscreens, or RB / R1 to cycle scenes on a controller. The Change Route chooser remains available for selecting a specific route. Standard browser mappings work best; unmapped devices use the same button indices as a rough fallback, with no device-specific remapping. AYN Thor compatibility depends on its controls being exposed to the browser as a gamepad; it has not been tested on physical hardware.
@@ -132,6 +144,7 @@ The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route butt
 - `src/world/instance-batches.js`: splits a scenery batch that sprawls too wide for the frustum test to reject it. Shared by all four routes. See [Scenery drawing cost](#scenery-drawing-cost).
 - `src/graphics.js`: the quality levels, the starting-level guess, and the adaptive controller that reads frame times and moves between levels. Choices persist per browser. See [Graphics quality](#graphics-quality).
 - `src/world/shadow-depth.js`: Three.js draws every shadow caster with one shared `MeshDepthMaterial`, so a scene mixing plain meshes, instanced meshes and per-instance colours re-derives that material's program on nearly every shadow draw call. Each signature gets its own depth material instead, which is a cached program per signature and the same image. `chunk-transforms.js` applies it to every chunk, worker-built or not, and the player and traffic cars do the same.
+- `src/world/route.js` `coastalGuardrail`: one rule for where an ocean-side rail stands, read by both the scenery and the driving limits. See [Coastal guardrails](#coastal-guardrails).
 - `src/world/coastal-assets.js`: shared faceted firs, cypress crowns and branches, sea-stack variants, and a spatially indexed sampler for grounding scenery on the terrain mesh.
 - `src/world/water.js`: shared GPU animation for swell, wave highlights, shoreline breakers, and rock wash. Global phases preserve wave continuity through chunk changes and floating-origin rebases.
 - `src/world/landmarks.js`: bridges with solid arch walls, decks, and balustrades; pond surfaces clipped to streaming chunks. Terrain basins and ravines are generated by the route height functions, while the car samples the bridge deck separately.
@@ -146,13 +159,27 @@ The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route butt
 - `src/world/jungle-route.js`, `src/world/jungle.js`: a continuous watershed with a positive grade and bounded pool-height variation, ensuring every step descends downstream. The jungle road follows the same grade smoothly. Pool widths, uneven lips, bank outcrops, side streams, and rock wakes are deterministic in world space. Extra terrain rows resolve waterfall sills and plunge basins. Scenery samples the rendered terrain mesh; the same nine-chunk streaming budget and worker transfer apply. Foliage batches that sprawl across the valley are split until each part is small enough for the frustum test to reject, and the background forest layers stay out of the ambient-occlusion prepass. See [Scenery drawing cost](#scenery-drawing-cost).
 - `src/world/jungle-assets.js`, `src/world/jungle-water.js`: lobed broadleaf and umbrella crowns with sunlit tops, buttressed emergent trunks, leaning palms with creased fronds, banana plants, bamboo clumps, lily pads, leafy vine strands, columnar cliff rock, ferns, broad leaves, grass tufts, boulders with baked moss, and shaders for the flowing turquoise river, falling water, cascade foam, spray, and valley mist.
 - `src/world/jungle-discoveries.js`, `jungle-discovery-assets.js`, `jungle-discovery-scenery.js`: widely spaced waterfall rainbows and weathered rope-and-plank footbridges in selected 6,144 m districts. Flocks of two to four scarlet macaws appear every third chunk (384 m), matching Pacific gull frequency. Bridges land on the rendered banks away from waterfalls, with short dirt paths that fade into the terrain's existing faces. Rainbows belong to taller falls. Parrot flight, wingbeats, and rainbow haze share the water's simulation clock and pause with the scene.
-- `src/traffic.js`, `src/traffic-models.js`: sparse traffic in both directions on all four routes, with hatchbacks, sedans, wagons, pickups, and vans in random paint colors. Six reused vehicles cover roughly a kilometer of road. Simple braking and rectangle collisions slow the player and separate overlapping cars; traffic pauses and rebases with the world.
+- `src/traffic.js`, `src/traffic-models.js`: sparse traffic in both directions on all four routes, with hatchbacks, sedans, wagons, pickups, and vans in random paint colors. Six reused vehicles cover roughly a kilometer of road. Simple braking and rectangle collisions slow the player and separate overlapping cars; traffic pauses and rebases with the world. `vehicleGeometry` builds one body shape as four merged geometries, with the wheels either baked in for traffic or left loose for a driven car.
+- `src/cars.js`, `src/car-models.js`, `src/car-art.js`: the chooser's fleet. `cars.js` holds each car's shape, paint, blurb and four handling numbers, and derives the rest of the throttle and brake feel from them; `car-models.js` drives a traffic body shape with steering, spinning wheels; `car-art.js` draws each card's side profile from the same measurements the model is built from. `src/vehicle.js` reads the numbers, so the collision footprint, HUD speed bar and engine telemetry all follow the chosen car.
 - `src/timing.js`: 60 Hz physics with display-rate rendering via `requestAnimationFrame`, including high-refresh and variable-refresh displays. Actual frame delivery depends on the browser, system settings, and available GPU/CPU performance. Pausing preserves interpolation progress; resets and journey changes discard old poses.
 - `src/rendering.js`, `src/third-person-camera.js`: three isometric zoom levels (165-unit medium default, 115-unit close, 235-unit scenic), a perspective third-person camera, lighting, fog, and shadows. Zoom changes the projection without reallocating the canvas buffers.
 - `src/input.js`, `src/gamepad.js`, `src/main.js`: keyboard/touch/controller input and scene lifecycle.
 - `src/audio.js`, `src/audio/`: optional procedural audio with a rounded engine tone, throttle/coasting response, gentle automatic gear changes, speed-dependent tire and wind noise, and softer snow or grittier off-road texture. Stereo surf, canyon wind, and alpine gusts use different profiles and slow overlapping swells. One reusable Web Audio graph fades on mute, pause, and focus loss, then suspends to save processing; sound stays off until enabled with the speaker button or M. No audio downloads or new dependencies.
 
 Geometry, colors, and lighting provide the environment without external texture or model assets. System fonts keep the app self-contained with no runtime network dependencies. Instanced scenery follows [Three.js instancing guidance](https://threejs.org/docs/pages/InstancedMesh.html).
+
+### Coastal guardrails
+
+Galvanized rails run along the ocean side of the Pacific highway where the ground falls away close to the road, and on the short approaches to a viaduct. Scenery and driving read the same `coastalGuardrail(s)`, so the two cannot drift apart:
+
+- **A rail stops the car.** Where one stands, the ocean-side limit is the rail itself rather than the soft shoulder eight metres past it. Before, every railed metre of road could be driven straight through. Open road keeps its soft limit, and a viaduct deck keeps its own narrower one.
+- **The rule answers per 4 m beam.** Rails are built one beam at a time, so the rule snaps to that grid and gives the same answer for every metre a beam covers. Without it, up to two metres at each run end had a rail you could drive through, or an invisible wall past its end.
+- **A beam is judged at both ends**, so half a rail cannot be left standing on a viaduct deck or across an overlook apron.
+- **A lone beam is not built.** A single 4 m rail in open meadow reads as a stray piece of metal, so a beam needs a neighbour.
+- **Runs are closed.** Each beam posts its near end, and a run adds one more post so the last beam does not hang in the air.
+- **No doubled markers.** The white delineator posts skip the ocean side where a rail already marks that edge; they used to stand 20 cm outside it.
+
+Viaduct approach rails were also shortened from 30 m to 15 m past each abutment. At 30 m they reached out over open meadow — measured against the terrain, the nearest drop was a median of 61 m away, and some approach rails had no drop within 70 m at all.
 
 ### Scenery drawing cost
 
@@ -192,7 +219,7 @@ With the development server running, `npm run test:generation` checks fresh worl
 
 With the development server running, `npm run test:audio` checks sound activation, throttle response, pause/resume, rapid toggles, focus loss, route changes, and cleanup in Chrome. It also renders the actual audio graph offline to check headroom and fades, saving a report and three short WAV previews to `.artifacts/audio/`. Set `TEST_URL` to override the development URL. Browser emulation does not replace listening on physical phone speakers or headphones.
 
-With the development server running, `npm run test:responsive` audits menu, driving, pause and route-chooser layouts across 23 phone/tablet/desktop viewport sizes, plus notched screens, controller mode, dismissed help and expanded install instructions. It checks panel overlaps, reachable primary actions, target sizes, overflow, the three-line readout and right-side joystick. Reports and screenshots are saved in `.artifacts/responsive/`. These checks use Chrome emulation, not physical devices. Set `TEST_URL` to override the default development URL.
+With the development server running, `npm run test:responsive` audits menu, driving, pause, route-chooser and garage layouts across 23 phone/tablet/desktop viewport sizes, plus notched screens, controller mode, dismissed help and expanded install instructions. It checks panel overlaps, reachable primary actions, target sizes, overflow, the three-line readout and right-side joystick. Reports and screenshots are saved in `.artifacts/responsive/`. These checks use Chrome emulation, not physical devices. Set `TEST_URL` to override the default development URL.
 
 With the development server running, `node scripts/us-units-test.mjs` checks speed and mileage conversions, US number formatting, the speed bar, Fahrenheit temperatures, and saved mileage across all routes. Set `TEST_URL` to use a server other than `http://127.0.0.1:5173`.
 
