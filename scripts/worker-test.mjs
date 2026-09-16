@@ -64,12 +64,15 @@ try {
         const t = performance.now(); a.world.update(a.vehicle.s); const updateMs = performance.now() - t;
         a.vehicle.render(1, a.world.origin); a.traffic.render(1, a.world.origin);
         a.rendering.snap(); a.rendering.update(a.vehicle.car, 1, a.world.origin); a.world.animate(2.2, a.vehicle);
-        return { updateMs, count: a.world.chunks.size, cache: a.world.chunkSource.cache.size,
+        const { behind, ahead } = a.graphics.settings.chunks;
+        return { updateMs, count: a.world.chunks.size, resident: behind + ahead + 1, cache: a.world.chunkSource.cache.size,
           pending: a.world.chunkSource.pending.size, fallback: a.chunkWorker.stats.fallback,
           sourceCount: a.chunkWorker.sources.size, origin: a.world.origin,
           local: [...a.world.chunks.values()].every(chunk => chunk.group.position.z === a.world.origin - chunk.start) };
       }, direction);
-      assert.equal(record.count, 9); assert.equal(record.sourceCount, 1); assert.equal(record.fallback, 0);
+      // How much stays built is a quality setting now, so the invariant is that
+      // streaming holds exactly the window this level asked for.
+      assert.equal(record.count, record.resident); assert.equal(record.sourceCount, 1); assert.equal(record.fallback, 0);
       assert.ok(record.local); assert.ok(record.cache + record.pending <= 2);
       advances.push(record.updateMs);
     }
@@ -94,7 +97,10 @@ try {
   await fallback.goto(url.href);
   await fallback.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));
   await fallback.evaluate(async () => { await window.__coastline.action('pause'); await window.__coastline.changeJourney('desert'); });
-  assert.equal(await fallback.evaluate(() => window.__coastline.world.chunks.size), 9);
+  assert.ok(await fallback.evaluate(() => {
+    const { behind, ahead } = window.__coastline.graphics.settings.chunks;
+    return window.__coastline.world.chunks.size === behind + ahead + 1;
+  }), 'the synchronous fallback fills the same window');
   assert.equal(await fallback.evaluate(() => window.__coastline.chunkWorker.worker), null);
   assert.deepEqual(errors, []);
   await mkdir('.artifacts/worker', { recursive: true });

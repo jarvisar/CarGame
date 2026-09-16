@@ -64,13 +64,16 @@ const streaming = await page.evaluate(async () => {
   for (const s of [400, 900, 1026, 2300, 5100, 10000, 20000, 19900, 240, -129]) {
     a.vehicle.s = s; a.vehicle.reset();
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    records.push({ s, chunks: a.world.chunks.size, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, origin: a.world.origin, carZ: a.vehicle.car.position.z });
+    const { behind, ahead } = a.graphics.settings.chunks;
+    records.push({ s, chunks: a.world.chunks.size, resident: behind + ahead + 1, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, origin: a.world.origin, carZ: a.vehicle.car.position.z });
   }
   a.vehicle.s = 215; a.vehicle.reset(); a.rendering.snap();
   return records;
 });
 // Three scenery textures plus six fixed AO textures; streaming must remain bounded.
-for (const record of streaming) { assert.equal(record.chunks, 9); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 9); assert.ok(Math.abs(record.carZ) < 1030); }
+// How much stays built is a quality setting now, so the invariant is that
+// streaming holds exactly the window this level asked for, and no more.
+for (const record of streaming) { assert.equal(record.chunks, record.resident); assert.ok(record.geometries <= 185); assert.ok(record.textures <= 9); assert.ok(Math.abs(record.carZ) < 1030); }
 await page.waitForTimeout(700);
 await page.screenshot({ path: '.artifacts/coastline-driving.png' });
 // Input cannot remain held when the window loses focus.

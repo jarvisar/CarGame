@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { QUALITY_LEVELS, renderScale } from '../src/graphics.js';
 
 // The quality levels, the settings panel and the adaptive controller, against a
 // real renderer at three display densities. Frame delivery is fed deterministically
@@ -53,7 +54,7 @@ try {
       let clock = drive(60, 0, 20);
       const steady = { level: graphics.levelId, writes: reads() };
       clock = drive([24, 61, 61, 61], clock + 1000, 25);
-      const slowed = { level: graphics.levelId, ratio: renderer.getPixelRatio(), writes: reads() };
+      const slowed = { level: graphics.levelId, ratio: renderer.getPixelRatio(), softShading: graphics.settings.ambientOcclusion, writes: reads() };
       clock = drive(60, clock + 1000, 40);
       const recovered = { level: graphics.levelId, writes: reads() };
 
@@ -69,21 +70,28 @@ try {
     });
 
     const density = id => result.levels.find(level => level.id === id);
-    assert.equal(density('high').ratio, deviceScaleFactor, 'high uses the device density');
-    assert.equal(density('balanced').ratio, Math.min(2, deviceScaleFactor));
-    assert.equal(density('smooth').ratio, Math.min(1.5, deviceScaleFactor));
-    assert.equal(density('basic').ratio, 1);
-    assert.equal(density('basic').width, 390); assert.equal(density('basic').height, 844);
+    const expected = id => renderScale(QUALITY_LEVELS.find(level => level.id === id).density, deviceScaleFactor);
+    // Every level must remove pixels at every density — the point of scaling the
+    // device's own ratio rather than capping it. A cap left a 1x panel rendering
+    // 1x at three of the four levels.
+    for (const id of ['high', 'balanced', 'smooth', 'basic']) assert.equal(density(id).ratio, expected(id), `${id} density`);
+    for (let i = 1; i < result.levels.length; i++) {
+      assert.ok(result.levels[i].ratio < result.levels[i - 1].ratio, `${result.levels[i].id} must draw fewer pixels than ${result.levels[i - 1].id}`);
+    }
+    assert.equal(density('basic').width, Math.floor(390 * expected('basic')));
+    assert.equal(density('basic').height, Math.floor(844 * expected('basic')));
     assert.deepEqual(result.levels.map(level => level.shadow), [2048, 1536, 1024, 1024]);
     assert.deepEqual(result.levels.map(level => level.ambientOcclusion), [true, true, false, false]);
     assert.ok(result.unchangedProjection, 'density never touches the camera projection');
 
     assert.equal(result.steady.level, 'high', 'a display-rate device keeps its level');
     assert.equal(result.steady.writes, 0, 'no resize without a decision');
+    // Soft shading goes first and costs no resize, then one level step follows.
+    assert.equal(result.slowed.softShading, false, 'soft shading is given up before any resolution is');
     assert.equal(result.slowed.level, 'balanced', 'one step down per decision');
-    assert.equal(result.slowed.ratio, Math.min(2, deviceScaleFactor));
+    assert.equal(result.slowed.ratio, expected('balanced'));
     // One resize writes the canvas width and height: two attribute records.
-    assert.equal(result.slowed.writes, density('high').ratio === density('balanced').ratio ? 0 : 2, 'one canvas resize per adjustment');
+    assert.equal(result.slowed.writes, 2, 'one canvas resize per adjustment');
     assert.equal(result.recovered.level, 'balanced', 'a settled level does not climb back');
     assert.equal(result.recovered.writes, 0);
     assert.equal(result.pinned.level, 'high', 'a chosen level ignores frame times');
@@ -92,7 +100,7 @@ try {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.waitForFunction(() => document.querySelector('#scene').style.width === '844px');
     await page.evaluate(() => window.__coastline.graphics.setMode('smooth'));
-    assert.equal(await page.evaluate(() => window.__coastline.rendering.renderer.getPixelRatio()), Math.min(1.5, deviceScaleFactor));
+    assert.equal(await page.evaluate(() => window.__coastline.rendering.renderer.getPixelRatio()), expected('smooth'));
     assert.match(await page.locator('#graphics-status').textContent(), /^Smooth · \d+ × \d+ · soft shading off$/);
     await page.reload();
     await page.waitForFunction(() => window.__coastline && document.querySelector('#loading.loaded'));

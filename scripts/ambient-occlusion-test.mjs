@@ -23,6 +23,9 @@ try {
   assert.equal(await page.locator('#fps-counter').isVisible(), false);
   assert.equal(await page.locator('#ambient-occlusion').count(), 0);
   await page.evaluate(() => window.__coastline.action('pause'));
+  // Whether soft shading starts on depends on what this machine is, so pin the
+  // level that has it before testing that the key turns it off and back on.
+  await page.evaluate(() => window.__coastline.graphics.setMode('high'));
   assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), true);
   await page.keyboard.press('KeyO');
   assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), false);

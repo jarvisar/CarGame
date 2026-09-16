@@ -25,10 +25,11 @@ try {
     const state = await page.evaluate(() => {
       const a = window.__coastline; let water = 0, bridges = 0;
       a.rendering.scene.traverse(o => { if (o.name === 'desert-creek-water') water++; if (o.name === 'desert-timber-bridge') bridges++; });
-      return { s: a.vehicle.s, water, bridges, chunks: a.world.chunks.size, origin: a.world.origin, carZ: a.vehicle.car.position.z,
+      return { s: a.vehicle.s, water, bridges, chunks: a.world.chunks.size, resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1, origin: a.world.origin, carZ: a.vehicle.car.position.z,
         geometries: a.rendering.renderer.info.memory.geometries, calls: a.rendering.renderer.info.render.calls };
     });
-    assert.equal(state.water, 9); assert.ok(state.bridges >= 1); assert.equal(state.chunks, 9);
+    // One water sheet per resident chunk, however many this level keeps built.
+    assert.equal(state.water, state.resident); assert.ok(state.bridges >= 1); assert.equal(state.chunks, state.resident);
     assert.ok(state.geometries < 150); assert.ok(Math.abs(state.carZ) < 1030);
     records.push(state);
     if (s === 290) await page.screenshot({ path: `${output}/desktop-crossing.png` });
@@ -87,7 +88,10 @@ try {
   await phone.evaluate(() => { const a = window.__coastline; a.vehicle.s = 292; a.vehicle.reset(); a.rendering.snap(); });
   await phone.waitForTimeout(1200);
   await phone.screenshot({ path: `${output}/phone-crossing.png` });
-  assert.equal(await phone.evaluate(() => window.__coastline.world.chunks.size), 9);
+  assert.ok(await phone.evaluate(() => {
+    const { behind, ahead } = window.__coastline.graphics.settings.chunks;
+    return window.__coastline.world.chunks.size === behind + ahead + 1;
+  }), 'the phone streams the window its quality level asks for');
   assert.deepEqual(errors, []);
   await writeFile(`${output}/report.json`, JSON.stringify({ records, errors, checks: ['forward and reverse driving', 'chunk and origin changes', 'water animation', 'pause', 'route cleanup', 'phone view with a second seed'] }, null, 2));
   console.log('Desert river browser checks passed:', records.length, 'streaming locations, desktop and phone views.');

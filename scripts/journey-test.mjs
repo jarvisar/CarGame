@@ -46,9 +46,11 @@ try {
       const a = window.__coastline;
       let oceans = 0, mesas = 0;
       a.rendering.scene.traverse(object => { if (object.name === 'animated-ocean') oceans++; if (object.name === 'sandstone-mesas') mesas++; });
-      return { s: a.vehicle.s, chunks: a.world.chunks.size, origin: a.world.origin, carZ: a.vehicle.car.position.z, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, triangles: a.rendering.renderer.info.render.triangles, calls: a.rendering.renderer.info.render.calls, oceans, mesas };
+      const { behind, ahead } = a.graphics.settings.chunks;
+      return { s: a.vehicle.s, chunks: a.world.chunks.size, resident: behind + ahead + 1, origin: a.world.origin, carZ: a.vehicle.car.position.z, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, triangles: a.rendering.renderer.info.render.triangles, calls: a.rendering.renderer.info.render.calls, oceans, mesas };
     });
-    assert.equal(result.chunks, 9); assert.equal(result.oceans, 0); assert.equal(result.mesas, 9);
+    // One mesa group per resident chunk, however many the quality level keeps.
+    assert.equal(result.chunks, result.resident); assert.equal(result.oceans, 0); assert.equal(result.mesas, result.resident);
     assert.ok(result.geometries < 180); assert.ok(Math.abs(result.carZ) < 1030);
     records.push(result);
     if (s < 1000) await page.screenshot({ path: `.artifacts/desert-${s}.png` });
@@ -69,8 +71,8 @@ try {
       assert.equal(await page.evaluate(() => window.__coastline.vehicle.distance), 1245);
     }
   }
-  const finalState = await page.evaluate(() => { const a = window.__coastline; return { geometry: a.rendering.renderer.info.memory.geometries, top: a.rendering.camera.top, speed: a.vehicle.speed, chunks: a.world.chunks.size }; });
-  assert.ok(finalState.geometry < 180); assert.ok(Math.abs(finalState.top - zoom) < 1); assert.equal(finalState.speed, 0); assert.equal(finalState.chunks, 9);
+  const finalState = await page.evaluate(() => { const a = window.__coastline, { behind, ahead } = a.graphics.settings.chunks; return { geometry: a.rendering.renderer.info.memory.geometries, top: a.rendering.camera.top, speed: a.vehicle.speed, chunks: a.world.chunks.size, resident: behind + ahead + 1 }; });
+  assert.ok(finalState.geometry < 180); assert.ok(Math.abs(finalState.top - zoom) < 1); assert.equal(finalState.speed, 0); assert.equal(finalState.chunks, finalState.resident);
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   mobile.on('pageerror', error => errors.push(error.message));
   await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });

@@ -1,5 +1,6 @@
 import { CHUNK_LENGTH, SEED } from './route.js';
 import { unpackChunk } from './chunk-transfer.js';
+import { residentWindow, prefetchOffsets } from './resident.js';
 
 // One job at a time lets reversals and route switches cancel queued work before
 // it runs. Only the two chunks just outside the resident window are prefetched.
@@ -53,19 +54,22 @@ export class ChunkWorker {
 class ChunkSource {
   constructor(owner, journey) { this.owner = owner; this.journey = journey; this.cache = new Map(); this.pending = new Map(); this.disposed = false; }
   async prepare(s) {
-    const center = Math.floor(s / CHUNK_LENGTH);
+    const center = Math.floor(s / CHUNK_LENGTH), { behind, ahead } = residentWindow();
     this.prefetch(center, new Map());
     // Prepare the whole initial view before revealing it. Edge prefetches may
     // finish afterward; ordinary driving has a full chunk's worth of lead time.
-    await Promise.all([...this.pending.values()].filter(task => task.index >= center - 3 && task.index <= center + 5).map(task => task.done));
+    await Promise.all([...this.pending.values()].filter(task => task.index >= center - behind && task.index <= center + ahead).map(task => task.done));
   }
+  // The queue follows the resident window, so a quality level that keeps less
+  // of the route built also stops the worker building what it will not show.
   prefetch(center, resident) {
     if (this.disposed) return;
-    for (const index of this.cache.keys()) if (index < center - 4 || index > center + 6 || resident.has(index)) this.cache.delete(index);
-    for (const task of this.pending.values()) if (task.index < center - 4 || task.index > center + 6 || resident.has(task.index) || this.cache.has(task.index)) this.owner.cancel(task);
+    const { behind, ahead } = residentWindow(), first = center - behind - 1, last = center + ahead + 1;
+    for (const index of this.cache.keys()) if (index < first || index > last || resident.has(index)) this.cache.delete(index);
+    for (const task of this.pending.values()) if (task.index < first || task.index > last || resident.has(task.index) || this.cache.has(task.index)) this.owner.cancel(task);
     if (!this.owner.worker) return;
     // Nearby chunks have priority during loading; offscreen chunks come last.
-    for (const offset of [0, 1, -1, 2, -2, 3, -3, 4, 5, -4, 6]) {
+    for (const offset of prefetchOffsets(behind, ahead)) {
       const index = center + offset;
       if (resident.has(index) || this.cache.has(index) || this.pending.has(index)) continue;
       const task = { source: this, index, id: ++this.owner.nextId };

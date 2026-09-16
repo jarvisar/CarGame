@@ -3,6 +3,9 @@ import { createServer } from 'node:http';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
+import { QUALITY_LEVELS } from '../src/graphics.js';
+
+const SMALLEST_WINDOW = Math.min(...QUALITY_LEVELS.map(level => level.chunks.behind + level.chunks.ahead + 1));
 import { build, createServer as createViteServer } from 'vite';
 
 const launchOptions = {
@@ -63,7 +66,11 @@ async function checkProduction(base) {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
-    await page.waitForFunction(() => window.__chunkWorkerCheck.chunks >= 9);
+    // A production build has no debug surface to read the quality level from,
+    // so require the smallest window any level keeps built: enough to prove the
+    // worker really supplied the route rather than the page falling back to
+    // building it itself.
+    await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, SMALLEST_WINDOW);
     const worker = await page.evaluate(() => window.__chunkWorkerCheck);
     assert.equal(worker.readySeed, worker.seed, 'production worker must use the page seed before building scenery');
     assert.deepEqual(worker.errors, []);
@@ -102,7 +109,11 @@ async function checkProduction(base) {
     await context.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
-    await page.waitForFunction(() => window.__chunkWorkerCheck.chunks >= 9);
+    // A production build has no debug surface to read the quality level from,
+    // so require the smallest window any level keeps built: enough to prove the
+    // worker really supplied the route rather than the page falling back to
+    // building it itself.
+    await page.waitForFunction(count => window.__chunkWorkerCheck.chunks >= count, SMALLEST_WINDOW);
     assert.deepEqual(await page.evaluate(() => window.__chunkWorkerCheck.errors), [], 'worker bundle must be available offline');
     assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Dismissal survives reload');
     // All journey assets are available even when switching for the first time offline.

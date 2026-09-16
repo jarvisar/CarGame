@@ -30,10 +30,10 @@ try {
       a.rendering.snap();
       while (a.rendering.viewLabel !== 'Medium view') a.rendering.toggleView();
       a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.resize(); a.world.animate(8.5); a.rendering.render();
-      return {kind: site.kind, s: site.s, chunks: a.world.chunks.size, geometries: a.rendering.renderer.info.memory.geometries,
+      return {kind: site.kind, s: site.s, chunks: a.world.chunks.size, resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1, geometries: a.rendering.renderer.info.memory.geometries,
         features: [...a.world.chunks.values()].flatMap(chunk => chunk.features.discoveries || [])};
     }, site);
-    assert.equal(record.chunks, 9);
+    assert.equal(record.chunks, record.resident);
     assert.equal(record.features.filter(other => other.kind === site.kind && other.index === site.index).length, 1);
     await page.screenshot({path: `${directory}/${site.kind}-drive.png`});
     // A close detail of each model catches placement, scale, and material errors.

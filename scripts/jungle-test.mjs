@@ -32,11 +32,13 @@ try {
     const result = await page.evaluate(() => {
       const a = window.__coastline, info = a.rendering.renderer.info, names = {};
       a.rendering.scene.traverse(object => { if (object.name) names[object.name] = (names[object.name] ?? 0) + 1; });
-      return { s: a.vehicle.s, chunks: a.world.chunks.size, geometry: info.memory.geometries, triangles: info.render.triangles, calls: info.render.calls, origin: a.world.origin, carZ: a.vehicle.car.position.z,
+      const { behind, ahead } = a.graphics.settings.chunks;
+      return { s: a.vehicle.s, chunks: a.world.chunks.size, resident: behind + ahead + 1, geometry: info.memory.geometries, triangles: info.render.triangles, calls: info.render.calls, origin: a.world.origin, carZ: a.vehicle.car.position.z,
         rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(),
         rivers: names['jungle-river'] ?? 0, floors: names['jungle-floor'] ?? 0, crowns: names['emergent-crowns'] ?? 0, foam: names['cascade-foam'] ?? 0, oceans: names['animated-ocean'] ?? 0, nightEffects: names['snow-night-effects'] ?? 0 };
     });
-    assert.equal(result.chunks, 9); assert.equal(result.rivers, 9); assert.equal(result.floors, 9); assert.ok(result.crowns >= 9);
+    // One river and one floor per resident chunk, however many this level keeps.
+    assert.equal(result.chunks, result.resident); assert.equal(result.rivers, result.resident); assert.equal(result.floors, result.resident); assert.ok(result.crowns >= result.resident);
     assert.ok(result.foam >= 5); assert.equal(result.oceans, 0); assert.equal(result.nightEffects, 0);
     assert.ok(result.geometry < 200); assert.ok(Math.abs(result.carZ) < 1030);
     assert.deepEqual(result.scale, initial.scale); assert.equal(result.top, initial.top);

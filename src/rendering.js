@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
-import { Graphics } from './graphics.js';
+import { Graphics, renderScale } from './graphics.js';
 
 export function createRendering(canvas, graphics = new Graphics()) {
   stabilizeShadowFiltering();
@@ -11,7 +11,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: graphics.antialias, powerPreference: 'high-performance' });
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
-    const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio, graphics.settings.density);
+    const width = window.innerWidth, height = window.innerHeight, ratio = renderScale(graphics.settings.density, window.devicePixelRatio);
     if (width === canvasWidth && height === canvasHeight && ratio === pixelRatio) return;
     // Update size and density together: setPixelRatio followed by setSize allocates twice.
     renderer.setDrawingBufferSize(width, height, ratio);

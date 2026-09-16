@@ -23,11 +23,13 @@ try {
     await page.waitForTimeout(800);
     const state = await page.evaluate(() => {
       const a = window.__coastline;
-      return { s: a.vehicle.s, chunks: a.world.chunks.size, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, calls: a.rendering.renderer.info.render.calls, triangles: a.rendering.renderer.info.render.triangles, features: [...a.world.chunks.values()].map(c => c.features) };
+      const { behind, ahead } = a.graphics.settings.chunks;
+      return { s: a.vehicle.s, chunks: a.world.chunks.size, resident: behind + ahead + 1, softShading: a.graphics.settings.ambientOcclusion, geometries: a.rendering.renderer.info.memory.geometries, textures: a.rendering.renderer.info.memory.textures, calls: a.rendering.renderer.info.render.calls, triangles: a.rendering.renderer.info.render.triangles, features: [...a.world.chunks.values()].map(c => c.features) };
     });
     records.push(state);
-    assert.equal(state.chunks, 9); assert.ok(state.geometries <= 185);
-    assert.equal(state.textures, 9, 'three scenery textures plus six reusable AO textures');
+    assert.equal(state.chunks, state.resident); assert.ok(state.geometries <= 185);
+    // A level without soft shading never allocates its six buffers at all.
+    assert.equal(state.textures, state.softShading ? 9 : 3, 'three scenery textures, plus six reusable AO textures when it is on');
     await page.screenshot({ path: `.artifacts/scenery-${s}.png` });
   }
   assert.ok(records.at(-1).geometries <= records[1].geometries + 2, 'returning to the same bridge must not leak GPU resources');
@@ -38,7 +40,11 @@ try {
     const read = time => {
       a.world.animate(time); a.rendering.renderer.render(a.rendering.scene, a.rendering.camera);
       const canvas = document.createElement('canvas'); canvas.width = 1440; canvas.height = 1000;
-      const context = canvas.getContext('2d', { willReadFrequently: true }); context.drawImage(document.querySelector('#scene'), 0, 0);
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      // The crop below is in CSS pixels, and the drawing buffer only matches
+      // those at full quality, so scale the frame into place rather than
+      // drawing it at its own size and reading off the bottom of it.
+      context.drawImage(document.querySelector('#scene'), 0, 0, canvas.width, canvas.height);
       return context.getImageData(70, 640, 360, 240).data;
     };
     const before = read(0), after = read(2.2), still = read(2.2);
@@ -62,7 +68,7 @@ try {
     }
     return { movingPixels: moving, pausedPixels: paused, rebaseMeanColorDifference: rebaseDifference / (still.length / 4 * 3) };
   });
-  assert.ok(animation.movingPixels > 500, 'waves must visibly move in the rendered ocean');
+  assert.ok(animation.movingPixels > 500, `waves must visibly move in the rendered ocean (${animation.movingPixels})`);
   assert.equal(animation.pausedPixels, 0, 'the same simulation time must render identical water');
   assert.ok(animation.rebaseMeanColorDifference < 1, 'wave phases must remain visually continuous after rebasing');
   assert.deepEqual(errors, []);

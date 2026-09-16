@@ -27,12 +27,14 @@ try {
     });
     return { seed: a.seed, journey: a.journey, s: a.vehicle.s, distance: a.vehicle.distance, speed: a.vehicle.speed,
       u: a.vehicle.u, y: a.vehicle.car.position.y, ground: a.vehicle.route.height(a.vehicle.s, a.vehicle.u) + .13,
-      carZ: a.vehicle.car.position.z, origin: a.world.origin, road: roadFrame(0), terrain };
+      carZ: a.vehicle.car.position.z, origin: a.world.origin, road: roadFrame(0), terrain,
+      resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1 };
   });
   function checkSpawn(state) {
     assert.equal(state.distance, 0); assert.equal(state.speed, 0); assert.equal(state.u, 2.4);
     assert.ok(Math.abs(state.y - state.ground) < .0001);
-    assert.ok(Math.abs(state.carZ) < 1030); assert.equal(state.terrain.length, 9);
+    // One terrain mesh per resident chunk, however many this level keeps built.
+    assert.ok(Math.abs(state.carZ) < 1030); assert.equal(state.terrain.length, state.resident);
   }
   for (let i = 0; i < 3; i++) {
     if (i === 0) await page.goto(url.href, { waitUntil: 'networkidle' });

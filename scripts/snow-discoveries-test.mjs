@@ -33,11 +33,11 @@ try {
       while (a.rendering.viewLabel !== 'Medium view') a.rendering.toggleView();
       a.rendering.snap(); a.rendering.update(a.vehicle.car, 10, a.world.origin); a.rendering.resize();
       a.world.animate(9, a.vehicle); a.rendering.render();
-      return { kind: site.kind, s: site.s, chunks: a.world.chunks.size,
+      return { kind: site.kind, s: site.s, chunks: a.world.chunks.size, resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1,
         geometries: a.rendering.renderer.info.memory.geometries, calls: a.rendering.renderer.info.render.calls,
         features: [...a.world.chunks.values()].flatMap(chunk => chunk.features?.discoveries ?? []).map(f => ({ kind: f.kind, index: f.index })) };
     }, site);
-    assert.equal(record.chunks, 9);
+    assert.equal(record.chunks, record.resident);
     if (!before) assert.equal(record.features.filter(f => f.index === site.index).length, 1, 'one chunk owns each discovery');
     await page.screenshot({ path: `${directory}/${site.kind}-drive.png` });
     // A framed view of the whole discovery, from the road's side.

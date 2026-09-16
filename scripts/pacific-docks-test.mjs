@@ -34,10 +34,10 @@ try {
       camera.left = -height * aspect / 2; camera.right = height * aspect / 2; camera.top = height / 2; camera.bottom = -height / 2;
       camera.position.set(p.x - 80, p.y + 85, p.z + a.world.origin + 100); camera.lookAt(p.x, p.y, p.z + a.world.origin);
       camera.updateProjectionMatrix(); a.rendering.render();
-      return {...site, inletDistance: Math.abs(site.s - bridgeAt(site.s).center), chunks: a.world.chunks.size,
+      return {...site, inletDistance: Math.abs(site.s - bridgeAt(site.s).center), chunks: a.world.chunks.size, resident: a.graphics.settings.chunks.behind + a.graphics.settings.chunks.ahead + 1,
         copies: [...a.world.chunks.values()].flatMap(chunk => chunk.features.discoveries || []).filter(other => other.kind === site.kind && other.index === site.index).length};
     }, site));
-    assert.equal(records.at(-1).chunks, 9);
+    assert.equal(records.at(-1).chunks, records.at(-1).resident);
     if (site.kind === 'dock') assert.equal(records.at(-1).copies, 1);
     await page.screenshot({path: `${directory}/${site.kind}-${site.index}.png`});
   }

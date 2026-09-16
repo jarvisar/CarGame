@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
+import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, coastalGrove, coastalGuardrail, GUARDRAIL_OFFSET, overlookAt, overlookWidth, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
@@ -550,15 +551,7 @@ export class CoastalWorld {
   update(s) {
     const center = Math.floor(s / CHUNK_LENGTH);
     this.origin = Math.floor(s / 1024) * 1024;
-    if (center !== this.center) {
-      // Both directions are retained. Streaming begins well outside the visible area.
-      for (let i = center - 3; i <= center + 5; i++) {
-        if (!this.chunks.has(i)) { const chunk = this.chunkSource?.take(i) ?? new CoastalChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
-      }
-      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { this.chunkSource?.retain(i, chunk); chunk.dispose(); this.chunks.delete(i); }
-      this.center = center;
-      this.chunkSource?.prefetch(center, this.chunks);
-    }
+    updateResidentChunks(this, center, CoastalChunk);
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
   }
   animate(time) {

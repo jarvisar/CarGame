@@ -11,6 +11,7 @@ import { carArt } from './car-art.js';
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
+import { setResidentWindow } from './world/resident.js';
 import { DrivingController } from './vehicle.js';
 import { Traffic } from './traffic.js';
 import { Input } from './input.js';
@@ -38,6 +39,10 @@ async function boot() {
   try {
     // `?ao=0` still forces the soft shading off, whatever the quality level is.
     const graphics = new Graphics({ ambientOcclusion: new URLSearchParams(window.location.search).get('ao') === '0' ? false : null });
+    // How much of the route stays built is a quality setting too, so it has to
+    // be in place before the first world is streamed.
+    setResidentWindow(graphics.settings.chunks);
+    graphics.onChange(settings => setResidentWindow(settings.chunks));
     const rendering = createRendering($('#scene'), graphics);
     const { renderer, scene } = rendering;
     const fpsCounter = $('#fps-counter');
@@ -331,7 +336,7 @@ async function boot() {
       // A frozen canvas keeps its old buffer until something asks for a frame.
       needsRender = true;
       updateGraphicsUi(settings);
-      if (reason === 'auto') toast(`Graphics · ${settings.label} · adjusted for this device`);
+      if (reason === 'auto') toast(`Graphics · ${settings.label}${settings.ambientOcclusion ? '' : ' · soft shading off'} · adjusted for this device`);
     });
     for (const button of qualityButtons) button.addEventListener('click', () => graphics.setMode(button.dataset.quality));
     softShading.addEventListener('click', () => action('ambientOcclusion'));

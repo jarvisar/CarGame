@@ -138,3 +138,37 @@ test('beach profiles vary smoothly and meet the ocean at a stable waterline', ()
   assert.ok(wide - narrow > 18);
   function ravineAtWater(s) { return Math.abs(s - bridgeAt(s).center) < 47; }
 });
+
+test('the resident window follows the quality level, and reaches the worker', async () => {
+  const { setResidentWindow, residentWindow, prefetchOffsets } = await import('../src/world/resident.js');
+  const scene = new THREE.Scene(), world = new CoastalWorld(scene);
+  try {
+    world.update(0);
+    assert.equal(world.chunks.size, 9, 'the top levels keep the whole window');
+    const centre = world.center;
+
+    // A cheaper level drops the far chunk in each direction. It takes effect on
+    // the next update, without waiting for the car to cross into a new chunk.
+    setResidentWindow({ behind: 2, ahead: 4 });
+    world.update(0);
+    assert.equal(world.center, centre, 'the car has not moved');
+    assert.deepEqual([...world.chunks.keys()].sort((a, b) => a - b),
+      Array.from({ length: 7 }, (_, i) => centre - 2 + i));
+    assert.equal(scene.children.length, 7, 'the dropped chunks leave the scene');
+
+    setResidentWindow({ behind: 1, ahead: 3 });
+    world.update(0);
+    assert.equal(world.chunks.size, 5);
+
+    // Climbing back builds the window out again rather than leaving a gap.
+    setResidentWindow({ behind: 3, ahead: 5 });
+    world.update(0);
+    assert.equal(world.chunks.size, 9);
+    assert.deepEqual(residentWindow(), { behind: 3, ahead: 5 });
+
+    // The worker's queue follows it, so a shorter view is also less building:
+    // resident chunks first, forward before back, then one chunk of lead.
+    assert.deepEqual(prefetchOffsets(3, 5), [0, 1, -1, 2, -2, 3, -3, 4, 5, 6, -4]);
+    assert.deepEqual(prefetchOffsets(1, 3), [0, 1, -1, 2, 3, 4, -2]);
+  } finally { world.dispose(); setResidentWindow(); }
+});

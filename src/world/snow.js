@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch } from './instance-batches.js';
+import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
 import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
@@ -409,12 +410,7 @@ export class SnowWorld {
   update(s) {
     this.s = s; this.origin = Math.floor(s / 1024) * 1024;
     const center = Math.floor(s / CHUNK_LENGTH);
-    if (center !== this.center) {
-      for (let i = center - 3; i <= center + 5; i++) if (!this.chunks.has(i)) { const chunk = this.chunkSource?.take(i) ?? new SnowChunk(i); this.chunks.set(i, chunk); this.scene.add(chunk.group); }
-      for (const [i, chunk] of this.chunks) if (i < center - 3 || i > center + 5) { this.chunkSource?.retain(i, chunk); chunk.dispose(); this.chunks.delete(i); }
-      this.center = center;
-      this.chunkSource?.prefetch(center, this.chunks);
-    }
+    updateResidentChunks(this, center, SnowChunk);
     for (const chunk of this.chunks.values()) chunk.group.position.z = this.origin - chunk.start;
     const lampIndex = Math.round((s - 16) / LAMP_SPACING);
     // Fixed fixtures only move when the light pool advances or the world rebases.
