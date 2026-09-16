@@ -22,6 +22,9 @@ const canopyMaterial = material('#ffffff', { vertexColors: true });
 const frondMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
 const shrubMaterial = material('#ffffff');
 const barkMaterial = material('#6a5644');
+// Fallen logs carry per-instance colours; standing trunks do not. Sharing one
+// material across both makes the renderer re-derive its program every draw.
+const logMaterial = material('#6a5644');
 const palmBarkMaterial = material('#8b7657', { vertexColors: true });
 const stoneMaterial = material('#ffffff', { vertexColors: true, roughness: .95 });
 const railMaterial = material('#ffffff', { roughness: .7 });
@@ -32,7 +35,7 @@ const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 registerChunkResources('jungle', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, canopyMaterial, frondMaterial,
-  shrubMaterial, barkMaterial, palmBarkMaterial, stoneMaterial, railMaterial, trunkGeometry, logGeometry, shrubGeometry, boxGeometry, jungleCrowns, emergentCrowns,
+  shrubMaterial, barkMaterial, logMaterial, palmBarkMaterial, stoneMaterial, railMaterial, trunkGeometry, logGeometry, shrubGeometry, boxGeometry, jungleCrowns, emergentCrowns,
   emergentTrunks, junglePalms, fernGeometry, bigLeafGeometry, bananaGeometry, bambooGeometry, lilyGeometry, vineGeometry, tuftGeometry, jungleBoulders, cliffBlocks });
 
 // Streams wander: across the terrace toward the gorge wall, straightening at
@@ -713,7 +716,7 @@ export class JungleChunk {
     instances(this.group, lilyGeometry, frondMaterial, lilies, 'lily-pads', false);
     jungleBoulders.forEach((g, i) => instances(this.group, g, stoneMaterial, boulders[i], 'mossy-boulders'));
     cliffBlocks.forEach((g, i) => instances(this.group, g, stoneMaterial, cliffs[i], 'gorge-rocks'));
-    instances(this.group, logGeometry, barkMaterial, logs, 'fallen-logs');
+    instances(this.group, logGeometry, logMaterial, logs, 'fallen-logs');
     instances(this.group, boxGeometry, railMaterial, [...rails.map(item => ({ ...item, color: '#b3b9b7' })), ...railPosts.map(item => ({ ...item, color: '#6f7674' }))], 'guardrails');
   }
   buildGuardrail(rails, posts) {

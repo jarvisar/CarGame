@@ -3,6 +3,7 @@ import './journey.css';
 import './ui.css';
 import './layout.css';
 import { createRendering } from './rendering.js';
+import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
@@ -27,7 +28,9 @@ const toast = message => { $('#toast').textContent = message; $('#toast').classL
 async function boot() {
   let chunkWorker;
   try {
-    const rendering = createRendering($('#scene'));
+    // `?ao=0` still forces the soft shading off, whatever the quality level is.
+    const graphics = new Graphics({ ambientOcclusion: new URLSearchParams(window.location.search).get('ao') === '0' ? false : null });
+    const rendering = createRendering($('#scene'), graphics);
     const { renderer, scene } = rendering;
     const fpsCounter = $('#fps-counter');
     let fpsStart = null, fpsFrames = 0;
@@ -85,6 +88,9 @@ async function boot() {
       if (id === journey && !regenerate) { journeyDialog.close(); return; }
       if (!journeyDialog.open) journeyWasPaused = paused;
       changingJourney = true; paused = true; input.clear(); frameClock.suspend();
+      // Building and compiling the next route says nothing about how it runs,
+      // and the new route may afford a level the last one could not.
+      graphics.relax();
       audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close();
       $('#pause-overlay').hidden = true;
@@ -159,6 +165,7 @@ async function boot() {
       if (name === 'ambientOcclusion') {
         const enabled = rendering.toggleAO();
         needsRender = true; toast(`Soft shading ${enabled ? 'on' : 'off'}`);
+        return;
       }
       if (name === 'sound') {
         try {
@@ -236,6 +243,23 @@ async function boot() {
     window.addEventListener('pageshow', () => { audio.setHidden(document.hidden); needsRender = true; });
     $('#scene').addEventListener('webglcontextlost', event => { event.preventDefault(); setPaused(true); toast('Graphics paused. Reload to restart the game.'); });
     $('#scene').addEventListener('webglcontextrestored', () => { needsRender = true; });
+    const qualityButtons = [...document.querySelectorAll('[data-quality]')];
+    const softShading = $('#soft-shading'), graphicsStatus = $('#graphics-status');
+    function updateGraphicsUi(settings = graphics.settings) {
+      for (const button of qualityButtons) button.setAttribute('aria-checked', String(button.dataset.quality === graphics.mode));
+      softShading.setAttribute('aria-pressed', String(settings.ambientOcclusion));
+      // The drawing buffer is the thing the quality level actually changes, so
+      // show it: it explains a softer picture without any further digging.
+      graphicsStatus.textContent = `${graphics.auto ? 'Auto · ' : ''}${settings.label} · ${renderer.domElement.width} × ${renderer.domElement.height} · soft shading ${settings.ambientOcclusion ? 'on' : 'off'}`;
+    }
+    graphics.onChange((settings, reason) => {
+      // A frozen canvas keeps its old buffer until something asks for a frame.
+      needsRender = true;
+      updateGraphicsUi(settings);
+      if (reason === 'auto') toast(`Graphics · ${settings.label} · adjusted for this device`);
+    });
+    for (const button of qualityButtons) button.addEventListener('click', () => graphics.setMode(button.dataset.quality));
+    softShading.addEventListener('click', () => action('ambientOcclusion'));
     const hud = { speed: $('#speed'), fill: $('#speed-fill'), distance: $('#distance'), gear: $('#gear') };
     function updateHud() {
       // Physics uses meters and seconds; convert only the displayed measurements.
@@ -293,13 +317,13 @@ async function boot() {
     }
     await world.chunkSource.prepare(vehicle.s);
     world.update(vehicle.s);
-    vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi();
+    vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
     else renderer.compile(scene, rendering.camera);
     changingJourney = false;
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

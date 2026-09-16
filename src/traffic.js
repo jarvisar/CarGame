@@ -45,6 +45,7 @@ export class Traffic {
       this.group.add(model.car);
       return { ...model, index, direction: index % 2 ? -1 : 1, position: new THREE.Vector3(), previousPosition: new THREE.Vector3(), quaternion: new THREE.Quaternion(), previousQuaternion: new THREE.Quaternion() };
     });
+    this.nearest = [];
     this.reset(route, s, journey);
   }
   random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
@@ -139,7 +140,10 @@ export class Traffic {
       car.car.quaternion.slerpQuaternions(car.previousQuaternion, car.quaternion, clamp(alpha, 0, 1));
     }
     if (this.journey === 'snow') {
-      const nearest = [...this.vehicles].sort((a, b) => Math.abs(a.s - this.lastPlayerS) - Math.abs(b.s - this.lastPlayerS));
+      // Reused, so ranking the fleet each frame allocates nothing.
+      const nearest = this.nearest;
+      for (let i = 0; i < this.vehicles.length; i++) nearest[i] = this.vehicles[i];
+      nearest.sort((a, b) => Math.abs(a.s - this.lastPlayerS) - Math.abs(b.s - this.lastPlayerS));
       for (const [index, { rig, light }] of this.headlightRigs.entries()) {
         const car = nearest[index];
         rig.position.copy(car.car.position); rig.quaternion.copy(car.car.quaternion);

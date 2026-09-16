@@ -38,6 +38,9 @@ try {
   await page.keyboard.down('KeyW');
   await page.waitForFunction(() => window.__coastline.vehicle.s > 310, { timeout: 30000 });
   await page.keyboard.up('KeyW'); await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);
+  // Reset lands on a fresh random stretch, so drive back onto this crossing
+  // before reversing off it.
+  await page.evaluate(() => { const a = window.__coastline; a.vehicle.s = 315; a.vehicle.reset(); a.rendering.snap(); });
   await page.keyboard.down('ArrowDown');
   await page.waitForFunction(() => window.__coastline.vehicle.s < 302, { timeout: 30000 });
   await page.keyboard.up('ArrowDown'); await page.keyboard.press('KeyR'); await page.waitForFunction(() => !window.__coastline.changingJourney);

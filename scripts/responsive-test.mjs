@@ -63,7 +63,11 @@ try {
           const line = document.querySelector('.location-sub').getBoundingClientRect();
           if (speed.getBoundingClientRect().top < line.bottom - 1) issues.push('speed is not below distance');
           const stick = document.querySelector('#touch-stick');
-          if (visible(stick) && rect(stick).left < innerWidth / 2) issues.push('joystick is not on the right');
+          // On a 320 px screen the stick is wider than half the viewport, so
+          // its centre, not its left edge, says which side it sits on.
+          const stickRect = visible(stick) && rect(stick);
+          if (stickRect && stickRect.left + stickRect.width / 2 < innerWidth / 2) issues.push('joystick is not on the right');
+          if (stickRect && stickRect.right > innerWidth - 4) issues.push('joystick runs past the right edge');
         }
         if (document.documentElement.scrollWidth > innerWidth) issues.push('page horizontal overflow');
         return issues;

@@ -14,6 +14,7 @@
     "test:traffic": "node scripts/traffic-test.mjs",
     "test:audio": "node scripts/audio-test.mjs",
     "test:mobile": "node scripts/mobile-test.mjs",
+    "test:graphics": "node scripts/graphics-test.mjs",
     "test:responsive": "node scripts/responsive-test.mjs",
     "test:controller": "node scripts/controller-test.mjs",
     "test:scenery": "node scripts/scenery-test.mjs",

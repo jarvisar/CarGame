@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, coastalDrivingRoute } from './world/route.js';
+import { stableShadowDepth } from './world/shadow-depth.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
@@ -86,6 +87,7 @@ export function createCar() {
     plate.position.x = spare.visible ? -.65 : 0;
   }
   setAppearance('coast');
+  car.traverse(stableShadowDepth);
   return { car, body, wheels, nightLights, setAppearance };
 }
 

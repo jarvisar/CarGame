@@ -53,11 +53,36 @@ Windows, Linux (including the Steam Deck), and macOS builds wrap this same web b
 
 ## Experimental shading
 
-Experimental ambient occlusion is enabled by default. AO sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge. Fixed sampling directions and finer depth/normal coverage (up to 1280 pixels) reduce shimmer during camera motion. Upscaling uses surface depth and normals to keep background shading off foreground edges. Open with `?ao=0` to disable AO.
+Experimental ambient occlusion is enabled by default on the High and Balanced graphics levels, and off on Smooth and Basic. AO sampling and edge-aware denoising run at half resolution, capped at 640 pixels on the longest edge. Fixed sampling directions and finer depth/normal coverage (up to 1280 pixels) reduce shimmer during camera motion. Upscaling uses surface depth and normals to keep background shading off foreground edges. **Soft shading** in the pause screen, or `O`, switches it for the current level; `?ao=0` starts a visit with it off.
 
 Sunlight shadows use a fixed soft filter and a world-aligned texel grid, including after floating-origin shifts. The chase camera uses constant shadow coverage while turning, so shadow pixels do not stretch with the camera angle.
 
 `npm run test:ao` checks image comparisons, camera modes, route changes, display density, and buffer reuse against a running dev server (`TEST_URL` can override its address). `node scripts/ao-motion-test.mjs` compares AO stability during a controlled camera pan. `node scripts/ao-edge-test.mjs` checks moving silhouettes for background shading leaks, and `node scripts/shadow-motion-test.mjs` checks sunlight-shadow stability with AO disabled.
+
+## Graphics quality
+
+Four levels trade resolution and shading detail for frame rate. Only renderer settings change: scenery, lighting, animation, traffic and the nine streamed chunks are identical at every level, so each route looks like itself everywhere and is simply drawn at a different resolution.
+
+| Level | Pixel density cap | Sun shadow map | Soft shading | Multisampling |
+| --- | --- | --- | --- | --- |
+| High | 3× | 2048² | on | on |
+| Balanced | 2× | 1536² | on | on |
+| Smooth | 1.5× | 1024² | off | on |
+| Basic | 1× | 1024² | off | off |
+
+The density cap is a ceiling, not a target: a 1× display renders at 1× on every level. On a 412 × 915 phone at 2.625× the drawing buffer runs from 2.60 megapixels at High to 0.38 at Basic, and turning soft shading off also removes its depth/normal prepass, which is worth about 37% of the frame's draw calls and 43% of its triangles in the jungle.
+
+Open the pause screen — the pause button, `P`, `Escape`, or Start / Menu on a controller — to choose **Auto**, a fixed level, or to switch **Soft shading** on its own. The readout underneath shows the level in force and the drawing buffer it produces. Choices are stored per browser and restored on the next visit; multisampling belongs to the WebGL context, so a level that changes it applies that part on the next load.
+
+**Auto** guesses a starting level, then corrects it by watching frame times:
+
+- Pointer-driven devices start at High. Touch devices (a coarse *primary* pointer, or a browser that reports itself as mobile) start no higher than Balanced, from `hardwareConcurrency` and `deviceMemory`; Safari reports no `deviceMemory`, so cores carry the decision. A level auto settled on last time is used as the starting point instead.
+- Frame rates are averaged over 1.5-second windows, after a settling delay, and only while the scene is actually drawing: paused, hidden, unfocused and route-changing frames are excluded, as is the first moment after any change.
+- Two windows below 92% of the 60 FPS target step the level down; four windows at 97% or above step it up. Quality then ratchets: the controller never probes back above a level it has stepped down from, so the picture cannot flicker between two levels for a whole drive.
+- If a step down buys less than 4% more frames, the limit is not the scene — a capped display, a busy CPU, a throttled tab — so the detail is given back and the target becomes the rate the device actually delivers. A phone held at 30 FPS keeps its quality instead of being stripped for nothing.
+- Changing route lifts that ratchet by exactly one level, because a new route is a different amount of work. Leaving the jungle for the coast reclaims a level at a time rather than walking the whole ladder up and straight back down.
+
+A change made by Auto says so in a toast, so the picture never changes without explanation. Auto cannot guarantee 60 FPS when something other than rendering is the bottleneck.
 
 ## Controls
 
@@ -72,12 +97,13 @@ The interface uses US English, miles per hour (mph), miles, and Fahrenheit (°F)
 - **N:** switch to the next scene, cycling through all routes while preserving each route’s progress
 - **1–4:** jump straight to a route by its number
 - **P / Escape:** pause / resume
+- **O:** toggle soft ambient shading.
 - **M:** toggle driving sound and route ambience.
 - **F:** toggle fullscreen (also available via the fullscreen icon on touchscreens).
 
 On touch devices, tap **Let’s drive**, then drag the right-side virtual joystick toward the direction you want the car to move **on screen**. Up moves toward the top of the screen, regardless of the car's previous heading. Drag farther for more speed; release to stop. Camera orientation and terrain slope are accounted for, while roadside limits still apply. This directional driving mode only applies to the touch joystick; keyboard and physical controller steering retain their existing behavior and can start a drive directly. Leaving the tab pauses the drive.
 
-Driving controls and the combined area/distance/speed readout stay hidden on menus and pause screens. During a drive, the three-line readout sits in the bottom-left corner and the joystick sits at the bottom right. Short landscape screens hide repeated control help and compact the toolbar. Safe-area insets and available viewport height govern panel sizing; long menu and installation content scrolls inside its panel.
+The pause screen also holds the graphics settings; see [Graphics quality](#graphics-quality). Driving controls and the combined area/distance/speed readout stay hidden on menus and pause screens. During a drive, the three-line readout sits in the bottom-left corner and the joystick sits at the bottom right. Short landscape screens hide repeated control help and compact the toolbar. Safe-area insets and available viewport height govern panel sizing; long menu and installation content scrolls inside its panel.
 
 Third-person view uses car-style touch controls: push up to accelerate, left/right to steer, and down to brake or reverse. Release to stop. The camera follows turns smoothly while driving and softens terrain bumps; the other views retain screen-direction joystick controls. A second finger can tap View while driving.
 
@@ -103,6 +129,8 @@ The touch joystick, View/Reset/Next toolbar, Pause button, and Change Route butt
 - `src/world/generation.js`, `src/world/route.js`: a fresh session seed (or explicit URL seed), seeded road curves and starting locations, continuous coastline and height functions, and deterministic terrain samples within each world.
 - `src/world/environment.js`: nine streamed 128 m chunks; faceted terrain and ocean, road ribbons, and instanced vegetation and rocks. Chunks work in either direction and dispose their unique GPU resources on removal. A floating origin keeps rendering coordinates small on long drives.
 - `src/world/chunk-source.js`, `chunk-worker.js`, `chunk-transfer.js`: one Web Worker builds initial views and prepares the next chunks in both directions. Chunk-owned geometry and instance buffers transfer to the renderer; named shared resources preserve the existing materials, shaders, and instancing. The scene retains nine chunks, with at most two additional chunks of CPU data cached during driving. Evicted chunks can supply that reverse-travel cache while releasing their GPU resources. Cancelled requests are discarded on route changes, and unavailable workers or sudden jumps to unprepared locations use the existing synchronous builders.
+- `src/graphics.js`: the quality levels, the starting-level guess, and the adaptive controller that reads frame times and moves between levels. Choices persist per browser. See [Graphics quality](#graphics-quality).
+- `src/world/shadow-depth.js`: Three.js draws every shadow caster with one shared `MeshDepthMaterial`, so a scene mixing plain meshes, instanced meshes and per-instance colours re-derives that material's program on nearly every shadow draw call. Each signature gets its own depth material instead, which is a cached program per signature and the same image. `chunk-transforms.js` applies it to every chunk, worker-built or not, and the player and traffic cars do the same.
 - `src/world/coastal-assets.js`: shared faceted firs, cypress crowns and branches, sea-stack variants, and a spatially indexed sampler for grounding scenery on the terrain mesh.
 - `src/world/water.js`: shared GPU animation for swell, wave highlights, shoreline breakers, and rock wash. Global phases preserve wave continuity through chunk changes and floating-origin rebases.
 - `src/world/landmarks.js`: bridges with solid arch walls, decks, and balustrades; pond surfaces clipped to streaming chunks. Terrain basins and ravines are generated by the route height functions, while the car samples the bridge deck separately.
@@ -127,9 +155,11 @@ Geometry, colors, and lighting provide the environment without external texture 
 
 Fixed car body parts share draw calls, and flat foam and lake mist use [single-pass transparency](https://threejs.org/docs/pages/Material.html#forceSinglePass). Coastal terrain vertices and desert column profiles are reused during chunk construction; those temporary caches are released afterward. Paused scenes redraw after a resize, reset, or canvas restoration while controller polling and audio fades continue. Scenery detail, shadows, and driving physics retain their existing settings.
 
-Rendering starts at the device's native pixel density, capped at **3×**. After a three-second grace period, two consecutive two-second windows below the 60 FPS target lower the cap based on measured FPS, rounded down to **0.25× steps**, with a **1× minimum**. For example, 3× at 50 FPS tries 2.5×; at 30 FPS it tries 2×. It allows one second to settle after each adjustment, measures again, and can reduce further if needed. A small tolerance (59.5 FPS threshold) avoids downgrading normal 59.94 Hz displays. Pauses, hidden/unfocused tabs, and route transitions do not count; resizing restarts the grace period. Reductions last for the page session to prevent oscillation; reloading tries higher density again. Devices below 1× retain their native density. This reduces rendering cost when the device struggles, but cannot guarantee 60 FPS if other work is the bottleneck.
+See [Graphics quality](#graphics-quality) for the levels and how the automatic one is chosen.
 
-Matching road markings draw together within each chunk, and each pair of car lamps shares a material and body batch. Snowfall uses floor-based coordinate wrapping to avoid repeated remainder operations for every flake. HUD text changes only when its displayed value changes. Canvas resizing updates size and pixel ratio together and skips duplicate viewport events, avoiding unnecessary buffer allocation during mobile viewport changes.
+A material shared between instanced and plain meshes costs a program lookup on every draw, so the alpine snow caps and the jungle bark keep their own material instances apart from the snowbanks and fallen logs they used to share. Together with the per-signature shadow depth materials this removed every mixed-signature draw call from all four routes: 90 of 175 on the coast, 122 of 237 in the desert, 218 of 303 in the alpine night and 147 of 342 in the jungle, down to none. Measured under 6× CPU throttling at 412 × 915 and 2.625×, that is roughly 15–30% less main-thread time per frame on the coast and in the jungle, 30–38% in the desert, and 45–50% in the alpine night, which has the most shadow casters.
+
+Matching road markings draw together within each chunk, and each pair of car lamps shares a material and body batch. The driving simulation fills one reused input record per step rather than building a fresh object, ambient occlusion reuses one bound visitor for its per-frame traversal, and traffic ranks the fleet in a reused array. Snowfall uses floor-based coordinate wrapping to avoid repeated remainder operations for every flake. HUD text changes only when its displayed value changes. Canvas resizing updates size and pixel ratio together and skips duplicate viewport events, avoiding unnecessary buffer allocation during mobile viewport changes.
 
 Run `npm test` for deterministic generation, continuity, driving, and streaming checks.
 
@@ -137,7 +167,7 @@ With the development server running, `npm run test:worker` checks worker-built i
 
 With the development server running, `node scripts/performance-test.mjs` checks that all routes stop rendering while paused, redraw after resize/reset, and resume normally. It also checks idle HUD updates and duplicate resize events, and compares flat effects pixel-for-pixel against two-pass rendering. Reports go to `.artifacts/performance/`; set `TEST_URL` to override the development URL. Browser checks use software rendering and do not measure physical mobile GPU performance.
 
-`node scripts/pixel-density-test.mjs` checks native densities 1×/2×/3×, stable 60 FPS delivery, intermediate density selection, one canvas resize per adjustment, preserved camera projection, rotation, and pause/resume integration. Frame samples are controlled so software GPU speed does not determine the test outcome. Reports go to `.artifacts/pixel-density/`; `TEST_URL` overrides the development URL. Node tests cover repeated reductions, the 1× floor, actual device density, startup/hitch tolerance, and excluded intervals.
+With the development server running, `npm run test:graphics` checks each level's pixel ratio, shadow map and soft shading against a real renderer at display densities 1×/2×/3×, plus one canvas resize per adjustment, an unchanged camera projection, a pinned level ignoring frame times, rotation, the panel's readout, and the remembered choice surviving a reload. Frame delivery is fed deterministically so software GPU speed never decides the outcome. Reports go to `.artifacts/graphics/`; `TEST_URL` overrides the development URL. Node tests in `tests/graphics.test.js` cover detection, stepping down, climbing back up, the settle-and-stop rule for capped displays, pinned levels, storage and the soft-shading override.
 
 With the development server running, `npm run test:generation` checks fresh worlds on reload, repeatable URL seeds across all four journeys, grounded spawns, regenerated chunk consistency, and saved progress. Reports and screenshots go to `.artifacts/generation/`. Set `TEST_URL` to override the development URL. The Node suite uses a repeatable seed by default; set `TEST_WORLD_SEED` to run it against another world.
 

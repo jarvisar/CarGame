@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import { fitSunShadow, stabilizeShadowFiltering } from './shadows.js';
-import { PixelDensity } from './pixel-density.js';
 import { ThirdPersonCamera } from './third-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
+import { Graphics } from './graphics.js';
 
-export function createRendering(canvas) {
+export function createRendering(canvas, graphics = new Graphics()) {
   stabilizeShadowFiltering();
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  const density = new PixelDensity();
+  // Multisampling belongs to the context and cannot be changed later, so the
+  // level this page starts on decides it.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: graphics.antialias, powerPreference: 'high-performance' });
   let canvasWidth, canvasHeight, pixelRatio;
   function resizeCanvas() {
-    const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio, density.cap);
+    const width = window.innerWidth, height = window.innerHeight, ratio = Math.min(window.devicePixelRatio, graphics.settings.density);
     if (width === canvasWidth && height === canvasHeight && ratio === pixelRatio) return;
     // Update size and density together: setPixelRatio followed by setSize allocates twice.
     renderer.setDrawingBufferSize(width, height, ratio);
@@ -18,24 +19,33 @@ export function createRendering(canvas) {
     canvasWidth = width; canvasHeight = height; pixelRatio = ratio;
   }
   resizeCanvas();
-  function recordFrame(timestamp, active) {
-    if (density.update(timestamp, active, pixelRatio)) resizeCanvas();
-  }
-  document.addEventListener('visibilitychange', () => density.reset());
-  window.addEventListener('blur', () => density.reset());
+  // Frame times only describe the scene while it is actually drawing it.
+  const recordFrame = (timestamp, active) => graphics.sample(timestamp, active);
+  document.addEventListener('visibilitychange', () => graphics.suspend());
+  window.addEventListener('blur', () => graphics.suspend());
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .94;
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#b8dfe0'); scene.fog = new THREE.Fog('#c2e2db', 460, 860);
   const sky = new THREE.HemisphereLight('#e4f2f5', '#617149', 1.45); scene.add(sky);
   const sun = new THREE.DirectionalLight('#fff1db', 2.5); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 650; sun.shadow.normalBias = .65; sun.shadow.bias = -.0003; sun.shadow.radius = 2;
   scene.add(sun); scene.add(sun.target);
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 1200);
   const thirdPerson = new ThirdPersonCamera();
   const ambientOcclusion = new AmbientOcclusion(renderer, scene, camera);
-  ambientOcclusion.enabled = new URLSearchParams(window.location.search).get('ao') !== '0';
+  // Resolution, sun-shadow detail and soft shading follow the quality level.
+  // A new shadow map size only takes effect once the old texture is released.
+  function applyQuality(settings) {
+    ambientOcclusion.enabled = settings.ambientOcclusion;
+    if (sun.shadow.mapSize.x !== settings.shadowMap) {
+      sun.shadow.mapSize.set(settings.shadowMap, settings.shadowMap);
+      sun.shadow.map?.dispose(); sun.shadow.map = null;
+    }
+    resizeCanvas();
+  }
+  applyQuality(graphics.settings);
+  graphics.onChange(applyQuality);
   const follow = new THREE.Vector3(); const target = new THREE.Vector3();
   const cameraOffset = new THREE.Vector3(-220, 245, 260);
   const cameraRight = new THREE.Vector3(cameraOffset.z, 0, -cameraOffset.x).normalize();
@@ -97,7 +107,7 @@ export function createRendering(canvas) {
     fitSunShadow(activeCamera(), sun, journey === 'jungle' ? sun.target.position.y : 0, origin);
   }
   // Zoom only changes the projection; resizing the canvas every zoom frame reallocates its buffers.
-  window.addEventListener('resize', () => { density.reset(); resizeCanvas(); resize(); }); resize();
+  window.addEventListener('resize', () => { graphics.suspend(); resizeCanvas(); resize(); }); resize();
   function setJourney(id) {
     journey = fogProfiles[id] ? id : 'coast';
     snowy = id === 'snow';
@@ -128,5 +138,5 @@ export function createRendering(canvas) {
     renderer.toneMappingExposure = desert ? .92 : 1.02;
   }
   setJourney('coast');
-  return { renderer, scene, ambientOcclusion, render() { ambientOcclusion.render(activeCamera()); }, toggleAO() { ambientOcclusion.enabled = !ambientOcclusion.enabled; density.reset(); return ambientOcclusion.enabled; }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
+  return { renderer, scene, graphics, ambientOcclusion, render() { ambientOcclusion.render(activeCamera()); }, toggleAO() { return graphics.toggleAmbientOcclusion(); }, get camera() { return activeCamera(); }, update, resize, recordFrame, setJourney, get viewLabel() { return views[view].label; }, toggleView() { view = (view + 1) % views.length; updateFog(); thirdPerson.snap(); return views[view].label; }, snap() { initialized = false; thirdPerson.snap(); } };
 }

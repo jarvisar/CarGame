@@ -79,7 +79,7 @@ try {
   assert.equal(await page.evaluate(() => window.__coastline.input.touchStick.engaged), false);
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await page.locator('#resume').tap();
-  assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick), undefined);
+  assert.equal(await page.evaluate(() => window.__coastline.input.state.touchStick), null, 'the reused input record reports no stick rather than a stale one');
   checks.push('second-finger pause clears joystick and prevents stale input on resume');
   await page.locator('#view').tap();
   assert.match(await page.locator('#view').getAttribute('aria-label'), /Extra close view/);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { stableShadowDepth } from './world/shadow-depth.js';
 
 export const TRAFFIC_MODELS = [
   { name: 'hatchback', width: 1.85, length: 3.45, cabin: [1.63, .75, 1.95], cabinZ: .25 },
@@ -87,7 +88,7 @@ export function createTrafficModels() {
       paints.push(paint); car.name = `traffic-${spec.name}`;
       for (const [key, geometry] of Object.entries(templates[index])) {
         const mesh = new THREE.Mesh(geometry, { paint, details, headlights, taillights }[key]);
-        mesh.castShadow = true; mesh.receiveShadow = true; car.add(mesh);
+        mesh.castShadow = true; mesh.receiveShadow = true; stableShadowDepth(mesh); car.add(mesh);
       }
       return { car, paint, spec };
     },

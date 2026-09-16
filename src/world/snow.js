@@ -14,6 +14,10 @@ import { buildSnowDiscoveries, animateSnowDiscoveries } from './snow-discovery-s
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .95, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
 const snowMaterial = material('#c7d2df');
+// Identical settings, but kept apart from the instanced snow caps: one
+// material shared by instanced and plain meshes makes the renderer
+// re-derive its program on every draw call.
+const snowBankMaterial = material('#c7d2df');
 const rockMaterial = material('#4b5870');
 const stoneMaterial = material('#ffffff');
 const pineMaterial = material('#ffffff', { side: THREE.DoubleSide });
@@ -30,7 +34,7 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const rockGeometry = new THREE.IcosahedronGeometry(1, 0);
 const poleGeometry = new THREE.CylinderGeometry(1, 1, 1, 6);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
-registerChunkResources('snow', { terrainMaterial, snowMaterial, rockMaterial, stoneMaterial, pineMaterial, metalMaterial,
+registerChunkResources('snow', { terrainMaterial, snowMaterial, snowBankMaterial, rockMaterial, stoneMaterial, pineMaterial, metalMaterial,
   barkMaterial, roadMaterial, lineMaterial, edgeMaterial, timberMaterial, glowMaterial, boxGeometry, rockGeometry, poleGeometry, alpinePines, alpineRockVariants });
 
 // Road ribbons, guardrails and stakes stop at the abutments of a timber trestle.
@@ -138,7 +142,7 @@ export class SnowChunk {
     this.addMesh(geometry(vertices), mat, name);
   }
   buildRoad() {
-    this.ribbon([[-7, 7]], .025, snowMaterial, 'plowed-snow-shoulders');
+    this.ribbon([[-7, 7]], .025, snowBankMaterial, 'plowed-snow-shoulders');
     this.ribbon([[-5.5, 5.5]], .075, roadMaterial, 'mountain-road');
     this.ribbon([[-4.98, -4.85], [4.85, 4.98]], .094, edgeMaterial, 'road-edge');
     this.ribbon([[-.08, .08]], .096, lineMaterial, 'center-line');
@@ -154,7 +158,7 @@ export class SnowChunk {
         triangle(banks, null, at(s + 4, i), at(s + 4, i + 1), at(s, i + 1), null, this.start);
       }
     }
-    this.addMesh(geometry(banks), snowMaterial, 'roadside-snowbanks');
+    this.addMesh(geometry(banks), snowBankMaterial, 'roadside-snowbanks');
   }
   buildScenery(index) {
     const random = seededRandom(index + 90241), trunks = [], metal = [], lamps = [];

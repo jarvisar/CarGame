@@ -63,7 +63,20 @@
         <span class="controller-hint">Left stick / D-pad: steer · RT / R2: gas<br>LT / L2: brake or reverse · Start / Menu: pause<br>Left face button: view · Top face button: reset<br>RB / R1: next scene · LB / L1: fullscreen<br>Select / View: choose scenery</span>
       </section>
       <div id="pause-overlay" class="pause-overlay" hidden>
-        <span class="eyebrow">PACIFIC COAST</span><h2>Paused</h2><p>Resume when you’re ready.</p><button id="resume" class="start-button">Resume drive <span aria-hidden="true">↗</span></button><span class="controller-hint">Press Start / Menu to resume.</span>
+        <span class="eyebrow">PACIFIC COAST</span><h2>Paused</h2><p>Resume when you’re ready.</p><button id="resume" class="start-button">Resume drive <span aria-hidden="true">↗</span></button>
+        <section class="graphics-panel" aria-labelledby="graphics-heading">
+          <h3 id="graphics-heading">Graphics</h3>
+          <div class="graphics-levels" role="radiogroup" aria-labelledby="graphics-heading">
+            <button type="button" role="radio" aria-checked="true" data-quality="auto">Auto</button>
+            <button type="button" role="radio" aria-checked="false" data-quality="high">High</button>
+            <button type="button" role="radio" aria-checked="false" data-quality="balanced">Balanced</button>
+            <button type="button" role="radio" aria-checked="false" data-quality="smooth">Smooth</button>
+            <button type="button" role="radio" aria-checked="false" data-quality="basic">Basic</button>
+          </div>
+          <button type="button" id="soft-shading" class="graphics-toggle" aria-pressed="true">Soft shading<span class="graphics-switch" aria-hidden="true"></span></button>
+          <p id="graphics-status" class="graphics-status" role="status"></p>
+        </section>
+        <span class="controller-hint">Press Start / Menu to resume.</span>
       </div>
       <footer class="bottom-bar">
         <div class="location"><svg viewBox="0 0 29 34" fill="none" aria-hidden="true"><path d="M4 4c7 2 14 2 21 0v17c0 4-7 7-10.5 10C11 28 4 25 4 21V4Z" stroke="currentColor" stroke-width="1.3"/><text x="14.5" y="22" text-anchor="middle" fill="currentColor" font-size="19" font-family="Georgia">1</text></svg><div class="location-copy"><span class="location-title">PACIFIC COAST</span><span class="location-sub"><span id="distance">0.0</span> mi driven</span><div class="speedometer"><div class="speed-track"><div id="speed-fill"></div></div><span id="speed">00</span><div class="speed-unit">MPH<span id="gear">READY</span></div></div></div></div>

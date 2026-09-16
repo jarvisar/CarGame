@@ -112,6 +112,15 @@ export class AmbientOcclusion {
       depthTest: false, depthWrite: false, toneMapped: false,
     });
     this.quad = new FullScreenQuad(this.material);
+    // Bound once: this runs over every visible object on every rendered frame.
+    this.hideOverlay = object => {
+      if (!object.isMesh) return;
+      const material = object.material;
+      if (Array.isArray(material) ? material.every(item => !item.depthWrite) : !material.depthWrite) {
+        this.hidden.push(object);
+        object.visible = false;
+      }
+    };
   }
 
   render(camera) {
@@ -154,14 +163,7 @@ export class AmbientOcclusion {
       this.material.uniforms.fogNear.value = scene.fog.near;
       this.material.uniforms.fogFar.value = scene.fog.far;
       // Foam, mist, flakes and other overlays must not become opaque AO casters.
-      scene.traverseVisible(object => {
-        if (!object.isMesh) return;
-        const material = object.material;
-        if (Array.isArray(material) ? material.every(item => !item.depthWrite) : !material.depthWrite) {
-          this.hidden.push(object);
-          object.visible = false;
-        }
-      });
+      scene.traverseVisible(this.hideOverlay);
       renderer.shadowMap.autoUpdate = false;
       // The color pass already updated every transform. AO uses the same pose.
       scene.matrixWorldAutoUpdate = false;

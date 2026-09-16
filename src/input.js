@@ -6,6 +6,10 @@ export class Input {
     this.keys = new Set(); this.onAction = onAction;
     this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
     this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
+    // The driving simulation reads this up to six times per displayed frame, so
+    // it fills one reused record rather than building a fresh object each step.
+    this.actions = Object.keys(this.codes);
+    this.driving = Object.fromEntries([...this.actions.map(action => [action, false]), ['touchStick', null], ['touchDrive', null]]);
     this.gamepad = new GamepadInput(onAction, connected => {
       this.keys.clear(); this.touchStick.clear();
       document.body.dataset.controller = String(connected);
@@ -45,8 +49,15 @@ export class Input {
     window.addEventListener('blur', () => this.clear());
   }
   get state() {
-    const state = Object.fromEntries(Object.entries(this.codes).map(([action, codes]) => [action, codes.some(code => this.keys.has(code)) || this.gamepad.state[action] || false]));
-    if (Object.values(state).some(Boolean) || this.gamepad.connected) this.touchStick.clear();
+    const state = this.driving;
+    let held = false;
+    for (const action of this.actions) {
+      const value = this.codes[action].some(code => this.keys.has(code)) || this.gamepad.state[action] || false;
+      state[action] = value;
+      if (value) held = true;
+    }
+    state.touchStick = null; state.touchDrive = null;
+    if (held || this.gamepad.connected) this.touchStick.clear();
     else if (this.touchStick.engaged) state.touchStick = this.touchStick.vector;
     return state;
   }
