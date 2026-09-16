@@ -4,6 +4,11 @@ import { ThirdPersonCamera } from './third-person-camera.js';
 import { AmbientOcclusion } from './ambient-occlusion.js';
 import { Graphics, renderScale } from './graphics.js';
 
+// How fast the overhead views close on the car, per second. Ground is what the
+// player reads as responsiveness, so it settles in about an eighth of a second;
+// height keeps the older, gentler rate so the view does not bob over terrain.
+const FOLLOW_GROUND = 8, FOLLOW_HEIGHT = 3;
+
 export function createRendering(canvas, graphics = new Graphics()) {
   stabilizeShadowFiltering();
   // Multisampling belongs to the context and cannot be changed later, so the
@@ -88,7 +93,17 @@ export function createRendering(canvas, graphics = new Graphics()) {
   function update(car, dt, origin) {
     const originShift = origin - previousOrigin; follow.z += originShift; previousOrigin = origin;
     if (!initialized) { follow.copy(car.position); initialized = true; }
-    follow.lerp(car.position, 1 - Math.exp(-dt * (reducedMotion ? 8 : 3)));
+    // Follow the car across the ground quickly and up the hill slowly. The two
+    // used to share one rate, and the slow one won: a steering input moved the
+    // car at once but took a third of a second to move the world, which reads
+    // as the car itself being late. Height is the one that has to stay gentle,
+    // because most of it is terrain rather than driving, and tracking every
+    // rise makes the whole miniature view bob. Reduced motion pins both, as
+    // before, which leaves the car nearly still on screen.
+    const groundRate = 1 - Math.exp(-dt * FOLLOW_GROUND);
+    follow.x += (car.position.x - follow.x) * groundRate;
+    follow.z += (car.position.z - follow.z) * groundRate;
+    follow.y += (car.position.y - follow.y) * (1 - Math.exp(-dt * (reducedMotion ? FOLLOW_GROUND : FOLLOW_HEIGHT)));
     const nextHeight = THREE.MathUtils.damp(viewHeight, views[view].height, 4, dt);
     if (Math.abs(nextHeight - viewHeight) > .01) { viewHeight = nextHeight; resize(); }
     // Shorten the look-ahead in close view so the car stays onscreen in portrait layouts.
