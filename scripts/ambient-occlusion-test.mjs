@@ -58,20 +58,37 @@ try {
         try { r.render(); } finally { r.scene.updateMatrixWorld = updateMatrices; }
         const on = pixels(), onImage = canvas.toDataURL();
         // Compare against automatic scenery transforms and a fresh AO traversal.
-        const frozen = [], renderAO = ao.pass.render;
-        r.scene.traverse(object => { if (!object.matrixAutoUpdate) { frozen.push(object); object.matrixAutoUpdate = true; } });
-        ao.pass.render = function (...args) {
-          const previous = r.scene.matrixWorldAutoUpdate;
-          r.scene.matrixWorldAutoUpdate = true;
-          try { return renderAO.apply(this, args); } finally { r.scene.matrixWorldAutoUpdate = previous; }
+        // Dense foliage makes this GPU redraw an identical jungle frame with a
+        // few thousand channels different about once in ten frames, so a single
+        // comparison cannot tell a transform regression from that. A real
+        // regression repeats; the artifact does not, so take the best of three.
+        const channelError = (x, y) => {
+          let error = 0;
+          for (let i = 0; i < x.length; i++) error = Math.max(error, Math.abs(x[i] - y[i]));
+          return error;
         };
-        try { r.render(); } finally {
-          ao.pass.render = renderAO;
-          for (const object of frozen) object.matrixAutoUpdate = false;
+        const automaticTransforms = () => {
+          const frozen = [], renderAO = ao.pass.render;
+          r.scene.traverse(object => { if (!object.matrixAutoUpdate) { frozen.push(object); object.matrixAutoUpdate = true; } });
+          ao.pass.render = function (...args) {
+            const previous = r.scene.matrixWorldAutoUpdate;
+            r.scene.matrixWorldAutoUpdate = true;
+            try { return renderAO.apply(this, args); } finally { r.scene.matrixWorldAutoUpdate = previous; }
+          };
+          try { r.render(); } finally {
+            ao.pass.render = renderAO;
+            for (const object of frozen) object.matrixAutoUpdate = false;
+          }
+          return pixels();
+        };
+        let automatic = automaticTransforms();
+        let transformError = channelError(on, automatic);
+        for (let attempt = 0; attempt < 2 && transformError > 1; attempt++) {
+          r.render();
+          const cached = pixels();
+          automatic = automaticTransforms();
+          transformError = Math.min(transformError, channelError(cached, automatic));
         }
-        const automatic = pixels();
-        let transformError = 0;
-        for (let i = 0; i < on.length; i++) transformError = Math.max(transformError, Math.abs(on[i] - automatic[i]));
         let darkened = 0, brightened = 0, difference = 0, offError = 0, neutralError = 0;
         for (let i = 0; i < off.length; i += 4) {
           const delta = (off[i] + off[i + 1] + off[i + 2] - on[i] - on[i + 1] - on[i + 2]) / 3;

@@ -38,6 +38,7 @@ export function packChunk(chunk) {
         data.sphere = sphereData(value.boundingSphere); data.box = boxData(value.boundingBox);
       }
     }
+    if (value.userData.ambientOcclusion === false) data.ambientOcclusion = false;
     if (value === chunk.terrain) data.terrain = true;
     if (value === chunk.birds?.mesh) data.birds = { phase: chunk.birds.phase, flightHeight: chunk.birds.flightHeight };
     return data;
@@ -80,6 +81,7 @@ export function unpackChunk(data) {
       result.name = source.name; result.position.fromArray(source.position); result.quaternion.fromArray(source.quaternion); result.scale.fromArray(source.scale);
       result.visible = source.visible; result.castShadow = source.castShadow; result.receiveShadow = source.receiveShadow;
       result.frustumCulled = source.frustumCulled; result.renderOrder = source.renderOrder;
+      if (source.ambientOcclusion === false) result.userData.ambientOcclusion = false;
       if (source.terrain) chunk.terrain = result;
       if (source.birds) chunk.birds = Object.assign(Object.create(CoastalBirds.prototype), source.birds, { start: chunk.start, mesh: result });
       for (const child of source.children) result.add(object(child));

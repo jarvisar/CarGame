@@ -115,6 +115,13 @@ export class AmbientOcclusion {
     // Bound once: this runs over every visible object on every rendered frame.
     this.hideOverlay = object => {
       if (!object.isMesh) return;
+      // Background layers still draw; they just stay out of the AO prepass,
+      // which is a second pass over the whole scene's geometry.
+      if (object.userData.ambientOcclusion === false) {
+        this.hidden.push(object);
+        object.visible = false;
+        return;
+      }
       const material = object.material;
       if (Array.isArray(material) ? material.every(item => !item.depthWrite) : !material.depthWrite) {
         this.hidden.push(object);

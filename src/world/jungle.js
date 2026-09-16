@@ -69,8 +69,30 @@ function triangle(vertices, colors, a, b, c, color, start) {
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) { vertices.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
 }
-function instances(group, geometry, mat, items, name, shadows = true) {
-  if (!items.length) return;
+// One instanced batch per chunk gets a bounding sphere as wide as the chunk,
+// which the frustum test can almost never reject: the valley's foliage reaches
+// hundreds of metres across, so a batch keeps drawing long after its plants have
+// left the screen. Halve a wide batch along its longer axis until the parts are
+// small enough to cull; leave compact batches alone, since splitting those would
+// only add draw calls. Same instances, same geometry, same picture.
+const BATCH_SPAN = 150, BATCH_MINIMUM = 24;
+
+function splitBatch(items, depth = 0) {
+  if (items.length <= BATCH_MINIMUM || depth === 3) return [items]; // At most eight parts.
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const item of items) {
+    minX = Math.min(minX, item.p[0]); maxX = Math.max(maxX, item.p[0]);
+    minZ = Math.min(minZ, item.p[2]); maxZ = Math.max(maxZ, item.p[2]);
+  }
+  const alongX = maxX - minX >= maxZ - minZ;
+  if ((alongX ? maxX - minX : maxZ - minZ) <= BATCH_SPAN) return [items];
+  const axis = alongX ? 0 : 2, middle = alongX ? (minX + maxX) / 2 : (minZ + maxZ) / 2;
+  const near = items.filter(item => item.p[axis] < middle);
+  if (!near.length || near.length === items.length) return [items];
+  return [...splitBatch(near, depth + 1), ...splitBatch(items.filter(item => item.p[axis] >= middle), depth + 1)];
+}
+
+function batch(group, geometry, mat, items, name, shadows, ambientOcclusion) {
   const mesh = new THREE.InstancedMesh(geometry, mat, items.length); mesh.name = name;
   items.forEach((item, i) => {
     dummy.position.set(...item.p); dummy.rotation.set(...(item.r ?? [0, 0, 0]));
@@ -79,8 +101,19 @@ function instances(group, geometry, mat, items, name, shadows = true) {
     if (item.color) mesh.setColorAt(i, new THREE.Color(item.color));
   });
   mesh.castShadow = shadows; mesh.receiveShadow = true; mesh.instanceMatrix.needsUpdate = true;
+  if (!ambientOcclusion) mesh.userData.ambientOcclusion = false;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   mesh.computeBoundingSphere(); group.add(mesh); return mesh;
+}
+
+// `ambientOcclusion: false` keeps a batch out of the soft-shading prepass, which
+// redraws the whole scene. The background forest layers cover a few per cent of
+// the screen behind fog and nearer trees, so their shading is not visible there.
+function instances(group, geometry, mat, items, name, shadows = true, { ambientOcclusion = true } = {}) {
+  if (!items.length) return;
+  let last;
+  for (const part of splitBatch(items)) last = batch(group, geometry, mat, part, name, shadows, ambientOcclusion);
+  return last;
 }
 // Quads over a parameter grid, each vertex carrying its own attribute values.
 function sheet(vertices, coords, rows, cols, point) {
@@ -695,7 +728,7 @@ export class JungleChunk {
     }
     this.buildGuardrail(rails, railPosts);
     instances(this.group, trunkGeometry, barkMaterial, trunks, 'jungle-trunks');
-    jungleCrowns.forEach((g, i) => { instances(this.group, g, canopyMaterial, crowns[i], 'jungle-canopy'); instances(this.group, g, canopyMaterial, farCrowns[i], 'jungle-canopy-far', false); });
+    jungleCrowns.forEach((g, i) => { instances(this.group, g, canopyMaterial, crowns[i], 'jungle-canopy'); instances(this.group, g, canopyMaterial, farCrowns[i], 'jungle-canopy-far', false, { ambientOcclusion: false }); });
     emergentTrunks.forEach((g, i) => instances(this.group, g, barkMaterial, emergents[i], 'emergent-trunks'));
     emergentCrowns.forEach((g, i) => instances(this.group, g, canopyMaterial, emergentTops[i], 'emergent-crowns'));
     instances(this.group, vineGeometry, frondMaterial, vines, 'lianas', false);
@@ -710,8 +743,8 @@ export class JungleChunk {
     instances(this.group, shrubGeometry, shrubMaterial, shrubs, 'undergrowth');
     // Dense ground cover under the forest canopy receives shade but does not
     // need hundreds of extra shadow casters on either hillside.
-    instances(this.group, shrubGeometry, shrubMaterial, forestShrubs, 'forest-undergrowth', false);
-    instances(this.group, shrubGeometry, shrubMaterial, lumps, 'distant-canopy', false);
+    instances(this.group, shrubGeometry, shrubMaterial, forestShrubs, 'forest-undergrowth', false, { ambientOcclusion: false });
+    instances(this.group, shrubGeometry, shrubMaterial, lumps, 'distant-canopy', false, { ambientOcclusion: false });
     instances(this.group, tuftGeometry, frondMaterial, tufts, 'grass-tufts', false);
     instances(this.group, lilyGeometry, frondMaterial, lilies, 'lily-pads', false);
     jungleBoulders.forEach((g, i) => instances(this.group, g, stoneMaterial, boulders[i], 'mossy-boulders'));
