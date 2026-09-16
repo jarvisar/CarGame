@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
+import { splitBatch } from './instance-batches.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, roadHeight, roadFrame } from './route.js';
 import { DESERT_COLUMNS, DESERT_STEP, DESERT_VALLEY_EDGE, desertFacetColumn, desertColumns, desertVertex, desertPosition, desertHeight, desertRowStep, desertBridgeAt, desertCreek, desertCreekDistance, canyonProfile, dryWashCenter, dryWashWidth, mesasForChunk, insideMesa } from './desert-route.js';
 import { buildDesertCrossing, buildDesertWater, desertWaterClock } from './desert-river.js';
@@ -34,6 +35,10 @@ function triangle(positions, colors, a, b, c, color, start, upward = true) {
 }
 function instances(group, source, material, items, name) {
   if (!items.length) return;
+  for (const part of splitBatch(items)) batch(group, source, material, part, name);
+}
+
+function batch(group, source, material, items, name) {
   const mesh = new THREE.InstancedMesh(source, material, items.length);
   if (name) mesh.name = name;
   items.forEach((item, index) => {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
+import { splitBatch } from './instance-batches.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep } from './route.js';
 import { SNOW_STEP, SNOW_COLUMN_COUNT, LAMP_SPACING, snowVertex, snowPosition, snowGroundHeight, snowRoadHeight, snowFrame, snowBridgeAt, lampAt, summitForCell, terrainPocket, alpineLake, onLake } from './snow-route.js';
 import { alpineRockVariants } from './alpine-rocks.js';
@@ -71,6 +72,10 @@ function triangle(vertices, colors, a, b, c, color, start) {
 }
 function instances(group, geo, mat, items, name) {
   if (!items.length) return;
+  for (const part of splitBatch(items)) batch(group, geo, mat, part, name);
+}
+
+function batch(group, geo, mat, items, name) {
   const mesh = new THREE.InstancedMesh(geo, mat, items.length); mesh.name = name;
   for (let i = 0; i < items.length; i++) {
     const item = items[i]; dummy.position.set(...item.p); dummy.rotation.set(0, item.angle ?? 0, 0);

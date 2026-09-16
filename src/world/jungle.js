@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
+import { splitBatch } from './instance-batches.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt } from './route.js';
 import { JUNGLE_STEP, JUNGLE_COLUMN_COUNT, RIVER_STEP, jungleColumns, jungleRows, jungleVertex, jungleHeight, jungleRoadHeight as roadHeight, riverCenter, riverHalfWidth, riverLevel, riverLips, riverLipOffset, riverRocks, riverTurbulence,
@@ -69,29 +70,6 @@ function triangle(vertices, colors, a, b, c, color, start) {
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) { vertices.push(p.x, p.y, p.z + start); if (colors) colors.push(color.r, color.g, color.b); }
 }
-// One instanced batch per chunk gets a bounding sphere as wide as the chunk,
-// which the frustum test can almost never reject: the valley's foliage reaches
-// hundreds of metres across, so a batch keeps drawing long after its plants have
-// left the screen. Halve a wide batch along its longer axis until the parts are
-// small enough to cull; leave compact batches alone, since splitting those would
-// only add draw calls. Same instances, same geometry, same picture.
-const BATCH_SPAN = 150, BATCH_MINIMUM = 24;
-
-function splitBatch(items, depth = 0) {
-  if (items.length <= BATCH_MINIMUM || depth === 3) return [items]; // At most eight parts.
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const item of items) {
-    minX = Math.min(minX, item.p[0]); maxX = Math.max(maxX, item.p[0]);
-    minZ = Math.min(minZ, item.p[2]); maxZ = Math.max(maxZ, item.p[2]);
-  }
-  const alongX = maxX - minX >= maxZ - minZ;
-  if ((alongX ? maxX - minX : maxZ - minZ) <= BATCH_SPAN) return [items];
-  const axis = alongX ? 0 : 2, middle = alongX ? (minX + maxX) / 2 : (minZ + maxZ) / 2;
-  const near = items.filter(item => item.p[axis] < middle);
-  if (!near.length || near.length === items.length) return [items];
-  return [...splitBatch(near, depth + 1), ...splitBatch(items.filter(item => item.p[axis] >= middle), depth + 1)];
-}
-
 function batch(group, geometry, mat, items, name, shadows, ambientOcclusion) {
   const mesh = new THREE.InstancedMesh(geometry, mat, items.length); mesh.name = name;
   items.forEach((item, i) => {
