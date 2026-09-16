@@ -375,12 +375,46 @@ export function terrainCell(row, col, vertex = terrainVertex) {
   return triangles;
 }
 
+// Where a galvanized guardrail stands on the ocean side: along bends where the
+// ground falls away close to the road, and on the short approaches to a
+// viaduct. Scenery and driving both read this, so the car is stopped by exactly
+// the rails it can see. `coastOffset` is the cliff edge in closed form, which
+// keeps this cheap enough to call from every physics step.
+export const GUARDRAIL_OFFSET = -6.65;
+// The car's centre stops with its flank against the rail.
+export const GUARDRAIL_STOP = GUARDRAIL_OFFSET + 1.05;
+export const GUARDRAIL_SEGMENT = 4;
+function guardrailBeam(middle) {
+  // A beam spans 4 m, so judge both of its ends: half a beam left standing on a
+  // viaduct deck or across an overlook apron is still in the wrong place.
+  const half = GUARDRAIL_SEGMENT / 2;
+  let bridgeDistance = Infinity, apron = 0;
+  for (const s of [middle - half, middle + half]) {
+    bridgeDistance = Math.min(bridgeDistance, Math.abs(s - bridgeAt(s).center));
+    apron = Math.max(apron, overlookWidth(s));
+  }
+  if (bridgeDistance < 49 || apron > 6.2) return false;
+  return bridgeDistance <= 64 || coastOffset(middle) >= -35;
+}
+export function coastalGuardrail(s) {
+  // Rails are built one 4 m beam at a time, so answer for the beam covering s.
+  // Scenery and driving then agree metre for metre, with no stretch of rail you
+  // can drive through and no invisible wall past its end.
+  const middle = Math.floor(s / GUARDRAIL_SEGMENT) * GUARDRAIL_SEGMENT + GUARDRAIL_SEGMENT / 2;
+  // A lone 4 m beam in open meadow reads as a stray piece of metal rather than
+  // a guardrail, so a beam needs a neighbour to be worth standing up.
+  return guardrailBeam(middle)
+    && (guardrailBeam(middle - GUARDRAIL_SEGMENT) || guardrailBeam(middle + GUARDRAIL_SEGMENT));
+}
+
 export const coastalDrivingRoute = {
   frame: roadFrame,
   position: positionAt,
   height: terrainHeight,
   bounds(s) {
-    const onBridge = Math.abs(s - bridgeAt(s).center) < 49;
-    return onBridge ? [-4.65, 4.65] : [Math.max(drivingCoastOffset(s) + 6, -15), 17];
+    if (Math.abs(s - bridgeAt(s).center) < 49) return [-4.65, 4.65];
+    const open = Math.max(drivingCoastOffset(s) + 6, -15);
+    // A rail is solid; without one the roadside limit stays soft.
+    return [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, 17];
   },
 };

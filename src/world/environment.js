@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
-import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, coastalGrove, overlookAt, overlookWidth, clamp, lerp, smoothstep } from './route.js';
+import { CHUNK_LENGTH, TERRAIN_STEP, randomAt, seededRandom, roadFrame, coastOffset, shorelineOffset, terrainColumns, terrainCell, terrainVertex, positionAt, pondRadius, ravineAmount, groundHeight, rockCover, cliffRib, bridgeAt, coastalGrove, coastalGuardrail, GUARDRAIL_OFFSET, overlookAt, overlookWidth, clamp, lerp, smoothstep } from './route.js';
 import { createWaterMaterial, createSurfMaterial, createRockWashMaterial, animateWater } from './water.js';
 import { buildLandmarks } from './landmarks.js';
 import { CoastalBirds } from './birds.js';
@@ -437,22 +437,27 @@ export class CoastalChunk {
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 16) {
       if (Math.abs(s - bridgeAt(s).center) < 49) continue;
       for (const u of [-6.85, 6.85]) {
-        if (u < 0 && overlookWidth(s) > 6.2) continue;
+        // A delineator beside a guardrail is 20 cm of clutter; the rail marks
+        // that edge on its own.
+        if (u < 0 && (overlookWidth(s) > 6.2 || coastalGuardrail(s))) continue;
         const p = positionAt(s, u); const angle = -roadFrame(s).angle;
         posts.push({ p: [p.x, p.y + .62, p.z + this.start], scale: [1, 1, 1], r: [0, angle, 0] });
         caps.push({ p: [p.x, p.y + .94, p.z + this.start], scale: [1, 1, 1], r: [0, angle, 0] });
       }
     }
-    // Galvanized rails follow exposed bends and the approaches to the viaduct.
-    // Keep the sheltered meadows open, with sparse roadside delineators.
+    // Galvanized rails follow exposed bends and the approaches to the viaduct,
+    // wherever `coastalGuardrail` says one stands. Keep the sheltered meadows
+    // open, with sparse roadside delineators.
     for (let s = this.start; s < this.start + CHUNK_LENGTH; s += 4) {
-      const bridgeDistance = Math.abs(s + 2 - bridgeAt(s + 2).center);
-      if (overlookWidth(s + 2) > 6.2 || bridgeDistance < 49 || (bridgeDistance > 79 && coastOffset(s + 2) < -35)) continue;
-      const a = positionAt(s, -6.65), b = positionAt(s + 4, -6.65);
+      if (!coastalGuardrail(s + 2)) continue;
+      const a = positionAt(s, GUARDRAIL_OFFSET), b = positionAt(s + 4, GUARDRAIL_OFFSET);
       const dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
       rails.push({ p: [(a.x + b.x) / 2, (a.y + b.y) / 2 + .95, (a.z + b.z) / 2 + this.start],
         scale: [.18, .32, length + .12], r: [-Math.atan2(b.y - a.y, length), Math.atan2(dx, dz), 0] });
       rails.push({ p: [a.x, a.y + .48, a.z + this.start], scale: [.17, .96, .18] });
+      // Each segment posts its own near end, so a run needs one more to close
+      // it rather than leaving the last beam hanging in the air.
+      if (!coastalGuardrail(s + 6)) rails.push({ p: [b.x, b.y + .48, b.z + this.start], scale: [.17, .96, .18] });
     }
     const overlook = overlookAt(this.start + CHUNK_LENGTH / 2);
     if (overlook.enabled && overlook.center >= this.start && overlook.center < this.start + CHUNK_LENGTH) {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CoastalChunk, CoastalWorld } from '../src/world/environment.js';
-import { coastalDrivingRoute, bridgeAt, terrainCell, terrainVertex, overlookAt, CHUNK_LENGTH } from '../src/world/route.js';
+import { coastalDrivingRoute, coastalGuardrail, bridgeAt, terrainCell, terrainVertex, overlookAt, GUARDRAIL_STOP, CHUNK_LENGTH } from '../src/world/route.js';
 import { coastalCrags } from '../src/world/coastal-assets.js';
 
 test('crag surfaces are closed and consistently wound, including their broken crowns', () => {
@@ -59,9 +59,14 @@ test('sculpted cliff faces do not fold over their neighbors on either side of th
 
 test('reshaping the coastline preserves the original driving limits', () => {
   for (let s = -2000; s < 12000; s += 23) {
+    // Headlands changed how the coast looks, never how far the car may go: the
+    // open limit still comes from the original curve, not the reshaped one.
     const originalCoast = -28 - 8 * Math.sin(s / 107 + .8) - 4 * Math.sin(s / 43) - 3 * Math.sin(s / 23 + 2);
     const bridge = Math.abs(s - bridgeAt(s).center) < 49;
-    assert.deepEqual(coastalDrivingRoute.bounds(s), bridge ? [-4.65, 4.65] : [Math.max(originalCoast + 6, -15), 17]);
+    const open = Math.max(originalCoast + 6, -15);
+    // A guardrail is the one thing that stops the car sooner than the open shoulder.
+    const expected = bridge ? [-4.65, 4.65] : [coastalGuardrail(s) ? Math.max(open, GUARDRAIL_STOP) : open, 17];
+    assert.deepEqual(coastalDrivingRoute.bounds(s), expected);
   }
 });
 
