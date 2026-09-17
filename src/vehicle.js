@@ -136,6 +136,7 @@ export class DrivingController {
     const { width, length } = carEntry(carId).shape;
     this.spec = { name: carId, width, length };
     this.stats = carStats(carId);
+    this.speedLimit = this.stats.topSpeed;
     parent?.add(this.car);
     this.setNight(this.night); this.setAppearance(this.journeyId); this.setPaint(paint);
     if (!rebuild) return;
@@ -188,6 +189,14 @@ export class DrivingController {
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
     const offRoad = Math.abs(this.u) > 5.1;
+    // Off the tarmac a car loses its top end, but the limit eases down to it
+    // rather than snapping: leaving the road at speed costs about a second of
+    // momentum, which reads as the surface dragging the car down instead of
+    // the game taking the speed away at the white line. Coming back is free,
+    // so correcting a slide out of a bend is worth doing.
+    this.speedLimit = offRoad
+      ? clamp(THREE.MathUtils.damp(this.speedLimit, stats.offRoad, 1.2, dt), stats.offRoad, stats.topSpeed)
+      : stats.topSpeed;
     let acceleration = 0;
     if (forward) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
     if (brake) acceleration -= brake * (this.speed > .3 ? stats.braking : stats.creep);
@@ -196,12 +205,12 @@ export class DrivingController {
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
     if (touch) {
       this.speed = Math.abs(this.speed);
-      const targetSpeed = touch.amount * (offRoad ? stats.offRoad : stats.topSpeed);
+      const targetSpeed = touch.amount * this.speedLimit;
       acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -stats.touchBraking, stats.acceleration) : 0;
       if (touch.amount) this.heading = touch.heading;
     }
     const oldSpeed = this.speed;
-    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, offRoad ? stats.offRoad : stats.topSpeed);
+    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, this.speedLimit);
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);

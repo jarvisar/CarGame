@@ -18,11 +18,13 @@ export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5
 // two chooser-only cars are the exceptions: the coupe reaches noticeably
 // further, and the formula racer is quicker again by the same margin over it.
 //
-//   topSpeed / offRoad  metres per second, the speed the throttle tops out at
+//   topSpeed            metres per second, the speed the throttle tops out at
+//   offRoad             the same off the tarmac: two thirds or so of topSpeed,
+//                       and the car eases down to it rather than snapping
 //   acceleration        metres per second squared under full throttle
 //   braking             metres per second squared on the brakes
 //   grip                steering rate against the coastal wagon's
-const BASE = { topSpeed: 28, acceleration: 11.3, braking: 20, grip: 1, offRoad: 15 };
+const BASE = { topSpeed: 28, acceleration: 11.3, braking: 20, grip: 1, offRoad: 18.5 };
 
 export const CARS = {
   auto: {
@@ -35,44 +37,44 @@ export const CARS = {
   },
   desert: {
     name: 'Canyon Runner', kind: 'classic', trim: 'desert', paint: '#78977b', shape: CLASSIC_SHAPE,
-    stats: { topSpeed: 27.2, acceleration: 11, braking: 19.4, grip: .97, offRoad: 16.4 },
+    stats: { topSpeed: 27.2, acceleration: 11, braking: 19.4, grip: .97, offRoad: 19 },
   },
   snow: {
     name: 'Alpine Tourer', kind: 'classic', trim: 'snow', paint: '#9fc4d5', shape: CLASSIC_SHAPE,
-    stats: { topSpeed: 27.4, acceleration: 10.9, braking: 21, grip: 1.06, offRoad: 15.6 },
+    stats: { topSpeed: 27.4, acceleration: 10.9, braking: 21, grip: 1.06, offRoad: 18.4 },
   },
   jungle: {
     name: 'Jungle Expedition', kind: 'classic', trim: 'jungle', paint: '#e0b44a', shape: CLASSIC_SHAPE,
-    stats: { topSpeed: 26.6, acceleration: 11.5, braking: 19.2, grip: .96, offRoad: 16.8 },
+    stats: { topSpeed: 26.6, acceleration: 11.5, braking: 19.2, grip: .96, offRoad: 18.6 },
   },
   hatchback: {
     name: 'City Hatch', kind: 'built', paint: '#6fa9c2', shape: shape('hatchback'),
-    stats: { topSpeed: 26.2, acceleration: 12.1, braking: 20.6, grip: 1.1, offRoad: 14.2 },
+    stats: { topSpeed: 26.2, acceleration: 12.1, braking: 20.6, grip: 1.1, offRoad: 16.8 },
   },
   sedan: {
     name: 'Highway Sedan', kind: 'built', paint: '#e7e3d5', shape: shape('sedan'),
-    stats: { topSpeed: 28.6, acceleration: 11.1, braking: 20.2, grip: 1.01, offRoad: 14.6 },
+    stats: { topSpeed: 28.6, acceleration: 11.1, braking: 20.2, grip: 1.01, offRoad: 18 },
   },
   wagon: {
     name: 'Estate Wagon', kind: 'built', paint: '#5f7a5a', shape: shape('wagon'),
-    stats: { topSpeed: 28, acceleration: 10.7, braking: 19.6, grip: .97, offRoad: 15.2 },
+    stats: { topSpeed: 28, acceleration: 10.7, braking: 19.6, grip: .97, offRoad: 18.3 },
   },
   pickup: {
     name: 'Work Pickup', kind: 'built', paint: '#b06a3a', shape: shape('pickup'),
-    stats: { topSpeed: 26.4, acceleration: 10.3, braking: 18.6, grip: .92, offRoad: 16.9 },
+    stats: { topSpeed: 26.4, acceleration: 10.3, braking: 18.6, grip: .92, offRoad: 18.4 },
   },
   van: {
     name: 'Delivery Van', kind: 'built', paint: '#9aa6ad', shape: shape('van'),
-    stats: { topSpeed: 27, acceleration: 9.9, braking: 18.8, grip: .9, offRoad: 13.8 },
+    stats: { topSpeed: 27, acceleration: 9.9, braking: 18.8, grip: .9, offRoad: 16.7 },
   },
   sports: {
     name: 'Cape GT', kind: 'built', paint: '#b8232f', shape: SPORTS_MODEL,
-    stats: { topSpeed: 33, acceleration: 13.5, braking: 23, grip: 1.14, offRoad: 12.4 },
+    stats: { topSpeed: 33, acceleration: 13.5, braking: 23, grip: 1.14, offRoad: 20.1 },
   },
   formula: {
     name: 'Apex Formula', kind: 'formula', badge: 'Track', paint: '#d8452f', shape: FORMULA_SHAPE,
-    // 89 mph against the wagon's 63, on slicks that want nothing to do with dirt.
-    stats: { topSpeed: 40, acceleration: 17.6, braking: 30, grip: 1.32, offRoad: 9 },
+    // 89 mph against the wagon's 63, and the least at home of any of them off it.
+    stats: { topSpeed: 40, acceleration: 17.6, braking: 30, grip: 1.32, offRoad: 24 },
   },
 };
 
