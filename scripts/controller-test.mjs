@@ -78,6 +78,17 @@ try {
   assert.ok(second && second !== 'auto', `right moves along the grid (${second})`);
   await press(14); await frames();
   assert.equal(await focused(), 'auto', 'left returns along the grid');
+  // The paint chips share the garage's focus ring, so the stick reaches them
+  // and A repaints the car in place rather than closing the panel.
+  await press(12); await frames();
+  const swatch = await page.evaluate(() => document.activeElement?.dataset?.paint ?? null);
+  assert.ok(swatch, 'up from the fleet reaches the paint chips');
+  await press(0); await frames();
+  assert.equal(await page.locator('#car-dialog').isVisible(), true, 'painting keeps the garage open');
+  const stored = await page.evaluate(() => window.__coastline.paints[window.__coastline.carId] ?? 'factory');
+  assert.equal(stored, swatch, 'A applies the focused colour');
+  await press(13); await frames();
+  assert.equal(await focused(), 'auto', 'down returns to the fleet');
   await press(13); await frames();
   const below = await focused();
   assert.ok(below && below !== 'auto', `down leaves the first row (${below})`);
@@ -124,5 +135,5 @@ try {
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   await page.keyboard.up('w');
   assert.deepEqual(errors, []);
-  console.log('Controller detection, analog driving, reverse, shortcuts, menus, garage grid navigation, disconnect/reconnect, focus loss, touch visibility and keyboard fallback passed (simulated gamepad).');
+  console.log('Controller detection, analog driving, reverse, shortcuts, menus, garage grid and paint navigation, disconnect/reconnect, focus loss, touch visibility and keyboard fallback passed (simulated gamepad).');
 } finally { await browser.close(); }

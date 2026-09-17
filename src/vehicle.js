@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, coastalDrivingRoute } from './world/route.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
-import { CARS, DEFAULT_CAR, carEntry, carStats } from './cars.js';
+import { CARS, DEFAULT_CAR, ROUTE_PAINT, carEntry, carStats } from './cars.js';
 import { createShapeCar } from './car-models.js';
+import { createFormulaCar } from './formula-model.js';
 
 const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: .74, flatShading: true, ...extra });
 function box(group, size, location, material) {
@@ -82,14 +83,18 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     wheels.push({ pivot, wheel, hub, front: z < 0 });
   }
   // Reuse the model and its materials so repeated route changes stay bounded.
-  // A chosen trim ignores the route; the default car follows it.
+  // A chosen trim ignores the route; the default car follows it. A garage colour
+  // outranks both, so a repainted car keeps that colour wherever it drives.
+  let customPaint = null, kitJourney = 'coast';
   function applyTrim(journey) {
+    kitJourney = journey;
     const kit = entry.trim ?? journey;
-    paint.color.set({ coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a' }[kit] ?? '#d96143');
+    paint.color.set(customPaint ?? ROUTE_PAINT[kit] ?? ROUTE_PAINT.coast);
     surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle';
     rack.visible = surfboard.visible || roofBox.visible || cargo.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
+  function paintCar(color) { customPaint = color || null; applyTrim(kitJourney); }
   applyTrim('coast');
   car.traverse(stableShadowDepth);
   function disposeModel() {
@@ -97,19 +102,20 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     car.traverse(object => { if (object.isMesh) { object.geometry.dispose(); materials.add(object.material); } });
     for (const material of materials) material.dispose();
   }
-  return { car, body, wheels, nightLights, applyTrim, disposeModel };
+  return { car, body, wheels, nightLights, applyTrim, paintCar, disposeModel };
 }
 
 export function createCar(id = DEFAULT_CAR) {
   const entry = carEntry(id);
+  if (entry.kind === 'formula') return createFormulaCar(entry);
   return entry.kind === 'classic' ? createClassicCar(entry) : createShapeCar(entry);
 }
 
 export class DrivingController {
-  constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR) {
+  constructor(route = coastalDrivingRoute, state = {}, carId = DEFAULT_CAR, paint = null) {
     this.route = route;
     this.night = false; this.journeyId = 'coast';
-    this.setCar(carId, { rebuild: false });
+    this.setCar(carId, { rebuild: false, paint });
     this.s = state.s ?? 24; this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = route.frame(this.s).angle;
     this.distance = state.distance ?? 0; this.pitch = 0; this.roll = 0; this.previousSpeed = 0; this.groundedPosition = new THREE.Vector3();
     this.bodyPitch = 0; this.bodyRoll = 0; this.wheelSpin = 0;
@@ -119,7 +125,8 @@ export class DrivingController {
     this.update(0, {});
   }
   // Swapping cars keeps the drive going: same place, same road, new machine.
-  setCar(id, { rebuild = true } = {}) {
+  // Paint belongs to the car being fitted, so it is passed in rather than kept.
+  setCar(id, { rebuild = true, paint = null } = {}) {
     const carId = CARS[id] ? id : DEFAULT_CAR;
     const previous = this.car, parent = previous?.parent ?? null;
     this.disposeModel?.();
@@ -130,12 +137,14 @@ export class DrivingController {
     this.spec = { name: carId, width, length };
     this.stats = carStats(carId);
     parent?.add(this.car);
-    this.setNight(this.night); this.setAppearance(this.journeyId);
+    this.setNight(this.night); this.setAppearance(this.journeyId); this.setPaint(paint);
     if (!rebuild) return;
     this.speed = clamp(this.speed, -this.stats.reverseSpeed, this.stats.topSpeed);
     this.wheelSpin = 0;
     this.update(0, {});
   }
+  // A garage colour, or null for the finish the car left the factory in.
+  setPaint(color) { this.paintColor = color ?? null; this.paintCar(this.paintColor); }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
   setNight(enabled) { this.night = enabled; for (const light of this.nightLights) light.material.emissiveIntensity = enabled ? light.night : light.day; }
   setAppearance(journey) { this.journeyId = journey; this.applyTrim(journey); }

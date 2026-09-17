@@ -6,8 +6,9 @@ import './car.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
-import { CARS, CAR_IDS, DEFAULT_CAR, carEntry, carMeters } from './cars.js';
+import { CARS, CAR_IDS, DEFAULT_CAR, ROUTE_PAINT, carEntry, carMeters } from './cars.js';
 import { carArt } from './car-art.js';
+import { PAINTS, loadPaints, savePaints, paintName, readPaint, shownPaint } from './car-paint.js';
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
@@ -32,6 +33,8 @@ let toastTimer; let sceneReady = false;
 const carStorageKey = 'coastline-car';
 let carId = DEFAULT_CAR;
 try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
+// Paint is kept per car, so a colour follows the car it was mixed for.
+const paints = loadPaints();
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
 async function boot() {
@@ -68,7 +71,7 @@ async function boot() {
     let world = new JOURNEYS.coast.World(scene, chunkWorker.source('coast'));
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
-    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId); const audio = new DriveAudio();
+    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId, paints[carId] ?? null); const audio = new DriveAudio();
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
     scene.add(vehicle.car);
@@ -101,17 +104,70 @@ async function boot() {
           + `<span class="chooser-card-title">${entry.name}</span>${current}</button>`;
         const meters = carMeters(id).map(({ label, level }) =>
           `<span class="car-meter"><span>${label}</span><span class="car-meter-track"><span style="width:${level}%"></span></span></span>`).join('');
-        return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${entry.paint}">`
+        // The portrait is drawn in the car's own paint, so the grid doubles as
+        // the preview for whatever colour the paint counter has just mixed.
+        const badge = entry.badge ? `<span class="car-badge">${entry.badge}</span>` : '';
+        return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${shownPaint(id, paints)}">`
           + carArt(id)
-          + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}</span>`
+          + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}${badge}</span>`
           + `<span class="car-meters">${meters}</span>${current}</span></button>`;
       }).join('');
       for (const button of carDialog.querySelectorAll('[data-car]')) button.addEventListener('click', () => chooseCar(button.dataset.car));
+    }
+    const paintSwatches = $('#paint-swatches'), paintWell = $('#paint-custom-well'), paintInput = $('#paint-custom');
+    function buildPaintSwatches() {
+      paintSwatches.innerHTML = ['<button type="button" class="paint-swatch paint-factory" role="radio" aria-checked="false" data-paint="factory"><span class="paint-chip" aria-hidden="true"></span></button>',
+        ...PAINTS.map(({ name, color }) => `<button type="button" class="paint-swatch" role="radio" aria-checked="false" data-paint="${color}" style="--swatch:${color}" aria-label="${name}" title="${name}"><span class="paint-chip" aria-hidden="true"></span></button>`)].join('');
+      for (const swatch of paintSwatches.querySelectorAll('[data-paint]')) {
+        swatch.addEventListener('click', () => applyPaint(swatch.dataset.paint));
+        // A row of bare colours says nothing on its own, so the one under the
+        // pointer or the keyboard focus names itself beside the heading.
+        for (const event of ['pointerenter', 'focus']) swatch.addEventListener(event, () => { $('#paint-current').textContent = swatch.getAttribute('aria-label'); });
+        for (const event of ['pointerleave', 'blur']) swatch.addEventListener(event, showPaintName);
+      }
+      paintInput.addEventListener('input', () => applyPaint(paintInput.value));
+    }
+    // The default car has no finish of its own, so its factory swatch is
+    // whichever colour the road it is on would give it.
+    const factoryPaint = () => (carEntry(carId).plain ? ROUTE_PAINT[journey] ?? ROUTE_PAINT.coast : carEntry(carId).paint);
+    const factoryName = () => (carEntry(carId).plain ? 'Route colours' : 'Factory finish');
+    function showPaintName() {
+      const chosen = paints[carId] ?? null;
+      $('#paint-current').textContent = chosen ? paintName(chosen) ?? chosen.toUpperCase() : factoryName();
+    }
+    function updatePaintUi() {
+      const entry = carEntry(carId), chosen = paints[carId] ?? null;
+      $('#paint-note').hidden = !entry.plain;
+      const factory = paintSwatches.querySelector('[data-paint="factory"]');
+      factory.style.setProperty('--swatch', factoryPaint());
+      factory.title = factoryName(); factory.setAttribute('aria-label', factoryName());
+      for (const swatch of paintSwatches.querySelectorAll('[data-paint]')) {
+        const value = swatch.dataset.paint;
+        swatch.setAttribute('aria-checked', String(value === 'factory' ? !chosen : value === chosen));
+      }
+      paintWell.dataset.active = String(Boolean(chosen) && !PAINTS.some(paint => paint.color === chosen));
+      paintWell.style.setProperty('--swatch', chosen ?? factoryPaint());
+      paintInput.value = chosen ?? factoryPaint();
+      $('#paint-car').textContent = entry.name;
+      showPaintName();
+    }
+    // Repainting needs no new scenery either: the colour lands on the car where
+    // it stands, on its card, and in storage, and the drive carries on.
+    function applyPaint(value) {
+      const color = value === 'factory' ? null : readPaint(value);
+      if (value !== 'factory' && !color) return;
+      if (color) paints[carId] = color; else delete paints[carId];
+      savePaints(paints);
+      vehicle.setPaint(color);
+      carDialog.querySelector(`[data-car="${carId}"]`)?.style.setProperty('--car-paint', paints[carId] ?? factoryPaint());
+      updatePaintUi();
+      vehicle.render(1, world.origin); rendering.update(vehicle.car, 0, world.origin); needsRender = true;
     }
     function updateCarUi() {
       for (const button of carDialog.querySelectorAll('[data-car]')) button.setAttribute('aria-current', String(button.dataset.car === carId));
       $('#current-car').textContent = carEntry(carId).name;
       $('#change-car').setAttribute('aria-label', `Open the garage. Currently driving the ${carEntry(carId).name}`);
+      updatePaintUi();
     }
     // Swapping cars needs no new scenery, so the drive simply carries on.
     function chooseCar(id) {
@@ -119,7 +175,7 @@ async function boot() {
       if (id === carId || !CARS[id]) return;
       carId = id;
       try { localStorage.setItem(carStorageKey, id); } catch { /* Still drive it for this visit. */ }
-      vehicle.setCar(id); vehicle.render(1, world.origin);
+      vehicle.setCar(id, { paint: paints[id] ?? null }); vehicle.render(1, world.origin);
       rendering.update(vehicle.car, 0, world.origin);
       updateCarUi(); updateHud(); needsRender = true;
       toast(`${carEntry(id).name} selected`);
@@ -164,7 +220,7 @@ async function boot() {
         vehicle.setAppearance(id);
         vehicle.setNight(id === 'snow');
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
-        rendering.setJourney(id); audio.setJourney(id); updateJourneyUi();
+        rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); rendering.render();
@@ -182,7 +238,8 @@ async function boot() {
     // full-width row, so up and down follow the rendered geometry rather than a
     // column count. A single row of cards steps along itself instead.
     function moveChooserFocus(chooser, name) {
-      const cards = [...chooser.querySelectorAll('[data-journey], [data-car]')];
+      // Hidden rows are skipped: the paint counter closes for the default car.
+      const cards = [...chooser.querySelectorAll('[data-journey], [data-car], [data-paint]')].filter(card => card.offsetParent);
       if (!cards.length) return;
       const index = Math.max(0, cards.indexOf(document.activeElement)), current = cards[index];
       const step = name === 'menuNext' || name === 'menuDown' ? 1 : -1;
@@ -397,14 +454,14 @@ async function boot() {
     }
     await world.chunkSource.prepare(vehicle.s);
     world.update(vehicle.s);
-    buildCarCards(); updateCarUi();
+    buildCarCards(); buildPaintSwatches(); updateCarUi();
     vehicle.render(1, world.origin); traffic.render(1, world.origin); rendering.update(vehicle.car, 1, world.origin); updateHud(); updateJourneyUi(); updateViewUi(); updateGraphicsUi();
     if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(scene, rendering.camera);
     else renderer.compile(scene, rendering.camera);
     changingJourney = false;
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, get carId() { return carId; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paints() { return { ...paints }; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

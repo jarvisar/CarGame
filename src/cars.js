@@ -1,4 +1,5 @@
 import { TRAFFIC_MODELS, SPORTS_MODEL } from './traffic-models.js';
+import { FORMULA_SHAPE } from './formula-model.js';
 
 // The player's original car. Its collision box is the footprint the game has
 // always used; the extra fields only describe it for the chooser's artwork.
@@ -9,9 +10,13 @@ export const CLASSIC_SHAPE = {
 
 const shape = name => TRAFFIC_MODELS.find(spec => spec.name === name);
 
-// Every car is the same kind of relaxed tourer. Stats stay within about a tenth
-// of the coastal wagon so a choice changes character, not the game, and only
-// the chooser-only coupe reaches noticeably further.
+// The default car dresses for the scenery; every other car brings its own paint.
+export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a' };
+
+// Almost every car is the same kind of relaxed tourer. Stats stay within about
+// a tenth of the coastal wagon so a choice changes character, not the game. The
+// two chooser-only cars are the exceptions: the coupe reaches noticeably
+// further, and the formula racer is quicker again by the same margin over it.
 //
 //   topSpeed / offRoad  metres per second, the speed the throttle tops out at
 //   acceleration        metres per second squared under full throttle
@@ -64,6 +69,11 @@ export const CARS = {
     name: 'Cape GT', kind: 'built', paint: '#b8232f', shape: SPORTS_MODEL,
     stats: { topSpeed: 33, acceleration: 13.5, braking: 23, grip: 1.14, offRoad: 12.4 },
   },
+  formula: {
+    name: 'Apex Formula', kind: 'formula', badge: 'Track', paint: '#d8452f', shape: FORMULA_SHAPE,
+    // 89 mph against the wagon's 63, on slicks that want nothing to do with dirt.
+    stats: { topSpeed: 40, acceleration: 17.6, braking: 30, grip: 1.32, offRoad: 9 },
+  },
 };
 
 export const CAR_IDS = Object.keys(CARS);
@@ -84,8 +94,9 @@ export function carStats(id) {
   };
 }
 
-// Chooser meters. The ranges sit just outside the fleet so the slowest car still
-// shows a little bar and only the coupe fills one.
+// Chooser meters. The ranges sit just outside the road fleet so the slowest car
+// still shows a little bar and only the coupe nearly fills one. The formula
+// racer is off that scale by design and pegs all three, which is the point.
 const METERS = [
   { label: 'Top speed', key: 'topSpeed', low: 24, high: 33.5 },
   { label: 'Acceleration', key: 'acceleration', low: 9, high: 13.8 },
