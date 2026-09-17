@@ -82,6 +82,10 @@ export const CAR_IDS = Object.keys(CARS);
 export const DEFAULT_CAR = 'auto';
 export const carEntry = id => CARS[id] ?? CARS[DEFAULT_CAR];
 
+// Rolling and air drag. They live here because the surface figures below are
+// sized against them, so how a car slows and what the verge costs stay in step.
+export const DRAG = { rolling: .7, air: .0095 };
+
 // One acceleration figure drives the whole throttle and brake feel, so a car is
 // described by four numbers and the rest follows the original car's proportions.
 export function carStats(id) {
@@ -93,6 +97,10 @@ export function carStats(id) {
     creep: braking * .325,         // Brake pedal used as reverse throttle.
     handbrake: braking * 1.35,
     touchBraking: braking * 1.2,
+    // Loose ground resists exactly hard enough that full throttle settles on
+    // the off-road figure, so the number on the card falls out of the physics
+    // rather than being clamped on top of it.
+    loose: Math.max(0, acceleration - DRAG.rolling - DRAG.air * offRoad * offRoad),
   };
 }
 

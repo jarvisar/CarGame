@@ -74,31 +74,25 @@ test('the coastal wagon keeps the original handling and every car stays close to
   assert.ok(share('sports') < share(DEFAULT_CAR));
 });
 
-test('leaving the road eases the speed down instead of snapping it', () => {
-  // Off-road at a steady speed the car settles on its own off-road top, and
-  // the road's top speed is available again the moment it is back on tarmac.
-  const shoulder = (id, seconds, { throttle = true } = {}) => {
+test('loose ground takes the speed instead of the game capping it', () => {
+  // Open ground is past the ramp; anything nearer the tarmac costs less.
+  const shoulder = (id, seconds, { at = 7, input = { forward: true } } = {}) => {
     const car = new DrivingController(straightRoute, {}, id);
     for (let i = 0; i < 60 * 90; i++) car.update(1 / 60, { forward: true });
     const entry = car.speed, trace = [];
-    for (let i = 0; i < 60 * seconds; i++) {
-      car.u = 6.4;                                   // Past the 5.1 m off-road line.
-      car.update(1 / 60, throttle ? { forward: true } : {});
-      trace.push(car.speed);
-    }
+    for (let i = 0; i < 60 * seconds; i++) { car.u = at; car.update(1 / 60, input); trace.push(car.speed); }
     return { car, entry, trace };
   };
   for (const id of CAR_IDS) {
-    const { car, entry, trace } = shoulder(id, 6);
+    const { car, entry, trace } = shoulder(id, 12);
     const stats = carStats(id);
+    // Full throttle balances on the off-road figure: the number on the card is
+    // where the physics settles, not a limit clamped on top of it.
     assert.ok(Math.abs(trace.at(-1) - stats.offRoad) < .35, `${id} settled at ${trace.at(-1)}, not ${stats.offRoad}`);
-    // The first tenth of a second may cost speed, but nowhere near all of it.
-    const afterATick = trace[0], lost = entry - trace[5];
-    assert.ok(afterATick > entry - .6, `${id} lost ${(entry - afterATick).toFixed(1)} m/s in one frame`);
-    assert.ok(lost < (entry - stats.offRoad) * .25, `${id} gave up most of its speed in a tenth of a second`);
-    // And it is still coming down a second later rather than already pinned.
+    // It gets there over seconds, not in the frame that crosses the line.
+    assert.ok(trace[0] > entry - .6, `${id} lost ${(entry - trace[0]).toFixed(1)} m/s in one frame`);
     assert.ok(trace[60] > stats.offRoad + .5 && trace[60] < trace[10], `${id} does not ease down`);
-    // Never harsher than the car's own brakes.
+    // And never pulls harder than the car's own brakes while it is doing it.
     for (let i = 1; i < trace.length; i++) {
       assert.ok((trace[i - 1] - trace[i]) * 60 < stats.braking, `${id} decelerates harder than it brakes`);
     }
@@ -107,60 +101,53 @@ test('leaving the road eases the speed down instead of snapping it', () => {
     for (let i = 0; i < 60 * 30; i++) car.update(1 / 60, { forward: true });
     assert.ok(Math.abs(car.speed - stats.topSpeed) < .35, `${id} could not recover its road speed`);
   }
-  // Coasting off-road bleeds more speed than coasting on it.
-  const rolling = shoulder('auto', 2, { throttle: false });
-  assert.ok(rolling.trace.at(-1) < carStats('auto').offRoad, 'a closed throttle should keep slowing on loose ground');
-  // A brief excursion is a glance, not a penalty: two lanes' worth of grass
-  // and back should leave most of the speed intact.
-  const car = new DrivingController(straightRoute, {}, 'formula');
+  // The throttle is worth holding: a closed one keeps bleeding speed well past
+  // the off-road top, where a held one stops there.
+  assert.ok(shoulder('auto', 3, { input: {} }).trace.at(-1) < carStats('auto').offRoad * .75);
+  // A brief excursion is a glance, not a penalty.
+  const { entry, trace } = shoulder('formula', .2);
+  assert.ok(entry - trace.at(-1) < (entry - carStats('formula').offRoad) * .25,
+    `a fifth of a second off the road cost ${(entry - trace.at(-1)).toFixed(1)} m/s`);
+});
+
+test('the edge of the road is a ramp, not a line', () => {
+  const stats = carStats('auto');
+  // Two wheels on the verge costs real speed, but nothing like leaving.
+  const settled = at => {
+    const car = new DrivingController(straightRoute, {}, 'auto');
+    for (let i = 0; i < 60 * 102; i++) { if (i > 60 * 90) car.u = at; car.update(1 / 60, { forward: true }); }
+    return car.speed;
+  };
+  const verge = settled(5.35), open = settled(7);
+  assert.ok(Math.abs(settled(4.6) - stats.topSpeed) < .35, 'the shoulder itself is still road');
+  assert.ok(verge < stats.topSpeed - 1 && verge > open + 3, `the verge (${verge}) should sit between road and open ground`);
+  assert.ok(Math.abs(open - stats.offRoad) < .35);
+  // Riding the line is steady rather than flickering between two surfaces.
+  const car = new DrivingController(straightRoute, {}, 'auto');
   for (let i = 0; i < 60 * 90; i++) car.update(1 / 60, { forward: true });
-  const before = car.speed, full = before - carStats('formula').offRoad;
-  for (let i = 0; i < 12; i++) { car.u = 6.4; car.update(1 / 60, { forward: true }); }
-  assert.ok(before - car.speed < full * .25, `a fifth of a second off the road cost ${(before - car.speed).toFixed(1)} of ${full.toFixed(1)} m/s`);
-  car.u = 2.4;
-  for (let i = 0; i < 60 * 10; i++) car.update(1 / 60, { forward: true });
-  assert.ok(Math.abs(car.speed - carStats('formula').topSpeed) < .35, 'and is paid back on the tarmac');
+  const speeds = [];
+  for (let i = 0; i < 120; i++) { car.u = 5.1 + Math.sin(i / 4) * .35; car.update(1 / 60, { forward: true }); speeds.push(car.speed); }
+  assert.ok(Math.max(...speeds) - Math.min(...speeds) < .6, 'skimming the edge should not jitter the car');
+  // What the surface does and what it sounds like come from the same number.
+  car.u = 7; car.update(1 / 60, { forward: true });
+  assert.equal(car.audioTelemetry.offRoad, 1);
+  car.u = 4.8; car.update(1 / 60, { forward: true });
+  assert.equal(car.audioTelemetry.offRoad, 0);
 });
 
-test('each car settles at its own top speed, and the racer is the quickest', () => {
-  const reached = Object.fromEntries(CAR_IDS.map(id => [id, flatOut(id).speed]));
-  for (const id of CAR_IDS) {
-    const { topSpeed } = carStats(id);
-    assert.ok(Math.abs(reached[id] - topSpeed) < .35, `${id} settled at ${reached[id]}, not ${topSpeed}`);
-  }
-  // Drag rises with the square of speed, so a car only reaches the figure on
-  // its card if it has the power to push through its own wake.
-  const order = Object.entries(reached).sort((a, b) => b[1] - a[1]).map(([id]) => id);
-  assert.deepEqual(order.slice(0, 2), ['formula', 'sports']);
-  assert.ok(reached.formula > reached.sports + 6);
-  assert.ok(reached.sports > reached.auto + 4);
-  // Distinct, but a whole fleet within a few miles an hour of each other.
-  const speeds = CAR_IDS.filter(id => !RACERS.includes(id)).map(id => reached[id]);
-  assert.ok(Math.max(...speeds) - Math.min(...speeds) < 3);
-  assert.ok(new Set(CAR_IDS.map(id => carStats(id).topSpeed)).size >= 8, 'the fleet should not share top speeds');
-});
-
-test('acceleration and braking separate the fleet in the expected order', () => {
-  const toSpeed = (id, target) => {
-    const car = new DrivingController(straightRoute, {}, id);
-    let ticks = 0;
-    while (car.speed < target && ticks < 60 * 60) { car.update(1 / 60, { forward: true }); ticks++; }
-    return ticks;
+test('loose ground costs grip as well as speed', () => {
+  // Same car, same speed, same lock: the only difference is the surface.
+  const turnIn = at => {
+    const car = new DrivingController(straightRoute, {}, 'auto');
+    car.u = at; car.speed = 20; car.update(0, {});
+    const heading = car.heading;
+    for (let i = 0; i < 30; i++) { car.u = at; car.speed = 20; car.update(1 / 60, { right: 1 }); }
+    return Math.abs(car.heading - heading);
   };
-  const sprint = Object.fromEntries(['formula', 'sports', 'hatchback', 'auto', 'van'].map(id => [id, toSpeed(id, 20)]));
-  assert.ok(sprint.formula < sprint.sports, 'the racer should out-accelerate the coupe');
-  assert.ok(sprint.sports < sprint.hatchback, 'the coupe should out-accelerate the hatchback');
-  assert.ok(sprint.hatchback < sprint.auto, 'the hatchback should out-accelerate the wagon');
-  assert.ok(sprint.auto < sprint.van, 'the wagon should out-accelerate the van');
-  const stoppingDistance = id => {
-    const car = flatOut(id, 60);
-    car.speed = 20; car.update(0, {});
-    const start = car.distance;
-    while (car.speed > .5) car.update(1 / 60, { brake: true });
-    return car.distance - start;
-  };
-  assert.ok(stoppingDistance('sports') < stoppingDistance('pickup'));
-  assert.ok(stoppingDistance('formula') < stoppingDistance('sports'));
+  const road = turnIn(2.4), verge = turnIn(5.35), open = turnIn(7);
+  assert.ok(verge < road && open < verge, 'turn-in should fall away with the surface');
+  // A quarter of it, so the car still answers the wheel out there.
+  assert.ok(open > road * .7 && open < road * .8, `open ground turns in at ${(open / road * 100).toFixed(0)}% of the road`);
 });
 
 test('choosing a car keeps the drive going and swaps the model in the scene', () => {

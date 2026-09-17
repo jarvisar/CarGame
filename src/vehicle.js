@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, coastalDrivingRoute } from './world/route.js';
 import { stableShadowDepth } from './world/shadow-depth.js';
-import { CARS, DEFAULT_CAR, ROUTE_PAINT, carEntry, carStats } from './cars.js';
+import { CARS, DEFAULT_CAR, DRAG, ROUTE_PAINT, carEntry, carStats } from './cars.js';
 import { createShapeCar } from './car-models.js';
 import { createFormulaCar } from './formula-model.js';
 
@@ -136,7 +136,6 @@ export class DrivingController {
     const { width, length } = carEntry(carId).shape;
     this.spec = { name: carId, width, length };
     this.stats = carStats(carId);
-    this.speedLimit = this.stats.topSpeed;
     parent?.add(this.car);
     this.setNight(this.night); this.setAppearance(this.journeyId); this.setPaint(paint);
     if (!rebuild) return;
@@ -188,33 +187,41 @@ export class DrivingController {
     const touch = input.touchDrive;
     const forward = clamp(Number(input.forward) || 0, 0, 1); const brake = clamp(Number(input.brake) || 0, 0, 1);
     this.steer = THREE.MathUtils.damp(this.steer, touch ? 0 : (Number(input.right) || 0) - (Number(input.left) || 0), 7, dt);
-    const offRoad = Math.abs(this.u) > 5.1;
-    // Off the tarmac a car loses its top end, but the limit eases down to it
-    // rather than snapping: leaving the road at speed costs about a second of
-    // momentum, which reads as the surface dragging the car down instead of
-    // the game taking the speed away at the white line. Coming back is free,
-    // so correcting a slide out of a bend is worth doing.
-    this.speedLimit = offRoad
-      ? clamp(THREE.MathUtils.damp(this.speedLimit, stats.offRoad, 1.2, dt), stats.offRoad, stats.topSpeed)
-      : stats.topSpeed;
+    // How far off the tarmac the car is: 0 on the road, 1 out on open ground,
+    // ramped across about half a car's width so putting two wheels on the verge
+    // costs a fraction of what leaving altogether does. One number drives the
+    // surface everywhere -- what it resists, how it steers and how it sounds --
+    // so what the player hears matches what the car is doing. The ramp closes
+    // by 5.9 m because the alpine road's own shoulder is only 6.3 m wide.
+    const looseness = clamp((Math.abs(this.u) - 4.8) / 1.1, 0, 1);
+    // Loose ground takes the speed rather than the game capping it: resistance
+    // that full throttle balances at the off-road figure, plus a little more
+    // the further above it the car arrives, so leaving the road at speed bleeds
+    // off over a second or so instead of at the white line.
+    const surface = looseness * (stats.loose + .35 * Math.max(0, Math.abs(this.speed) - stats.offRoad));
+    // Grip goes with it. Losing top speed is a number in the corner of the
+    // screen; losing turn-in is the thing that says "this is grass". A quarter
+    // of it keeps the car recoverable, and the alignment assist still works out
+    // here, so a straightened wheel still points the car back at the road.
+    const grip = stats.grip * (1 - .25 * looseness);
     let acceleration = 0;
     if (forward) acceleration += forward * (this.speed < -.3 ? stats.launch : stats.acceleration);
     if (brake) acceleration -= brake * (this.speed > .3 ? stats.braking : stats.creep);
     if (input.handbrake) acceleration -= Math.sign(this.speed) * stats.handbrake;
-    const drag = .7 + .0095 * this.speed * this.speed + (offRoad ? 4.2 : 0);
+    const drag = DRAG.rolling + DRAG.air * this.speed * this.speed + surface;
     if (Math.abs(this.speed) > .015) acceleration -= Math.sign(this.speed) * drag;
     if (touch) {
       this.speed = Math.abs(this.speed);
-      const targetSpeed = touch.amount * this.speedLimit;
+      const targetSpeed = touch.amount * (stats.topSpeed + (stats.offRoad - stats.topSpeed) * looseness);
       acceleration = dt ? clamp((targetSpeed - this.speed) / dt, -stats.touchBraking, stats.acceleration) : 0;
       if (touch.amount) this.heading = touch.heading;
     }
     const oldSpeed = this.speed;
-    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, this.speedLimit);
+    this.speed = clamp(this.speed + acceleration * dt, touch ? 0 : -stats.reverseSpeed, stats.topSpeed);
     if (!forward && !brake && oldSpeed * this.speed < 0) this.speed = 0;
     if (input.handbrake && oldSpeed * this.speed < 0) this.speed = 0;
     const frame = roadFrame(this.s);
-    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * stats.grip / (1 + Math.abs(this.speed) * .105)) * dt;
+    if (!touch) this.heading += this.steer * this.speed / 3.3 * (.52 * grip / (1 + Math.abs(this.speed) * .105)) * dt;
     let difference = Math.atan2(Math.sin(this.heading - frame.angle), Math.cos(this.heading - frame.angle));
     // A gentle alignment assist makes long bends relaxed; steering always wins.
     if (!touch && Math.abs(this.steer) < .08 && Math.abs(this.speed) > .2 && Math.abs(difference) < 1.15) {
@@ -246,7 +253,7 @@ export class DrivingController {
     this.audioTelemetry.speed = this.speed;
     this.audioTelemetry.throttle = input.handbrake ? 0 : touch ? clamp((acceleration + (this.speed > .015 ? drag : 0)) / stats.acceleration, 0, 1) : this.speed < -.3 ? brake : forward;
     this.audioTelemetry.brake = input.handbrake ? 1 : touch ? clamp(-acceleration / stats.touchBraking, 0, 1) : this.speed < -.3 ? forward : brake;
-    this.audioTelemetry.offRoad = clamp((Math.abs(this.u) - 4.8) / .7, 0, 1);
+    this.audioTelemetry.offRoad = looseness;
     this.currentPose.position.copy(this.groundedPosition); this.currentPose.quaternion.copy(this.car.quaternion);
     for (const key of ['bodyPitch', 'bodyRoll', 'wheelSpin', 'steer']) this.currentPose[key] = this[key];
     // Resets and journey changes are teleports, so never blend from the old location.
