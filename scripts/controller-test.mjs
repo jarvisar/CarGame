@@ -85,8 +85,8 @@ try {
   assert.ok(swatch, 'up from the fleet reaches the paint chips');
   await press(0); await frames();
   assert.equal(await page.locator('#car-dialog').isVisible(), true, 'painting keeps the garage open');
-  const stored = await page.evaluate(() => window.__coastline.paints[window.__coastline.carId] ?? 'factory');
-  assert.equal(stored, swatch, 'A applies the focused colour');
+  const chosen = await page.evaluate(() => window.__coastline.paint ?? 'default');
+  assert.equal(chosen, swatch, 'A applies the focused colour');
   await press(13); await frames();
   assert.equal(await focused(), 'auto', 'down returns to the fleet');
   await press(13); await frames();

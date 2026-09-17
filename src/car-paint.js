@@ -1,8 +1,8 @@
-import { CARS, carEntry } from './cars.js';
-
 // The garage's paint counter. Twelve mixed colours keep a repainted car inside
-// the game's slightly dusty, faceted palette; the factory swatch puts a car
-// back in the finish it arrived in, and the custom well covers everything else.
+// the game's slightly dusty, faceted palette; the custom well covers anything
+// else. One colour dresses the whole garage rather than a car at a time, so it
+// is held for the visit and never stored, and Default hands every car the
+// finish it arrived in back.
 export const PAINTS = [
   { name: 'Sunset Coral', color: '#d96143' },
   { name: 'Signal Red', color: '#b8232f' },
@@ -18,31 +18,12 @@ export const PAINTS = [
   { name: 'Graphite', color: '#4a5257' },
 ];
 
-export const FACTORY = 'factory';
-const STORAGE_KEY = 'coastline-paint';
-const HEX = /^#[0-9a-f]{6}$/i;
+// The one swatch that is not a colour: it clears whatever the garage is wearing.
+export const DEFAULT_PAINT = 'default';
+export const DEFAULT_PAINT_NAME = 'Each car’s own colour';
 
+const HEX = /^#[0-9a-f]{6}$/i;
 export const isPaint = value => typeof value === 'string' && HEX.test(value);
-// A swatch either names a colour or asks for the car's own finish back.
+// A swatch either names a colour or asks for the cars' own finishes back.
 export const readPaint = value => (isPaint(value) ? value.toLowerCase() : null);
 export const paintName = color => PAINTS.find(paint => paint.color === color)?.name ?? null;
-// What the card art and the model should show: a chosen colour, or the factory one.
-export const shownPaint = (id, paints) => paints[id] ?? carEntry(id).paint;
-
-const store = () => { try { return globalThis.localStorage ?? null; } catch { return null; } };
-
-// Paint is kept per car, so a colour follows the car it was mixed for. Anything
-// unrecognised is dropped rather than trusted: storage outlives a release.
-export function loadPaints(storage = store()) {
-  try {
-    const saved = JSON.parse(storage?.getItem(STORAGE_KEY) ?? 'null');
-    if (!saved || typeof saved !== 'object') return {};
-    return Object.fromEntries(Object.entries(saved)
-      .filter(([id, color]) => CARS[id] && isPaint(color))
-      .map(([id, color]) => [id, color.toLowerCase()]));
-  } catch { return {}; }
-}
-
-export function savePaints(paints, storage = store()) {
-  try { storage?.setItem(STORAGE_KEY, JSON.stringify(paints)); } catch { /* Still drive it for this visit. */ }
-}

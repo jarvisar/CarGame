@@ -5,7 +5,7 @@ import { CARS, CAR_IDS, DEFAULT_CAR, ROUTE_PAINT, carMeters, carStats } from '..
 import { createCar, DrivingController } from '../src/vehicle.js';
 import { TRAFFIC_MODELS } from '../src/traffic-models.js';
 import { JOURNEYS } from '../src/journeys.js';
-import { PAINTS, isPaint, loadPaints, savePaints, paintName, shownPaint } from '../src/car-paint.js';
+import { PAINTS, DEFAULT_PAINT, isPaint, paintName } from '../src/car-paint.js';
 
 const straightRoute = {
   frame: () => ({ angle: 0, scale: 1 }),
@@ -216,34 +216,36 @@ test('the racer is an open-wheeler, not a road car with new numbers', () => {
   formula.disposeModel(); wagon.disposeModel();
 });
 
-test('a car keeps the colour it was painted, on every route and after a swap', () => {
-  const blue = '#2f4a6d';
+test('one colour dresses the whole garage and follows the car swap', () => {
+  const blue = '#2f4a6d', wears = (car, color) => palette(car).includes(color.slice(1));
   const car = new DrivingController(straightRoute, {}, 'sports', blue);
-  assert.ok(palette(car).includes(blue.slice(1)), 'the chosen colour should reach the model');
-  for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); assert.ok(palette(car).includes(blue.slice(1))); }
-  // The default car dresses for the scenery until it is painted, and then holds.
+  assert.ok(wears(car, blue), 'the chosen colour should reach the model');
+  // It is the garage's colour, not the car's: every car picked up wears it.
+  for (const id of CAR_IDS) {
+    car.setCar(id, { paint: blue });
+    assert.ok(wears(car, blue), `${id} ignored the garage colour`);
+    assert.equal(car.paintColor, blue);
+  }
+  // And it stays on through a route change, kit and all.
+  for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); assert.ok(wears(car, blue)); }
+  // Clearing it hands every car the finish it arrived in back. The default
+  // car's own finish is the route's, so put it back on the coast road first.
+  car.setAppearance('coast');
+  for (const id of CAR_IDS) {
+    car.setCar(id); car.setPaint(null);
+    assert.equal(car.paintColor, null);
+    assert.ok(wears(car, CARS[id].paint), `${id} did not get its own colour back`);
+  }
+  // The default car goes back to dressing for the scenery, not to one colour.
   car.setCar('auto');
   const scenic = new Set();
   for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); scenic.add(palette(car)); }
   assert.equal(scenic.size, 4);
-  car.setPaint(blue);
-  const painted = new Set();
-  for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); painted.add(palette(car)); }
-  assert.equal(painted.size, 1);
-  assert.ok([...painted][0].includes(blue.slice(1)));
-  // Back to the factory finish is back to the route's own colours.
-  car.setPaint(null);
   car.setAppearance('desert');
-  assert.ok(palette(car).includes(ROUTE_PAINT.desert.slice(1)));
-  // Every other car can be painted too, without losing its shape.
-  for (const id of CAR_IDS) {
-    car.setCar(id, { paint: blue });
-    assert.ok(palette(car).includes(blue.slice(1)), `${id} ignored its paint`);
-    assert.equal(car.paintColor, blue);
-  }
+  assert.ok(wears(car, ROUTE_PAINT.desert));
 });
 
-test('the paint counter offers usable colours and only stores real ones', () => {
+test('the paint counter offers usable colours, and one swatch that is not one', () => {
   assert.ok(PAINTS.length >= 8);
   for (const { name, color } of PAINTS) {
     assert.ok(name && isPaint(color), `${name} is not a usable swatch`);
@@ -251,24 +253,9 @@ test('the paint counter offers usable colours and only stores real ones', () => 
   }
   assert.equal(new Set(PAINTS.map(paint => paint.color)).size, PAINTS.length, 'no two swatches may share a colour');
   assert.equal(paintName('#010203'), null, 'a mixed colour has no catalogue name');
+  // Default clears the garage rather than naming a colour, so it must never
+  // read as one or collide with a swatch.
+  assert.equal(isPaint(DEFAULT_PAINT), false);
+  assert.ok(!PAINTS.some(paint => paint.color === DEFAULT_PAINT));
   for (const value of ['red', '#fff', '#12345g', '', null, 42]) assert.equal(isPaint(value), false);
-  // An unpainted car shows the finish it left the factory in.
-  assert.equal(shownPaint('sports', {}), CARS.sports.paint);
-  assert.equal(shownPaint('sports', { sports: '#123456' }), '#123456');
-});
-
-test('stored paint survives a reload, and junk in storage is dropped', () => {
-  const store = new Map();
-  const storage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
-  savePaints({ sports: '#2F4A6D', formula: '#123456' }, storage);
-  assert.deepEqual(loadPaints(storage), { sports: '#2f4a6d', formula: '#123456' });
-  // Cars that no longer exist, bad colours and broken JSON never reach a model.
-  savePaints({ sports: '#2f4a6d', ghost: '#ffffff', van: 'chartreuse' }, storage);
-  assert.deepEqual(loadPaints(storage), { sports: '#2f4a6d' });
-  store.set('coastline-paint', '{ not json');
-  assert.deepEqual(loadPaints(storage), {});
-  // Storage is optional: a browser that refuses it still drives.
-  const refuses = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
-  assert.deepEqual(loadPaints(refuses), {});
-  savePaints({ sports: '#2f4a6d' }, refuses);
 });

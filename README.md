@@ -132,9 +132,11 @@ Choosing a car swaps the model where you stand: the route, position, mileage, sp
 
 #### Paint
 
-The paint counter at the top of the garage recolours the car you are driving. Twelve mixed colours sit alongside a **factory** swatch, which puts a car back in the finish it arrived in, and a **Custom** well that opens the browser's colour picker for anything else. The heading names the car being painted and the colour under the pointer or the keyboard focus, so a bare row of chips still says what it is.
+The paint counter at the top of the garage holds one colour for the whole garage, not one per car. Pick Signal Red and the car you are driving turns red; pick a different car and it is red too. Twelve mixed colours sit alongside a **Custom** well that opens the browser's colour picker for anything else, and a **Default** swatch — drawn as an empty chip with a line through it, because it is not a colour — that clears whatever is set and hands every car the finish it arrived in back. The colour under the pointer or the keyboard focus names itself beside the heading, so a bare row of chips still says what it is.
 
-A colour is applied where the car stands — no reload and no scenery change — and the card portrait in the grid below repaints with it, so the fleet doubles as the preview. Paint is kept per car in `localStorage`, so each car remembers its own colour, and it survives a route change: a repainted car keeps its colour on every road. Painting the Default car is the one case with a twist, since it has no finish of its own: its factory swatch is whichever colour the route would give it, and any other colour keeps the route's kit — surfboard, spare, roof box or cargo — while fixing the paint. The chips are reachable with the D-pad or stick alongside the cards.
+A colour is applied where the car stands — no reload and no scenery change — and every card portrait in the grid below repaints with it, so the fleet doubles as the preview of what the garage is wearing. It holds through a car swap and a route change alike. The Default car is the one case with a twist, since it has no finish of its own: cleared, it goes back to dressing for the route, and a chosen colour keeps the route's kit — surfboard, spare, roof box or cargo — while fixing the paint.
+
+Nothing about the colour is stored. It lasts the visit and a reload starts back at the fleet's own finishes, which are the thing worth keeping; the chosen *car* is still remembered in `localStorage` as before. The chips are reachable with the D-pad or stick alongside the cards.
 
 ### Controllers
 

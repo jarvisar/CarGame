@@ -8,7 +8,7 @@ import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
 import { CARS, CAR_IDS, DEFAULT_CAR, ROUTE_PAINT, carEntry, carMeters } from './cars.js';
 import { carArt } from './car-art.js';
-import { PAINTS, loadPaints, savePaints, paintName, readPaint, shownPaint } from './car-paint.js';
+import { PAINTS, DEFAULT_PAINT, DEFAULT_PAINT_NAME, paintName, readPaint } from './car-paint.js';
 import { SEED, journeyStart } from './world/route.js';
 import { freshSceneStart } from './world/generation.js';
 import { ChunkWorker } from './world/chunk-source.js';
@@ -33,8 +33,10 @@ let toastTimer; let sceneReady = false;
 const carStorageKey = 'coastline-car';
 let carId = DEFAULT_CAR;
 try { const saved = localStorage.getItem(carStorageKey); if (saved && CARS[saved]) carId = saved; } catch { /* Storage is optional. */ }
-// Paint is kept per car, so a colour follows the car it was mixed for.
-const paints = loadPaints();
+// One colour dresses the whole garage and follows the player from car to car.
+// It lasts the visit and is not stored: the fleet's own finishes are the thing
+// worth keeping, and Default hands them straight back.
+let paint = null;
 const toast = message => { $('#toast').textContent = message; $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 2200); };
 
 async function boot() {
@@ -71,7 +73,7 @@ async function boot() {
     let world = new JOURNEYS.coast.World(scene, chunkWorker.source('coast'));
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
-    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId, paints[carId] ?? null); const audio = new DriveAudio();
+    const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId, paint); const audio = new DriveAudio();
     const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
     scene.add(vehicle.car);
@@ -104,10 +106,10 @@ async function boot() {
           + `<span class="chooser-card-title">${entry.name}</span>${current}</button>`;
         const meters = carMeters(id).map(({ label, level }) =>
           `<span class="car-meter"><span>${label}</span><span class="car-meter-track"><span style="width:${level}%"></span></span></span>`).join('');
-        // The portrait is drawn in the car's own paint, so the grid doubles as
-        // the preview for whatever colour the paint counter has just mixed.
+        // The portrait is drawn in whatever the garage is wearing, so the grid
+        // doubles as the preview: one colour repaints the whole fleet at once.
         const badge = entry.badge ? `<span class="car-badge">${entry.badge}</span>` : '';
-        return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${shownPaint(id, paints)}">`
+        return `<button type="button" class="chooser-card car-card" data-car="${id}" aria-label="${entry.name}" aria-current="false" style="--car-paint:${cardPaint(id)}">`
           + carArt(id)
           + `<span class="chooser-card-copy"><span class="chooser-card-title">${entry.name}${badge}</span>`
           + `<span class="car-meters">${meters}</span>${current}</span></button>`;
@@ -116,7 +118,7 @@ async function boot() {
     }
     const paintSwatches = $('#paint-swatches'), paintWell = $('#paint-custom-well'), paintInput = $('#paint-custom');
     function buildPaintSwatches() {
-      paintSwatches.innerHTML = ['<button type="button" class="paint-swatch paint-factory" role="radio" aria-checked="false" data-paint="factory"><span class="paint-chip" aria-hidden="true"></span></button>',
+      paintSwatches.innerHTML = [`<button type="button" class="paint-swatch paint-default" role="radio" aria-checked="false" data-paint="${DEFAULT_PAINT}" aria-label="${DEFAULT_PAINT_NAME}" title="${DEFAULT_PAINT_NAME}"><span class="paint-chip" aria-hidden="true"></span></button>`,
         ...PAINTS.map(({ name, color }) => `<button type="button" class="paint-swatch" role="radio" aria-checked="false" data-paint="${color}" style="--swatch:${color}" aria-label="${name}" title="${name}"><span class="paint-chip" aria-hidden="true"></span></button>`)].join('');
       for (const swatch of paintSwatches.querySelectorAll('[data-paint]')) {
         swatch.addEventListener('click', () => applyPaint(swatch.dataset.paint));
@@ -127,40 +129,34 @@ async function boot() {
       }
       paintInput.addEventListener('input', () => applyPaint(paintInput.value));
     }
-    // The default car has no finish of its own, so its factory swatch is
-    // whichever colour the road it is on would give it.
-    const factoryPaint = () => (carEntry(carId).plain ? ROUTE_PAINT[journey] ?? ROUTE_PAINT.coast : carEntry(carId).paint);
-    const factoryName = () => (carEntry(carId).plain ? 'Route colours' : 'Factory finish');
+    // With no garage colour set, every car shows the finish it arrived in. The
+    // default car has none of its own, so it shows whatever the road it is on
+    // would give it.
+    const ownPaint = id => (carEntry(id).plain ? ROUTE_PAINT[journey] ?? ROUTE_PAINT.coast : carEntry(id).paint);
+    const cardPaint = id => paint ?? ownPaint(id);
+    const paintCards = () => { for (const card of carDialog.querySelectorAll('[data-car]')) card.style.setProperty('--car-paint', cardPaint(card.dataset.car)); };
     function showPaintName() {
-      const chosen = paints[carId] ?? null;
-      $('#paint-current').textContent = chosen ? paintName(chosen) ?? chosen.toUpperCase() : factoryName();
+      $('#paint-current').textContent = paint ? paintName(paint) ?? paint.toUpperCase() : DEFAULT_PAINT_NAME;
     }
     function updatePaintUi() {
-      const entry = carEntry(carId), chosen = paints[carId] ?? null;
-      $('#paint-note').hidden = !entry.plain;
-      const factory = paintSwatches.querySelector('[data-paint="factory"]');
-      factory.style.setProperty('--swatch', factoryPaint());
-      factory.title = factoryName(); factory.setAttribute('aria-label', factoryName());
       for (const swatch of paintSwatches.querySelectorAll('[data-paint]')) {
         const value = swatch.dataset.paint;
-        swatch.setAttribute('aria-checked', String(value === 'factory' ? !chosen : value === chosen));
+        swatch.setAttribute('aria-checked', String(value === DEFAULT_PAINT ? !paint : value === paint));
       }
-      paintWell.dataset.active = String(Boolean(chosen) && !PAINTS.some(paint => paint.color === chosen));
-      paintWell.style.setProperty('--swatch', chosen ?? factoryPaint());
-      paintInput.value = chosen ?? factoryPaint();
-      $('#paint-car').textContent = entry.name;
+      paintWell.dataset.active = String(Boolean(paint) && !PAINTS.some(swatch => swatch.color === paint));
+      paintWell.style.setProperty('--swatch', paint ?? ownPaint(carId));
+      paintInput.value = paint ?? ownPaint(carId);
       showPaintName();
     }
     // Repainting needs no new scenery either: the colour lands on the car where
-    // it stands, on its card, and in storage, and the drive carries on.
+    // it stands and on every card at once, and the drive carries on. Default
+    // clears it, and the fleet goes back to its own finishes.
     function applyPaint(value) {
-      const color = value === 'factory' ? null : readPaint(value);
-      if (value !== 'factory' && !color) return;
-      if (color) paints[carId] = color; else delete paints[carId];
-      savePaints(paints);
-      vehicle.setPaint(color);
-      carDialog.querySelector(`[data-car="${carId}"]`)?.style.setProperty('--car-paint', paints[carId] ?? factoryPaint());
-      updatePaintUi();
+      const color = value === DEFAULT_PAINT ? null : readPaint(value);
+      if (value !== DEFAULT_PAINT && !color) return;
+      paint = color;
+      vehicle.setPaint(paint);
+      paintCards(); updatePaintUi();
       vehicle.render(1, world.origin); rendering.update(vehicle.car, 0, world.origin); needsRender = true;
     }
     function updateCarUi() {
@@ -175,7 +171,7 @@ async function boot() {
       if (id === carId || !CARS[id]) return;
       carId = id;
       try { localStorage.setItem(carStorageKey, id); } catch { /* Still drive it for this visit. */ }
-      vehicle.setCar(id, { paint: paints[id] ?? null }); vehicle.render(1, world.origin);
+      vehicle.setCar(id, { paint }); vehicle.render(1, world.origin);
       rendering.update(vehicle.car, 0, world.origin);
       updateCarUi(); updateHud(); needsRender = true;
       toast(`${carEntry(id).name} selected`);
@@ -220,7 +216,7 @@ async function boot() {
         vehicle.setAppearance(id);
         vehicle.setNight(id === 'snow');
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
-        rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); updatePaintUi();
+        rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
         rendering.snap(); rendering.update(vehicle.car, 1, world.origin); world.animate(time, vehicle);
         updateHud(); rendering.render();
@@ -238,7 +234,7 @@ async function boot() {
     // full-width row, so up and down follow the rendered geometry rather than a
     // column count. A single row of cards steps along itself instead.
     function moveChooserFocus(chooser, name) {
-      // Hidden rows are skipped: the paint counter closes for the default car.
+      // Cards and paint chips share one ring; anything laid out is reachable.
       const cards = [...chooser.querySelectorAll('[data-journey], [data-car], [data-paint]')].filter(card => card.offsetParent);
       if (!cards.length) return;
       const index = Math.max(0, cards.indexOf(document.activeElement)), current = cards[index];
@@ -461,7 +457,7 @@ async function boot() {
     changingJourney = false;
     requestAnimationFrame(frame);
     // Development-only inspection surface for automated driving and streaming checks.
-    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paints() { return { ...paints }; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
+    if (import.meta.env.DEV) window.__coastline = { seed: SEED, chunkWorker, vehicle, traffic, audio, graphics, get world() { return world; }, rendering, input, action, changeJourney, chooseCar, applyPaint, get carId() { return carId; }, get paint() { return paint; }, get journey() { return journey; }, get changingJourney() { return changingJourney; }, get paused() { return paused; }, get started() { return started; } };
   } catch (error) { chunkWorker?.dispose(); console.error('Could not start Coastline:', error); $('#loading').classList.add('loaded'); $('#error').hidden = false; }
 }
 boot();

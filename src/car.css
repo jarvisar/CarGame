@@ -22,15 +22,13 @@ body[data-journey=jungle] .panel-button { background: #1c3423e0; border-color: #
 body[data-journey=jungle] .panel-button:hover { background: #2c4a33e8; }
 @media (max-height: 560px) { .pause-panel { margin: 2px 0 8px; } .pause-panel h3 { margin-bottom: 6px; } }
 
-/* The paint counter sits above the fleet: the car being driven, the colour it
-   wears, and one row of chips that repaint it where it stands. */
+/* The paint counter sits above the fleet: the colour the garage is wearing,
+   and one row of chips that repaint the car where it stands. */
 .paint-shop { margin: 2px 0 20px; padding: 13px 16px 14px; border: 1px solid #25473e24; border-radius: 12px; background: #fff7; }
 .paint-shop-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .paint-shop h3 { margin: 0; font-size: 9px; font-weight: 700; letter-spacing: 2.1px; text-transform: uppercase; opacity: .72; }
-.paint-car { font-size: 11px; font-weight: 600; letter-spacing: .2px; text-transform: none; }
 .paint-current { font-size: 11px; letter-spacing: .2px; opacity: .68; text-align: right; }
 .paint-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.paint-row[hidden] { display: none; }
 .paint-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .paint-swatch { position: relative; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: none; }
 /* Chips stay 34px so a dozen colours fit on one line; the hit area is 44px. */
@@ -39,8 +37,9 @@ body[data-journey=jungle] .panel-button:hover { background: #2c4a33e8; }
 .paint-swatch:hover .paint-chip { transform: scale(1.14); }
 .paint-swatch[aria-checked=true] { box-shadow: 0 0 0 2px var(--ink); }
 .paint-swatch[aria-checked=true] .paint-chip { transform: scale(.82); }
-/* A cream inner ring marks the colour the car left the factory in. */
-.paint-factory .paint-chip { box-shadow: inset 0 0 0 1px #0000002e, inset 0 0 0 3px #f6f5ea; }
+/* Default is not a colour, so it reads as an empty swatch with a line through
+   it rather than a disc that could be mistaken for one. */
+.paint-default .paint-chip { background: linear-gradient(135deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%); box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 28%, transparent); }
 .paint-custom { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px 0 4px; border: 1px dashed #25473e45; border-radius: 17px; cursor: pointer; }
 .paint-custom input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 .paint-custom-chip { width: 26px; height: 26px; border-radius: 50%; box-shadow: inset 0 0 0 1px #0000002e; background: conic-gradient(#d96143, #e0b44a, #78977b, #6fa9c2, #2f4a6d, #6b4a6b, #d96143); }
@@ -49,15 +48,12 @@ body[data-journey=jungle] .panel-button:hover { background: #2c4a33e8; }
 .paint-custom[data-active=true] .paint-custom-chip { background: var(--swatch); }
 .paint-custom:hover .paint-custom-chip { transform: scale(1.1); }
 .paint-note { margin: 11px 0 0; font-size: 11px; line-height: 1.6; opacity: .62; }
-.paint-note[hidden] { display: none; }
+.paint-note b { font-weight: 650; opacity: .85; }
 .garage-subheading { margin: 0 0 10px; font-size: 9px; font-weight: 700; letter-spacing: 2.1px; text-transform: uppercase; opacity: .72; }
 body[data-journey=desert] .paint-shop { background: #fff6; }
 body[data-journey=snow] .paint-shop { background: #ffffff0f; border-color: #8aa4c442; }
 body[data-journey=jungle] .paint-shop { background: #ffffff0f; border-color: #8fb58442; }
 body[data-journey=snow] .paint-custom, body[data-journey=jungle] .paint-custom { border-color: #ffffff4d; }
-body[data-journey=snow] .paint-factory .paint-chip { box-shadow: inset 0 0 0 1px #0000002e, inset 0 0 0 3px #1c2b41; }
-body[data-journey=jungle] .paint-factory .paint-chip { box-shadow: inset 0 0 0 1px #0000002e, inset 0 0 0 3px #203a27; }
-body[data-journey=desert] .paint-factory .paint-chip { box-shadow: inset 0 0 0 1px #0000002e, inset 0 0 0 3px #fff2dd; }
 
 .car-card { --car-paint: #d96143; }
 /* One word on the card for a car that is not an ordinary tourer. */
