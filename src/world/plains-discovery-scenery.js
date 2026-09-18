@@ -74,10 +74,45 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
         const [treeS, treeU] = local(ds, du);
         chunk.tree('oak', treeS, treeU, height, ['#4d7434', '#587f3a', '#43682e'][Math.abs(ds) % 3], randomAt(site.index, 2934 + ds) * 6.28);
       }
+      // A machine shed at the back, and a fence round the yard with its gate
+      // where the drive comes in.
+      const [shedS, shedU] = local(0, 13);
+      const shedGround = foundation(shedS, shedU, 2.2, 3.4, angle);
+      chunk.scenery.painted.push({ p: point(shedS, shedU, shedGround + 1.3), scale: [4.2, 2.6, 6.6], r: [0, angle, 0], color: '#9c9585' });
+      chunk.scenery.painted.push({ p: point(shedS, shedU, shedGround + 2.72), scale: [4.8, .22, 7.2], r: [0, angle, 0], color: '#6d655c' });
+      const yardS = site.halfS - 4, yardU = site.halfU - 3, ring = [];
+      for (let ds = -yardS; ds <= yardS; ds += 4) ring.push([ds, -yardU]);
+      for (let du = -yardU + 4; du < yardU; du += 4) ring.push([yardS, du]);
+      for (let ds = yardS; ds >= -yardS; ds -= 4) ring.push([ds, yardU]);
+      for (let du = yardU - 4; du > -yardU; du -= 4) ring.push([-yardS, du]);
+      chunk.fence(ring.filter(([ds, du]) => !(du === -yardU && Math.abs(ds - site.drive) < 4.5)).map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
     } else {
       chunk.dirtPatch(s + 1, u, 10, 8);
       ground = foundation(s, u, 5, 8, angle);
       add('plains-grain-elevators', assets.grainElevator, material, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
+      // A rail spur runs past the elevator on a ballast strip, with a hopper
+      // car waiting under the loading side.
+      const railU = u + side * (site.halfU + 1.5), { painted } = chunk.scenery;
+      for (let t = s - 96; t < s + 96; t += 8) {
+        if (!inChunk(t + 4)) continue;
+        chunk.dirtQuad([[t, railU - 1.9], [t + 8, railU - 1.9], [t, railU + 1.9], [t + 8, railU + 1.9]]);
+        const a = chunk.ground(t, railU), b = chunk.ground(t + 8, railU);
+        for (const offset of [-.75, .75]) {
+          const from = chunk.ground(t, railU + offset), to = chunk.ground(t + 8, railU + offset);
+          chunk.beam(painted, { ...from, y: a.y + .21 }, { ...to, y: b.y + .21 }, .13, '#6a675f');
+        }
+        for (let k = 0; k < 8; k += 1.4) {
+          const p = chunk.ground(t + k, railU);
+          painted.push({ p: [p.x, p.y + .12, p.z], scale: [2.5, .14, .3], r: [0, -roadFrame(t + k).angle, 0], color: '#5d4d3b' });
+        }
+      }
+      const carS = s + 24;
+      if (inChunk(carS)) {
+        const p = chunk.ground(carS, railU), yaw = -roadFrame(carS).angle;
+        painted.push({ p: [p.x, p.y + 2.25, p.z], scale: [2.7, 2.7, 11.5], r: [0, yaw, 0], color: '#8a5340' });
+        painted.push({ p: [p.x, p.y + 3.75, p.z], scale: [2.9, .3, 11.8], r: [0, yaw, 0], color: '#6f4434' });
+        for (const dz of [-3.9, 3.9]) { const q = chunk.ground(carS + dz, railU); painted.push({ p: [q.x, q.y + .55, q.z], scale: [2.2, .7, 1.8], r: [0, yaw, 0], color: '#3c3a36' }); }
+      }
     }
     chunk.features.discoveries.push({ ...site, ground });
   }

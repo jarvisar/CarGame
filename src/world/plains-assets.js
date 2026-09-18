@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { randomAt } from './route.js';
+import { waterClock } from './water.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 
@@ -78,3 +79,64 @@ function bale() {
   return g;
 }
 export const baleGeometry = bale();
+
+// Cattle for the pastures: a few boxes with the head and legs a shade darker
+// than the flank, so a per-instance coat colour still reads as an animal.
+function cow() {
+  const parts = [];
+  const box = (size, position, shade) => {
+    const g = new THREE.BoxGeometry(...size).toNonIndexed(); g.deleteAttribute('uv'); g.translate(...position);
+    const colors = new Float32Array(g.attributes.position.count * 3).fill(shade);
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3)); parts.push(g);
+  };
+  box([.95, .78, 1.75], [0, 1.02, 0], 1);
+  box([.5, .46, .62], [0, 1.22, -1.08], .82);
+  box([.62, .12, .12], [0, 1.48, -1.02], .55);
+  for (const x of [-.3, .3]) for (const z of [-.62, .62]) box([.19, .66, .19], [x, .33, z], .78);
+  box([.08, .5, .08], [0, .95, .9], .6);
+  const g = mergeGeometries(parts); parts.forEach(part => part.dispose());
+  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+}
+export const cowGeometry = cow();
+
+// A clump of rushes at the water's edge: bent blades, like the desert grass.
+function rushes() {
+  const positions = [];
+  for (let i = 0; i < 11; i++) {
+    const angle = i * 2.399963, x = Math.cos(angle), z = Math.sin(angle);
+    const height = .7 + randomAt(i, 962) * .6, bend = .18 + randomAt(i, 963) * .22;
+    positions.push(-z * .04, 0, x * .04, x * bend * .5, height * .72, z * bend * .5, z * .04, 0, -x * .04,
+      z * .04, 0, -x * .04, x * bend * .5, height * .72, z * bend * .5, x * bend, height, z * bend);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+}
+export const rushGeometry = rushes();
+
+// Crows: the gull's silhouette, smaller and dark. The flock circles a field
+// in the vertex shader off the shared water clock, so it costs one draw call
+// and nothing per frame, and it pauses with the scene like the parrots.
+export const crowGeometry = new THREE.BufferGeometry();
+crowGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+  0, 0, -.38, -.65, .08, 0, -.1, 0, .3, -.65, .08, 0, -1.5, -.12, .45, -.1, 0, .3,
+  0, 0, -.38, .1, 0, .3, .65, .08, 0, .65, .08, 0, .1, 0, .3, 1.5, -.12, .45,
+  -.13, 0, .2, .13, 0, .2, 0, 0, .68,
+].map(v => v * .72), 3));
+crowGeometry.computeVertexNormals(); crowGeometry.computeBoundingSphere();
+export const crowMaterial = new THREE.MeshBasicMaterial({ color: '#2b2622', side: THREE.DoubleSide, toneMapped: false });
+crowMaterial.onBeforeCompile = shader => {
+  shader.uniforms.plainsTime = waterClock.time;
+  shader.vertexShader = 'uniform float plainsTime;\n' + shader.vertexShader;
+  shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
+    #include <begin_vertex>
+    float phase = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;
+    float flap = sin(plainsTime * 6.2 + phase) * smoothstep(-0.4, 0.5, sin(plainsTime * 0.7 + phase));
+    transformed.y += abs(position.x) * (0.1 + flap * 0.3);
+    float orbit = plainsTime * 0.21 + phase;
+    float yaw = orbit + 1.5708;
+    mat2 heading = mat2(cos(yaw), -sin(yaw), sin(yaw), cos(yaw));
+    transformed.xz = heading * transformed.xz;
+    transformed += vec3(cos(orbit) * 11.0, sin(plainsTime * 1.1 + phase) * 0.6, sin(orbit) * 11.0);
+  `);
+};
+crowMaterial.customProgramCacheKey = () => 'plains-crows-v1';
