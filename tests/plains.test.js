@@ -163,17 +163,19 @@ test('plains scenery stands on the rendered facets and the world streams and rel
     }
     assert.ok(worked > 0 && flat > 0, 'a chunk has both worked fields and unworked ground');
   }
-  // The fringe is present in every chunk, throws no shadow, and stays out of
-  // the ambient occlusion prepass.
+  // Both fringes are present across the drive, throw no shadow, and stay out
+  // of the ambient occlusion prepass.
+  const fringes = { 'grass-fringe': 0, 'wheat-fringe': 0 };
   for (const chunk of world.chunks.values()) {
     let stalks = 0;
     chunk.group.traverse(object => {
-      if (object.name !== 'field-fringe') return;
-      stalks += object.count;
+      if (!(object.name in fringes)) return;
+      fringes[object.name] += object.count; stalks += object.count;
       assert.equal(object.castShadow, false); assert.equal(object.userData.ambientOcclusion, false);
     });
     assert.ok(stalks > 20, 'stalks fringe the fields');
   }
+  assert.ok(fringes['grass-fringe'] > 20 && fringes['wheat-fringe'] > 20, 'the green fields and the grain fields each grow their own fringe');
   let disposed = 0;
   for (const chunk of world.chunks.values()) for (const source of chunk.owned) source.addEventListener('dispose', () => disposed++);
   for (const s of [250, 1025, 9000, -300]) {
@@ -188,9 +190,40 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   chunk.dispose();
 });
 
+test('the cow wears its patches proud of its hide, so no two faces flicker against each other', async () => {
+  const { cowGeometry } = await import('../src/world/plains-assets.js');
+  // Two faces of different colours on one plane have no stable depth order,
+  // so the renderer picks between them per pixel and per frame: the cow's
+  // back patch once ended exactly level with its back and blinked there.
+  const position = cowGeometry.attributes.position, color = cowGeometry.attributes.color, count = position.count / 3;
+  const corners = i => [0, 1, 2].map(k => [position.getX(i * 3 + k), position.getY(i * 3 + k), position.getZ(i * 3 + k)]);
+  const plane = triangle => {
+    const [a, b, c] = triangle, u = b.map((v, k) => v - a[k]), v = c.map((w, k) => w - a[k]);
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const length = Math.hypot(...n), unit = n.map(value => value / length);
+    return { unit, offset: unit.reduce((sum, value, k) => sum + value * a[k], 0) };
+  };
+  const span = (triangle, k) => [Math.min(...triangle.map(p => p[k])), Math.max(...triangle.map(p => p[k]))];
+  const triangles = Array.from({ length: count }, (_, i) => corners(i));
+  const shades = Array.from({ length: count }, (_, i) => color.getX(i * 3));
+  for (let i = 0; i < count; i++) for (let j = i + 1; j < count; j++) {
+    if (Math.abs(shades[i] - shades[j]) < 1e-6) continue;
+    const a = plane(triangles[i]), b = plane(triangles[j]);
+    const dot = a.unit.reduce((sum, value, k) => sum + value * b.unit[k], 0);
+    if (Math.abs(Math.abs(dot) - 1) > 1e-6) continue;
+    if (Math.abs(a.offset - (dot > 0 ? b.offset : -b.offset)) > 1e-6) continue;
+    const axis = a.unit.map(Math.abs).indexOf(Math.max(...a.unit.map(Math.abs)));
+    const overlap = [0, 1, 2].filter(k => k !== axis).every(k => {
+      const [low, high] = span(triangles[i], k), [start, end] = span(triangles[j], k);
+      return low < end - 1e-4 && start < high - 1e-4;
+    });
+    assert.ok(!overlap, `two differently shaded faces share a plane on ${'xyz'[axis]} at ${a.offset.toFixed(3)}`);
+  }
+});
+
 test('every plains asset is built from real geometry, so no part is silently missing', async () => {
   const { plainsDiscoveryAssets } = await import('../src/world/plains-discovery-assets.js');
-  const { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
+  const { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
   // A colour passed where a segment count belongs yields an empty geometry that
   // merges away without complaint, which is how the turbines lost their towers.
   const expected = { barn: 400, silo: 900, farmhouse: 400, windmillTower: 900, windmillRotor: 600,
@@ -221,5 +254,11 @@ test('every plains asset is built from real geometry, so no part is silently mis
     assert.equal(colors.count, variant.leaves.attributes.position.count, 'one colour per crown vertex');
     for (let i = 0; i < colors.array.length; i++) assert.ok(Number.isFinite(colors.array[i]) && colors.array[i] > .4, `crown colour ${i} is ${colors.array[i]}`);
   }
-  for (const geometry of [baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
+  for (const geometry of [baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
+  // Wheat carries its pale ear in its vertex colours, which a per-instance
+  // gold multiplies; without them every stalk would be one flat tone.
+  const grain = wheatGeometry.attributes.color;
+  assert.equal(grain.count, wheatGeometry.attributes.position.count);
+  const shades = new Set(); for (let i = 0; i < grain.count; i++) shades.add(grain.getX(i).toFixed(3));
+  assert.ok(shades.size >= 2, 'the ear must be a different tone from the straw');
 });

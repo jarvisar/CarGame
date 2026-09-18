@@ -9,7 +9,7 @@ import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsV
   rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, fieldCorner, pondsNear, pondDistance, headlandDistance } from './plains-route.js';
 import { createWaterMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
-import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
+import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
 import { plainsDiscoveries, plainsDiscoveryClears } from './plains-discoveries.js';
 import { plainsDiscoveryAssets, plainsDiscoveryMaterial } from './plains-discovery-assets.js';
 import { buildPlainsDiscoveries } from './plains-discovery-scenery.js';
@@ -55,12 +55,16 @@ const concreteMaterial = material('#bcb7a8');
 const paintedMaterial = material('#ffffff');
 const hideMaterial = material('#ffffff', { vertexColors: true });
 const rushMaterial = material('#ffffff', { side: THREE.DoubleSide });
+// The fringe carries its shading in its vertex colours, which the
+// per-instance tint multiplies. Both sides of every blade are real geometry,
+// so this stays single sided.
+const fringeMaterial = material('#ffffff', { vertexColors: true });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const poleGeometry = new THREE.CylinderGeometry(.85, 1, 1, 6);
 const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 registerChunkResources('plains', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, dirtMaterial, waterMaterial, leavesMaterial,
-  barkMaterial, shrubMaterial, strawMaterial, timberMaterial, poleMaterial, wireMaterial, railMaterial, metalMaterial, concreteMaterial, paintedMaterial, hideMaterial, rushMaterial, boxGeometry, poleGeometry, shrubGeometry, plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry, crowMaterial });
+  barkMaterial, shrubMaterial, strawMaterial, timberMaterial, poleMaterial, wireMaterial, railMaterial, metalMaterial, concreteMaterial, paintedMaterial, hideMaterial, rushMaterial, boxGeometry, poleGeometry, shrubGeometry, plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, fringeMaterial, crowGeometry, crowMaterial });
 
 function geometry(vertices, colors, furrows) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -108,10 +112,11 @@ const haze = new THREE.Color('#cdbf7c'), pastureLight = new THREE.Color('#a3b84c
 // a step: a green much deeper than this took no light on its shaded side
 // and stood among the crowns as a black shape, worst on a phone's screen.
 const CONIFER_GREENS = ['#4c7c3e', '#427037', '#558544'], CYPRESS_GREENS = ['#457a3c', '#4c8042', '#3f7137'];
-// Standing stalks at a field's edge take the crop's own tone; the verge
-// and the pastures are long grass.
-const FRINGE_TINTS = { wheat: ['#d9a93a', '#e3b545'], stubble: ['#d6bd6a', '#cbb060'], hay: ['#c9b855', '#bfae4e'], ploughed: ['#c8b070', '#bfa768'],
-  pasture: ['#8fae48', '#9db84f'], verge: ['#9bab4c', '#8da144'] };
+// Only two kinds of ground grow a fringe, and each grows its own: long
+// grass in the green fields and the verge, standing wheat at the edge of a
+// grain field. A mown or ploughed field is bare to its boundary.
+const GRASS_TINTS = { pasture: ['#8fae48', '#9db84f'], verge: ['#9bab4c', '#8da144'] };
+const WHEAT_TINTS = ['#d9a93a', '#e3b545', '#d2a235'];
 
 export class PlainsChunk {
   constructor(index) {
@@ -119,7 +124,7 @@ export class PlainsChunk {
     this.features = { discoveries: [] };
     // A row of turbines reaches well past its own district anchor.
     this.discoveries = plainsDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
-    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], fringe: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
+    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
     this.buildTerrain(); this.buildRoad(); this.buildCreek(); this.buildScenery();
     buildPlainsDiscoveries(this, this.discoveries);
     this.finishScenery();
@@ -356,16 +361,21 @@ export class PlainsChunk {
         shrubs.push({ p: [p.x, p.y + size * .26, p.z], scale: [size, size * .72, size * 1.05], r: [0, random() * 6.28, 0], color: hedgeGreens[Math.floor(random() * hedgeGreens.length)] });
       }
     };
-    // The fringe: standing stalks either side of a boundary, where the
-    // harvester and the plough stop short of the edge. Only near the road,
-    // where they can be seen; the far fields keep their flat colour.
+    // The fringe: what stands either side of a boundary, where the harvester
+    // and the plough stop short of the edge. Whatever lies that side decides
+    // both what grows there and how far in: grass crowds right up to the
+    // line, wheat stands back past the bare headland. Only near the road,
+    // where it can be seen; the far fields keep their flat colour.
     const fringe = (points, axis) => {
       for (const point of points) {
         if (Math.abs(point.u) > 170) continue;
         for (const k of [-1, 1]) {
           if (random() > .55) continue;
-          const d = k * (1.1 + random() * 2.2), jitter = (random() - .5) * 2.2;
-          this.tuft(point.s + (axis === 's' ? d : jitter), point.u + (axis === 'u' ? d : jitter), null, random);
+          const probeS = point.s + (axis === 's' ? k * 3.5 : 0), probeU = point.u + (axis === 'u' ? k * 3.5 : 0);
+          const kind = Math.abs(probeU) < ROAD_RESERVE ? 'verge' : fieldAt(probeS, probeU)?.kind;
+          if (kind !== 'pasture' && kind !== 'wheat' && kind !== 'verge') continue;
+          const d = k * (kind === 'wheat' ? 2.6 + random() * 2.4 : 1.1 + random() * 2.2), jitter = (random() - .5) * 2.2;
+          this.tuft(point.s + (axis === 's' ? d : jitter), point.u + (axis === 'u' ? d : jitter), kind, random);
         }
       }
     };
@@ -696,11 +706,15 @@ export class PlainsChunk {
       previous = p;
     }
   }
-  // A tuft of standing stalks, tinted for the crop it stands in.
+  // A tuft at a field's edge: long grass in the green fields and the verge,
+  // standing wheat in a grain field, and nothing anywhere else.
   tuft(s, u, kind, random) {
+    const where = kind ?? (Math.abs(u) < ROAD_RESERVE ? 'verge' : fieldAt(s, u)?.kind);
+    if (where !== 'pasture' && where !== 'verge' && where !== 'wheat') return;
     if (!this.clearAt(s, u, .2)) return;
-    const tints = FRINGE_TINTS[kind ?? fieldAt(s, u)?.kind ?? 'verge'], p = this.ground(s, u), size = .8 + random() * .6;
-    this.scenery.fringe.push({ p: [p.x, p.y - .03, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: tints[Math.floor(random() * tints.length)] });
+    const wheat = where === 'wheat', tints = wheat ? WHEAT_TINTS : GRASS_TINTS[where];
+    const p = this.ground(s, u), size = wheat ? .85 + random() * .45 : .8 + random() * .6;
+    (wheat ? this.scenery.wheat : this.scenery.grass).push({ p: [p.x, p.y - .03, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: tints[Math.floor(random() * tints.length)] });
   }
   cow(s, u, heading, random) {
     const p = this.ground(s, u), coats = ['#f0ece2', '#e8e2d4', '#9b7551', '#8a6340', '#f2eee6', '#7d5a3c'];
@@ -741,7 +755,7 @@ export class PlainsChunk {
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
   }
   finishScenery() {
-    const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, fringe, farLumps, concrete, sheds, tanks, bark, leaves, dirt } = this.scenery;
+    const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt } = this.scenery;
     if (dirt.length) this.addMesh(geometry(dirt), dirtMaterial, 'farm-tracks');
     instances(this.group, squareBaleGeometry, strawMaterial, squareBales, 'square-bales');
     instances(this.group, plainsDiscoveryAssets.shed, plainsDiscoveryMaterial, sheds, 'field-sheds');
@@ -759,7 +773,8 @@ export class PlainsChunk {
     instances(this.group, rushGeometry, rushMaterial, rushes, 'rushes', false);
     // The fringe throws no shadow and stays out of the occlusion prepass:
     // hundreds of blades a chunk cost one draw call and nothing more.
-    instances(this.group, stalkGeometry, rushMaterial, fringe, 'field-fringe', false, false);
+    instances(this.group, stalkGeometry, fringeMaterial, grass, 'grass-fringe', false, false);
+    instances(this.group, wheatGeometry, fringeMaterial, wheat, 'wheat-fringe', false, false);
     // Far windbreaks are horizon silhouettes: no shadow pass, no soft shading.
     for (const part of splitBatch(farLumps)) {
       if (!part.length) continue;

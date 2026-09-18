@@ -223,9 +223,13 @@ function cow() {
   box([.08, .5, .08], [0, .95, .9], .6);
   // Dark patches over the flanks and shoulder. A pale instance colour then
   // reads as a Holstein and a brown one as a brown cow, from one mesh.
-  box([.97, .34, .52], [0, 1.24, -.34], .3);
-  box([.97, .3, .4], [0, .86, .5], .34);
-  box([.52, .3, .26], [0, 1.3, .74], .32);
+  // Every patch stands a little proud of the hide it lies on, and no two of
+  // them share a face plane: the back patch used to end exactly level with
+  // the cow's back, and two faces on one plane flicker against each other
+  // as the camera moves, which read as a black stripe blinking on and off.
+  box([.99, .38, .52], [0, 1.24, -.34], .3);
+  box([.982, .3, .4], [0, .86, .5], .34);
+  box([.56, .32, .3], [0, 1.285, .74], .32);
   const g = mergeGeometries(parts); parts.forEach(part => part.dispose());
   g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
@@ -245,22 +249,80 @@ function rushes() {
 }
 export const rushGeometry = rushes();
 
-// A tuft of standing stalks for the fringe of a field: a few bent blades,
-// taller and slimmer than the rushes, spread over a little ground, that read
-// as uncut wheat or long grass where the field meets its edge.
+// A blade of grass or a stalk of wheat is one flat face standing on end.
+// Drawing such a face double-sided flips its normal on the far side, which
+// points it at the ground and leaves half of every tuft near-black under a
+// low sun. So each face is emitted twice, wound both ways, and both copies
+// are lit from above with a little of the face's own tilt kept for shape:
+// whichever side the camera is on, the face it sees takes the sky.
+function standingFoliage(positions, colors) {
+  const points = [], shades = [], normals = [];
+  for (let face = 0; face < positions.length / 9; face++) {
+    const corner = k => positions.slice(face * 9 + k * 3, face * 9 + k * 3 + 3);
+    const [a, b, c] = [corner(0), corner(1), corner(2)];
+    const u = b.map((value, k) => value - a[k]), v = c.map((value, k) => value - a[k]);
+    const cross = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const length = Math.hypot(...cross) || 1, lean = .25;
+    const tilted = [cross[0] / length * lean, cross[1] / length * lean + 1, cross[2] / length * lean];
+    const scale = Math.hypot(...tilted), normal = tilted.map(value => value / scale);
+    for (const point of [a, b, c, a, c, b]) points.push(...point);
+    for (let k = 0; k < 6; k++) normals.push(...normal);
+    // Every face carries one shade, so both windings take the same colours.
+    if (colors) shades.push(...colors.slice(face * 9, face * 9 + 9), ...colors.slice(face * 9, face * 9 + 9));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(shades.length ? shades : new Array(points.length).fill(1), 3));
+  g.computeBoundingSphere(); return g;
+}
+
+// A tuft of long grass for the fringe of a green field: a few bent blades,
+// darker at the root than at the tip, spread over a little ground.
 function stalks() {
-  const positions = [];
-  for (let i = 0; i < 7; i++) {
+  const positions = [], colors = [];
+  const face = (a, b, c, shades) => { positions.push(...a, ...b, ...c); for (const shade of shades) colors.push(shade, shade, shade * .96); };
+  for (let i = 0; i < 6; i++) {
     const angle = i * 2.399963 + .7, x = Math.cos(angle), z = Math.sin(angle);
     const height = .85 + randomAt(i, 966) * .45, bend = .12 + randomAt(i, 967) * .16, spread = .1 + randomAt(i, 968) * .16;
     const bx = x * spread, bz = z * spread;
-    positions.push(bx - z * .035, 0, bz + x * .035, bx + x * bend * .5, height * .7, bz + z * bend * .5, bx + z * .035, 0, bz - x * .035,
-      bx + z * .035, 0, bz - x * .035, bx + x * bend * .5, height * .7, bz + z * bend * .5, bx + x * bend, height, bz + z * bend);
+    const root = [.82, .82], mid = [.93, .93], tip = [1];
+    face([bx - z * .04, 0, bz + x * .04], [bx + x * bend * .5, height * .7, bz + z * bend * .5], [bx + z * .04, 0, bz - x * .04], [root[0], mid[0], root[1]]);
+    face([bx + z * .04, 0, bz - x * .04], [bx + x * bend * .5, height * .7, bz + z * bend * .5], [bx + x * bend, height, bz + z * bend], [root[0], mid[0], tip[0]]);
   }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+  return standingFoliage(positions, colors);
 }
 export const stalkGeometry = stalks();
+
+// Standing wheat for the fringe of a grain field: straighter, taller stalks
+// that bend over as they rise, each carrying a pale ear that tapers to a
+// point. The ear is baked into the vertex colours, so a per-instance gold
+// still reads as grain over straw rather than one flat tone.
+function wheatStalks() {
+  const positions = [], colors = [];
+  // Kept bright: a stalk is a hair's width of geometry standing on end, and
+  // a dark bake turned a field's edge into a line of near-black specks.
+  const straw = [.9, .88, .74], grain = [1, .98, .87];
+  const face = (a, b, c, shade) => { positions.push(...a, ...b, ...c); for (let k = 0; k < 3; k++) colors.push(...shade); };
+  for (let i = 0; i < 5; i++) {
+    const angle = i * 2.399963 + .4, x = Math.cos(angle), z = Math.sin(angle);
+    const height = 1.05 + randomAt(i, 976) * .45, lean = .06 + randomAt(i, 977) * .13, spread = .08 + randomAt(i, 978) * .18;
+    const bx = x * spread, bz = z * spread, px = -z, pz = x;
+    // A point up the stalk, as a pair of vertices half a width either side.
+    const at = (t, w) => {
+      const y = t * height, along = lean * t * t;
+      return [[bx + x * along - px * w, y, bz + z * along - pz * w], [bx + x * along + px * w, y, bz + z * along + pz * w]];
+    };
+    const shoulder = .6;
+    const [b0, b1] = at(0, .032), [s0, s1] = at(shoulder, .026);
+    face(b0, b1, s0, straw); face(b1, s1, s0, straw);
+    // The ear tapers to its tip in one quad, so a stalk stays four faces.
+    const [e0, e1] = at(shoulder, .058), [t0, t1] = at(1, .013);
+    face(e0, e1, t0, grain); face(e1, t1, t0, grain);
+  }
+  return standingFoliage(positions, colors);
+}
+export const wheatGeometry = wheatStalks();
 
 // Crows: the gull's silhouette, smaller and dark. The flock circles a field
 // in the vertex shader off the shared water clock, so it costs one draw call
