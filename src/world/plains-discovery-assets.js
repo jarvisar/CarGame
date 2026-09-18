@@ -172,6 +172,16 @@ function tractor() {
   for (const x of [-.55, .55]) p.cylinder([x, .42, -1.3], .42, .42, .3, tyre, 8, [0, 0, Math.PI / 2]);
   return p.finish();
 }
+// A timber field shed under a rusting tin roof: the outbuilding that stands
+// in a corner of a field, well short of a farmstead.
+function fieldShed() {
+  const p = new Parts(), board = '#8f816b', roof = '#7f6b5b';
+  p.box([0, 1.6, 0], [5.2, 3.2, 7.4], board);
+  p.gable([0, 0, 0], 5.2, 7.4, 3.2, 4.7, board, roof, .3);
+  p.box([-2.64, 1.35, 1.2], [.1, 2.7, 2.4], '#4a3d31');
+  for (const z of [-3.7, 3.7]) for (const x of [-2.6, 2.6]) p.box([x, 1.6, z], [.16, 3.2, .16], '#a99b81');
+  return p.finish();
+}
 // A country grain elevator: a tin-clad shed with a tall wood elevator tower
 // and headhouse, a leg up its side, and two steel bins with cone roofs.
 function grainElevator() {
@@ -223,7 +233,7 @@ function turbineRotor() {
 }
 
 export const plainsDiscoveryAssets = { barn: barn(), silo: silo(), farmhouse: farmhouse(), windmillTower: windmillTower(), windmillRotor: windmillRotor(),
-  tractor: tractor(), grainElevator: grainElevator(), turbineTower: turbineTower(), turbineRotor: turbineRotor(), box: new THREE.BoxGeometry(1, 1, 1) };
+  tractor: tractor(), grainElevator: grainElevator(), turbineTower: turbineTower(), turbineRotor: turbineRotor(), shed: fieldShed(), box: new THREE.BoxGeometry(1, 1, 1) };
 export const plainsDiscoveryMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
 export const plainsFoundationMaterial = new THREE.MeshStandardMaterial({ color: '#b1a892', roughness: 1, flatShading: true });
 // Rotors turn about their own local z in the vertex shader, off the shared

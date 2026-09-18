@@ -51,13 +51,14 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     let ground;
     if (kind === 'farmstead') {
       chunk.dirtPatch(s + 2, u, 12, 9);
-      // Buildings are drawn a quarter over life size, as the miniature style
-      // does with the cabins and the lighthouse, so they read from the road.
-      const big = [1.25, 1.25, 1.25];
+      // Buildings are drawn well over life size, as the miniature style does
+      // with the cabins and the lighthouse, so a barn holds its own against
+      // the trees round it and reads from the road.
+      const big = [1.4, 1.4, 1.4];
       const [barnS, barnU] = local(-7, 3);
       ground = foundation(barnS, barnU, 4.5, 7, angle);
       add('plains-barns', assets.barn, material, point(barnS, barnU, ground), [0, angle + Math.PI / 2, 0], big);
-      const [siloS, siloU] = local(-17, 1.5);
+      const [siloS, siloU] = local(-16, 1.5);
       const siloGround = foundation(siloS, siloU, 3.1, 3.1, angle);
       add('plains-silos', assets.silo, material, point(siloS, siloU, siloGround), [0, angle, 0], big);
       const [houseS, houseU] = local(10.5, -4.5);
@@ -70,7 +71,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       add('plains-windmill-rotors', assets.windmillRotor, plainsWindmillMaterial, offset(millRoot, millYaw, 0, 8.65, -.55), [0, millYaw, 0]);
       const [tractorS, tractorU] = local(2, 9);
       add('plains-tractors', assets.tractor, material, point(tractorS, tractorU), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
-      for (const [ds, du, height] of [[-19, -9, 11], [12, 11, 9], [-4, -14, 12]]) {
+      for (const [ds, du, height] of [[-19, -9, 10], [12, 11, 8.5], [-4, -14, 10.5]]) {
         const [treeS, treeU] = local(ds, du);
         chunk.tree('oak', treeS, treeU, height, ['#4d7434', '#587f3a', '#43682e'][Math.abs(ds) % 3], randomAt(site.index, 2934 + ds) * 6.28);
       }
@@ -81,7 +82,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       }
       // A machine shed at the back, and a fence round the yard with its gate
       // where the drive comes in.
-      const [shedS, shedU] = local(0, 13);
+      const [shedS, shedU] = local(1, 14);
       const shedGround = foundation(shedS, shedU, 2.2, 3.4, angle);
       chunk.scenery.painted.push({ p: point(shedS, shedU, shedGround + 1.3), scale: [4.2, 2.6, 6.6], r: [0, angle, 0], color: '#9c9585' });
       chunk.scenery.painted.push({ p: point(shedS, shedU, shedGround + 2.72), scale: [4.8, .22, 7.2], r: [0, angle, 0], color: '#6d655c' });

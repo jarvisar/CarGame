@@ -79,9 +79,10 @@ export function distantRise(s, u) {
 
 function fieldSwell(s, u) {
   // Long, broad waves carry the country; the short ones only break up their
-  // surface, so the fields roll without the road ever pitching.
+  // surface, so the fields roll without the road ever pitching. The shortest
+  // are kept faint: at the facet size they read as crumpled ground, not swell.
   return 5.2 * Math.sin(s / 231 + u / 173 + swellPhase[1]) + 3.1 * Math.sin(s / 97 + u / 71 + swellPhase[0])
-    + 1.7 * Math.sin(s / 53 - u / 89) + .9 * Math.sin(s / 29 + u / 37) + .5 * Math.sin(s / 17 - u / 23);
+    + 1.7 * Math.sin(s / 53 - u / 89) + .45 * Math.sin(s / 29 + u / 37) + .2 * Math.sin(s / 17 - u / 23);
 }
 // The plain without its creek: a flat road reserve with a drainage ditch on
 // each side, then rolling fields that ease down toward the camera and up
@@ -160,14 +161,29 @@ export function fieldAt(s, u) {
 // are where the tall shelterbelts go; band boundaries run along the road.
 export function rowBoundaryKind(row, side) {
   const r = randomAt(row, side > 0 ? 2781 : 2782);
-  return r < .26 ? null : r < .48 ? 'fence' : r < .64 ? 'hedge' : r < .84 ? 'treeline' : 'shelterbelt';
+  return r < .14 ? null : r < .44 ? 'fence' : r < .56 ? 'hedge' : r < .84 ? 'treeline' : 'shelterbelt';
 }
 export function bandBoundaryKind(row, side, band) {
   const r = randomAt(row * 4 + band, side > 0 ? 2783 : 2784);
-  // Most band edges are just a change of crop. A line on every one of them
-  // turned the fields into a thicket of dots at driving zoom. The rest are a
-  // fence, a low clipped hedge, or a belt of trees.
-  return r < .5 ? null : r < .68 ? 'fence' : r < .84 ? 'hedge' : 'treeline';
+  // Some band edges are just a change of crop; most carry a post-and-rail
+  // fence, a low clipped hedge, or a belt of trees, now that a fence is a
+  // pair of rails rather than a row of dots at driving zoom.
+  return r < .3 ? null : r < .62 ? 'fence' : r < .74 ? 'hedge' : 'treeline';
+}
+// A strip of bare headland runs beside every boundary that carries a fence,
+// hedge or trees, where the tractor turns: the distance from a point in a
+// field to the nearest such line, which the terrain shades as trodden earth.
+export const BOUNDARY_LINE = 2.2;
+export function headlandDistance(s, u, field) {
+  const { row, side, band } = field, bands = fieldBands(row, side), cross = Math.abs(u);
+  let d = 99;
+  if (band < 4 && cross < 330) {
+    if (rowBoundaryKind(row, side)) d = Math.min(d, Math.abs(s - field.start - BOUNDARY_LINE));
+    if (rowBoundaryKind(row + 1, side)) d = Math.min(d, Math.abs(s - field.end - BOUNDARY_LINE));
+  }
+  if (band > 0 && band < 4 && bandBoundaryKind(row, side, band)) d = Math.min(d, Math.abs(cross - bands[band]));
+  if (band < 3 && bandBoundaryKind(row, side, band + 1)) d = Math.min(d, Math.abs(cross - bands[band + 1]));
+  return d;
 }
 // Stone piles cleared off the fields, and a stock pond in some pastures.
 export function fieldCorner(row, side, band) {
@@ -200,9 +216,10 @@ export function plainsVertex(row, column) {
   const gap = Math.min(base - (PLAINS_COLUMNS[column - 1] ?? base - 40), (PLAINS_COLUMNS[column + 1] ?? base + 40) - base);
   const u = base + (fixed ? 0 : (randomAt(seedRow, column + 2762) - .5) * Math.min(4.5, gap * .32));
   const p = plainsPosition(s, u, plainsGroundHeight(s, u));
-  // Small facet relief on the fields, more on the far rises, none at the water.
+  // A trace of facet relief on the fields, so a worked field lies smooth
+  // enough to carry its furrows; more on the far rises, none at the water.
   const dry = smoothstep(4, 9, creekDistance(s, u));
-  p.y += (randomAt(seedRow, column + 2763) - .5) * (.28 * smoothstep(13, 30, cross) + 2.2 * smoothstep(280, 360, cross)) * dry;
+  p.y += (randomAt(seedRow, column + 2763) - .5) * (.09 * smoothstep(13, 30, cross) + 2.2 * smoothstep(280, 360, cross)) * dry;
   return { ...p, s, u, column };
 }
 

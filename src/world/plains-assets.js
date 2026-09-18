@@ -139,8 +139,34 @@ function conifer(seed) {
   return result;
 }
 
+// A cypress: a tall, narrow column of dark foliage on a short stem, the
+// vertical stroke that stands among the round crowns along a farm road.
+function cypress(seed) {
+  const bark = [], leaves = [];
+  const stem = new THREE.CylinderGeometry(.02, .045, .42, 5);
+  stem.translate(0, .09, 0); bark.push(stem);
+  const lobe = (y, radius, tall, salt) => {
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    g.scale(radius * (.92 + randomAt(salt, seed + 991) * .16), tall, radius * (.92 + randomAt(salt, seed + 992) * .16));
+    g.rotateY(randomAt(salt, seed + 993) * 6.28); g.translate(0, y, 0);
+    const colors = [], normals = g.attributes.normal;
+    for (let j = 0; j < normals.count; j += 3) {
+      const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+      const shade = .68 + Math.max(0, upward) * .28 + randomAt(j, salt + seed * 3 + 994) * .05;
+      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .96);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    leaves.push(g);
+  };
+  lobe(.3, .17, .25, 1); lobe(.56, .15, .27, 2); lobe(.81, .11, .22, 3);
+  const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
+  for (const part of [...bark, ...leaves]) part.dispose();
+  result.bark.computeBoundingSphere(); result.leaves.computeBoundingSphere();
+  return result;
+}
+
 export const plainsTrees = { oak: [plainsTree(1, 'oak'), plainsTree(2, 'oak')], poplar: [plainsTree(3, 'poplar'), plainsTree(4, 'poplar')], willow: [plainsTree(5, 'willow')],
-  hedge: [hedgeTree(6), hedgeTree(7), hedgeTree(8)], conifer: [conifer(9), conifer(10)] };
+  hedge: [hedgeTree(6), hedgeTree(7), hedgeTree(8)], conifer: [conifer(9), conifer(10)], cypress: [cypress(11)] };
 
 // A round bale lying on its side, axis across x. The wrapped side is lighter
 // than the cut ends, with a faint band every few segments.
@@ -160,6 +186,22 @@ function bale() {
   return g;
 }
 export const baleGeometry = bale();
+// A square bale: a block with its cut ends darker than the strung sides and
+// a lighter top, stacked in twos and threes on the stubble.
+function squareBale() {
+  const g = new THREE.BoxGeometry(1.6, .8, 1.1).toNonIndexed();
+  g.deleteAttribute('uv');
+  const colors = [], normals = g.attributes.normal;
+  for (let i = 0; i < normals.count; i += 3) {
+    const end = Math.abs(normals.getX(i)) > .5, top = normals.getY(i) > .5;
+    const shade = top ? 1 : end ? .78 : .9;
+    for (let k = 0; k < 3; k++) colors.push(shade, shade * (end ? .95 : 1), shade * .9);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.computeBoundingSphere();
+  return g;
+}
+export const squareBaleGeometry = squareBale();
 
 // Cattle for the pastures: a few boxes with the head and legs a shade darker
 // than the flank, so a per-instance coat colour still reads as an animal.

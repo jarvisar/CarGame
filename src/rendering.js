@@ -148,8 +148,8 @@ export function createRendering(canvas, graphics = new Graphics()) {
       // Golden hour over open country: a low, warm sun throws long shadows
       // from every bale and fence post, under a pale hazy sky.
       scene.background.set('#ecd8ab'); updateFog();
-      sky.color.set('#efe0c2'); sky.groundColor.set('#7d6a3f'); sky.intensity = 1.02;
-      sun.color.set('#ffd99c'); sun.intensity = 2.75; sunOffset.set(-185, 150, 125);
+      sky.color.set('#e8e0cb'); sky.groundColor.set('#75683f'); sky.intensity = 1;
+      sun.color.set('#ffdba2'); sun.intensity = 2.7; sunOffset.set(-185, 150, 125);
       renderer.toneMappingExposure = .96;
       return;
     }

@@ -150,6 +150,19 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   }
   assert.ok([...world.chunks.values()].some(chunk => chunk.group.getObjectByName('creek-water')), 'the creek is built');
   assert.ok([...world.chunks.values()].some(chunk => chunk.group.getObjectByName('creek-bridge')), 'the bridge is built');
+  // The shader draws furrows and headlands from a per-vertex attribute: every
+  // terrain vertex carries one, and the worked fields carry rows while the
+  // road reserve and the pastures do not.
+  for (const mesh of ground) {
+    const furrow = mesh.geometry.attributes.furrow;
+    assert.equal(furrow.count, mesh.geometry.attributes.position.count);
+    let worked = 0, flat = 0;
+    for (let i = 0; i < furrow.count; i++) {
+      assert.ok(Number.isFinite(furrow.getX(i)) && furrow.getY(i) >= 0 && furrow.getY(i) < .3 && furrow.getZ(i) >= 0);
+      if (furrow.getY(i) > 0) worked++; else flat++;
+    }
+    assert.ok(worked > 0 && flat > 0, 'a chunk has both worked fields and unworked ground');
+  }
   let disposed = 0;
   for (const chunk of world.chunks.values()) for (const source of chunk.owned) source.addEventListener('dispose', () => disposed++);
   for (const s of [250, 1025, 9000, -300]) {
@@ -170,7 +183,7 @@ test('every plains asset is built from real geometry, so no part is silently mis
   // A colour passed where a segment count belongs yields an empty geometry that
   // merges away without complaint, which is how the turbines lost their towers.
   const expected = { barn: 400, silo: 900, farmhouse: 400, windmillTower: 900, windmillRotor: 600,
-    tractor: 400, grainElevator: 1500, turbineTower: 200, turbineRotor: 300, box: 24 };
+    tractor: 400, grainElevator: 1500, turbineTower: 200, turbineRotor: 300, shed: 200, box: 24 };
   for (const [name, geometry] of Object.entries(plainsDiscoveryAssets)) {
     const count = geometry.attributes.position.count;
     assert.ok(count >= expected[name], `${name} has ${count} vertices, expected at least ${expected[name]}`);
