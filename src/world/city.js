@@ -19,7 +19,7 @@ const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, 
 const terrainMaterial = material('#ffffff', { vertexColors: true });
 // Wet asphalt: darker than the other routes' roads and glossy enough to take
 // a broad sheen from the weak sun.
-const roadMaterial = material('#45484c', { roughness: .5, flatShading: false });
+const roadMaterial = material('#4d5155', { roughness: .5, flatShading: false });
 const kerbMaterial = material('#a4a7a9', { flatShading: false });
 const edgeMaterial = material('#c3c6c3', { flatShading: false });
 const centerMaterial = material('#bda041', { flatShading: false });
@@ -69,15 +69,15 @@ function instances(group, geo, mat, items, name, shadows = true, ambientOcclusio
 
 // The palette is cool and wet: grey stone, dark brick, concrete, a little
 // painted render, with warm accents on fascias, awnings and lit windows.
-const WALLS = ['#7a5b54', '#87685d', '#6b524f', '#96969a', '#a4a09b', '#adb0b3', '#999ea3', '#889aa3', '#6e7d87', '#a4978a', '#b2a189', '#5c6975', '#4f5b66', '#8f8579'];
-const ROOFS = ['#54585c', '#4c5054', '#5e6266', '#474b4f'];
+const WALLS = ['#846159', '#8f7064', '#755955', '#9e9ea2', '#aba7a2', '#b4b7ba', '#a0a5aa', '#90a2ab', '#78878f', '#ab9e91', '#b8a790', '#67747f', '#5a6670', '#978d81'];
+const ROOFS = ['#5c6064', '#54585c', '#666a6e', '#4f5357'];
 const ACCENTS = ['#8c3a3a', '#2f6c6a', '#ad7a2f', '#3f5a86', '#6a4a78', '#3b6d47', '#b0553a'];
-const GLASS = new THREE.Color('#2c3741'), LIT = ['#e3b96f', '#e9c27d', '#d9ad62', '#ecc98c'];
-const asphalt = new THREE.Color('#4a4d51'), gutter = new THREE.Color('#3c3f43'), pavement = new THREE.Color('#878b8f'), paving = new THREE.Color('#8a8e92');
-const lots = new THREE.Color('#7d8286'), vacant = new THREE.Color('#71767a'), far = new THREE.Color('#6d747b'), fog = new THREE.Color('#98a3ac');
-const wall = new THREE.Color('#79766f'), bed = new THREE.Color('#3b464c'), bank = new THREE.Color('#6d6b66'), bankTop = new THREE.Color('#787b7d');
+const GLASS = new THREE.Color('#33404a'), LIT = ['#c9a668', '#cfae73', '#c09a5c', '#d2b47e'];
+const asphalt = new THREE.Color('#52565a'), gutter = new THREE.Color('#44474b'), pavement = new THREE.Color('#909498'), paving = new THREE.Color('#93979b');
+const lots = new THREE.Color('#868b8f'), vacant = new THREE.Color('#7a7f83'), far = new THREE.Color('#767d84'), fog = new THREE.Color('#aab4bc');
+const wall = new THREE.Color('#827f78'), bed = new THREE.Color('#3b464c'), bank = new THREE.Color('#75736e'), bankTop = new THREE.Color('#818486');
 const lawn = new THREE.Color('#587347'), lawnWet = new THREE.Color('#4b653e');
-const waterDeep = new THREE.Color('#57656e'), waterLight = new THREE.Color('#63717a');
+const waterDeep = new THREE.Color('#5f6d76'), waterLight = new THREE.Color('#6c7a83');
 const TREE_GREENS = ['#3b6136', '#426639', '#345832', '#456b3e'];
 const pick = (list, n) => list[((n % list.length) + list.length) % list.length];
 
@@ -241,9 +241,9 @@ export class CityChunk {
   // in the shop's colour, a door, and an awning over some of them.
   shopfront(b, y0, seed) {
     const { s0, s1, u0 } = b, { blocks, lit } = this.scenery, accent = new THREE.Color(pick(ACCENTS, seed));
-    const glassLit = randomAt(seed, 3071) < .45;
+    const glassLit = randomAt(seed, 3071) < .28;
     this.quad(glassLit ? lit : blocks, [this.at(s0 + .5, u0 - .06, y0 + .25), this.at(s1 - .5, u0 - .06, y0 + .25), this.at(s1 - .5, u0 - .06, y0 + 2.8), this.at(s0 + .5, u0 - .06, y0 + 2.8)],
-      glassLit ? new THREE.Color('#e7d7b0') : GLASS.clone().multiplyScalar(1.12), [-1, 0, 0]);
+      glassLit ? new THREE.Color('#d3c4a0') : GLASS.clone().multiplyScalar(1.12), [-1, 0, 0]);
     this.quad(blocks, [this.at(s0 + .3, u0 - .12, y0 + 2.8), this.at(s1 - .3, u0 - .12, y0 + 2.8), this.at(s1 - .3, u0 - .12, y0 + 3.55), this.at(s0 + .3, u0 - .12, y0 + 3.55)], accent, [-1, 0, 0]);
     this.quad(blocks, [this.at(s0 + .3, u0 - .12, y0 + 3.55), this.at(s1 - .3, u0 - .12, y0 + 3.55), this.at(s1 - .3, u0, y0 + 3.55), this.at(s0 + .3, u0, y0 + 3.55)], accent.clone().multiplyScalar(1.1), [0, 1, 0]);
     const door = s0 + 1 + randomAt(seed, 3072) * (s1 - s0 - 3.2);
@@ -314,7 +314,7 @@ export class CityChunk {
           const storeys = band === 0 ? 3 + Math.floor(r(3) * 4) : band === 1 ? 5 + Math.floor(r(3) * 7) : 8 + Math.floor(r(3) * 11);
           const gable = band === 0 && storeys <= 4 && r(4) < .35;
           this.building({ s0: lot.s0, s1: lot.s1, u0, u1, height: storeys * 3.2 + 1.2, wall: WALLS[Math.floor(r(5) * WALLS.length)], roofColor: ROOFS[Math.floor(r(6) * ROOFS.length)],
-            roof: gable ? 'gable' : 'flat', windows: band === 2 && r(7) < .5 ? 'ribbon' : 'punched', shop: band < 2 && r(8) < (band ? .35 : .85), lit: [.22, .16, .1][band], shade: .96 + r(9) * .08 }, seed);
+            roof: gable ? 'gable' : 'flat', windows: band === 2 && r(7) < .5 ? 'ribbon' : 'punched', shop: band < 2 && r(8) < (band ? .35 : .85), lit: [.11, .08, .05][band], shade: .96 + r(9) * .08 }, seed);
         }
       }
     }
@@ -327,7 +327,7 @@ export class CityChunk {
         const u1 = range.front - r(3) * 3, u0 = Math.max(range.back, u1 - (k ? 16 + r(4) * 20 : 9 + r(4) * 8));
         const height = k ? 14 + r(5) * 26 : 6 + r(5) * 5;
         this.building({ s0, s1: s0 + w, u0, u1, height, wall: WALLS[Math.floor(r(6) * WALLS.length)], roofColor: ROOFS[Math.floor(r(7) * ROOFS.length)],
-          roof: !k && r(8) < .55 ? 'gable' : 'flat', windows: k ? 'punched' : 'none', shop: false, lit: k ? .1 : 0, shade: .94 + r(9) * .08 }, seed);
+          roof: !k && r(8) < .55 ? 'gable' : 'flat', windows: k ? 'punched' : 'none', shop: false, lit: k ? .05 : 0, shade: .94 + r(9) * .08 }, seed);
       }
     }
     // The skyline: plain towers beyond the far blocks, fading into the fog,
@@ -340,7 +340,7 @@ export class CityChunk {
         const r = j => randomAt(n, lane * 10 + 3161 + j), s = n * 46 + r(0) * 30, w = 14 + r(1) * 18, d = 14 + r(2) * 18;
         if (!this.inChunk(s) || r(3) < .3) continue;
         const height = 30 + r(4) * 95 + lane * 6;
-        const base = cityGroundHeight(s, u) - 1, color = new THREE.Color(lane % 2 ? '#6b7581' : '#737d88').lerp(fog, .15 + .06 * (lane % 5));
+        const base = cityGroundHeight(s, u) - 1, color = new THREE.Color(lane % 2 ? '#78828d' : '#808a95').lerp(fog, .15 + .06 * (lane % 5));
         this.prism(skyline, s, s + w, u, u + d, base, base + height, color, { back: false, sides: true });
       }
     }

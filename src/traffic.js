@@ -7,7 +7,7 @@ const BEHIND = 380, AHEAD = 620;
 const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1 };
 // The city runs half as many cars again over the same stretch of road.
 const FLEET = { city: 9 };
-const LIGHTS = { snow: 1, city: .55 };
+const LIGHTS = { snow: 1, city: .35 };
 
 // Four separating axes give a forgiving rectangular footprint even when the
 // player is sideways. All collision coordinates are independent of render origin.

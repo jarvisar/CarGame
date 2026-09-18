@@ -17,7 +17,7 @@ try {
   await page.waitForFunction(() => window.__coastline.journey === 'city' && !window.__coastline.changingJourney);
   assert.equal(await page.locator('.location-title').textContent(), 'RAINY DOWNTOWN');
   assert.equal(await page.evaluate(() => document.body.dataset.journey), 'city');
-  assert.equal(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content), '#aab4bc');
+  assert.equal(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').content), '#b3bcc4');
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.car.getObjectByName('city-bike').visible), true);
   assert.equal(await page.evaluate(() => window.__coastline.vehicle.car.getObjectByName('surfboard').visible), false);
   // Lamps run part way up in the storm, on the player's car and on the traffic.

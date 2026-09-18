@@ -101,7 +101,7 @@ async function boot() {
       $('#welcome .eyebrow').lastChild.textContent = ` ${data.label}`;
       $('#welcome p').textContent = data.introduction;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#aab4bc' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function buildCarCards() {
@@ -222,7 +222,7 @@ async function boot() {
         if (regenerate) { time = 0; hudTime = 0; vehicle.wheelSpin = 0; }
         vehicle.setRoute(JOURNEYS[id].route, nextState);
         vehicle.setAppearance(id);
-        vehicle.setLights(id === 'snow' ? 1 : id === 'city' ? .55 : 0);
+        vehicle.setLights(id === 'snow' ? 1 : id === 'city' ? .35 : 0);
         traffic.reset(vehicle.route, vehicle.s, id); traffic.render(1, world.origin);
         rendering.setJourney(id); audio.setJourney(id); updateJourneyUi(); paintCards(); updatePaintUi();
         vehicle.render(1, world.origin);
