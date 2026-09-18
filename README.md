@@ -76,7 +76,7 @@ The two cheapest levels also keep less of the route built. The far chunk in each
 
 Turning soft shading off removes its depth/normal prepass, a second pass over every visible object: 27–33% of the frame's draw calls and 29–32% of its triangles, measured across the four routes at High. A level that starts without it never allocates its six buffers at all. Because that cost is geometry rather than pixels, a smaller drawing buffer cannot reduce it — which is why the controller below treats it as its own decision rather than a property of a level.
 
-Open the pause screen — the pause button, `P`, `Escape`, or Start / Menu on a controller — to choose **Auto**, a fixed level, or to switch **Soft shading** on its own. The readout underneath shows the level in force and the drawing buffer it produces. Choices are stored per browser and restored on the next visit; multisampling belongs to the WebGL context, so a level that changes it applies that part on the next load.
+Open the pause screen — the pause button, `P`, `Escape`, or Start / Menu on a controller — to choose **Auto**, a fixed level, or to switch **Soft shading** on its own. On a controller, the D-pad or stick moves between the levels and the switch and A / Cross sets the focused one, so every graphics choice is reachable without a keyboard or a touchscreen. The readout underneath shows the level in force and the drawing buffer it produces. Choices are stored per browser and restored on the next visit; multisampling belongs to the WebGL context, so a level that changes it applies that part on the next load.
 
 **Auto** guesses a starting level, then corrects it by watching frame times:
 
@@ -146,13 +146,13 @@ Basic support uses the browser's [Gamepad API](https://w3c.github.io/gamepad/) f
 - **RT / R2:** gas; **LT / L2:** brake, then reverse. Analog triggers support partial pressure.
 - **Bottom face button (Xbox A / PlayStation Cross):** gas fallback.
 - **Right face button (Xbox B / PlayStation Circle):** brake/reverse fallback.
-- **Start / Menu / Options:** pause or resume.
+- **Start / Menu / Options:** pause or resume. On the pause screen the D-pad or stick moves between **Resume drive**, the **Garage** button and the graphics settings, A / Cross presses the focused one, and B / Circle resumes. Select / View and the right stick press still open the route chooser and the garage from there, and RB / R1 still goes to the next scene.
 - **Left face button (Xbox X / PlayStation Square):** change view.
 - **Top face button (Xbox Y / PlayStation Triangle):** reset the scene in a fresh area.
 - **RB / R1 (right shoulder):** next scene, including while paused.
 - **Select / Back / View:** open the scenery chooser. Use the D-pad or stick to highlight a route, A / Cross to select, and B / Circle or Select to close.
 
-In either chooser, left and right step along the cards while up and down move between rows, following the cards as they are actually laid out, so a grid is crossed by row and a single row of routes still steps along itself. The stick's two axes are separate menu directions for the same reason.
+In either chooser, left and right step along the cards while up and down move between rows, following the cards as they are actually laid out, so a grid is crossed by row and a single row of routes still steps along itself. The stick's two axes are separate menu directions for the same reason. The pause screen is walked by the same rules, so the wrapped row of graphics levels is crossed by row as well. A chooser is modal and takes the whole controller; the pause screen only borrows the directions and A / Cross, so the shortcuts below still work from it.
 - **Right stick press (R3):** open the garage, from a drive or from the pause screen, with the same A / Cross and B / Circle handling.
 - **LB / L1 (left shoulder):** toggle fullscreen. Browsers may require a tap on the fullscreen icon or the F key to enter fullscreen; controller requests are handled without interrupting the game if denied.
 
@@ -245,7 +245,7 @@ With the development server running, `npm run test:responsive` audits menu, driv
 
 With the development server running, `node scripts/us-units-test.mjs` checks speed and mileage conversions, US number formatting, the speed bar, Fahrenheit temperatures, and saved mileage across all routes. Set `TEST_URL` to use a server other than `http://127.0.0.1:5173`.
 
-`npm run test:controller` checks simulated controller detection, driving, pause/resume, modal isolation, disconnect/reconnect, and touch-control visibility in Chrome. Set `TEST_URL` to use a development server other than `http://127.0.0.1:5173`.
+`npm run test:controller` checks simulated controller detection, driving, pause/resume, pause-screen and chooser navigation, modal isolation, disconnect/reconnect, and touch-control visibility in Chrome. Set `TEST_URL` to use a development server other than `http://127.0.0.1:5173`.
 
 With the development server running, `npm run test:browser` checks keyboard/touch controls and streaming in Chrome, and `npm run test:scenery` checks landmarks, bounded GPU resources, visible water animation, and frozen animation while paused. These browser scripts use the installed Windows Chrome executable. Screenshots and reports are written to `.artifacts/`.
 

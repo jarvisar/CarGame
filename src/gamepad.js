@@ -13,6 +13,8 @@ export class GamepadInput {
     this.previousButtons = []; this.requireNeutral = false;
   }
   clear() { this.state = {}; this.requireNeutral = true; }
+  // `menu` is 'pause' for the pause screen, truthy for a modal chooser, and
+  // false during a drive.
   update({ blocked = false, paused = false, menu = false } = {}) {
     let pads;
     try { pads = Array.from(this.getGamepads()).filter(pad => pad?.connected); }
@@ -59,7 +61,9 @@ export class GamepadInput {
     this.previousButtons = buttons;
     if (fps) this.onAction('fps');
     if (fullscreen) { this.onAction('fullscreen'); return; }
-    if (menu) {
+    // A chooser takes the whole pad. The pause screen only borrows the
+    // directions and A, so the shortcuts below still work from it.
+    if (menu && menu !== 'pause') {
       this.state = {};
       if (journey || car || back) this.onAction('menuClose');
       else if (previous) this.onAction('menuPrevious');
@@ -73,7 +77,19 @@ export class GamepadInput {
     if (car) { this.onAction('car'); return; }
     if (pause) { this.onAction('pause'); return; }
     if (nextJourney) { this.onAction('nextJourney'); return; }
-    if (paused) return;
+    if (paused) {
+      // Paused, the D-pad and sticks move the pause screen's focus ring rather
+      // than the car, so resume, the garage and the graphics settings are all
+      // reachable without a keyboard or a touchscreen.
+      if (menu !== 'pause') return;
+      if (previous) this.onAction('menuPrevious');
+      else if (next) this.onAction('menuNext');
+      else if (up) this.onAction('menuUp');
+      else if (down) this.onAction('menuDown');
+      else if (confirm) this.onAction('menuConfirm');
+      else if (back) this.onAction('menuClose');
+      return;
+    }
     if (state.forward || state.brake) this.onAction('drive');
     if (view) this.onAction('view');
     if (reset) this.onAction('reset');

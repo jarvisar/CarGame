@@ -13,6 +13,10 @@
 body[data-controller=true] #app :is(.controls, #pause, #change-journey) { display: none !important; }
 .chooser > .controller-hint { margin: 0 0 12px; }
 .chooser-card:focus { outline: 3px solid #568d78; outline-offset: 3px; }
+/* A controller sends no keystroke, so :focus-visible cannot be counted on to
+   show where the ring is. While one is connected, the pause screen draws it
+   on plain focus. */
+body[data-controller=true] .pause-overlay button:focus { outline: 3px solid #e78858; outline-offset: 3px; }
 .journey-button { position: static; }
 .brand { min-width: 0; }
 #app:has(.welcome.hidden) .brand,
