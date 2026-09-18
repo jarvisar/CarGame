@@ -94,12 +94,12 @@ function instances(group, geo, mat, items, name, shadows = true) {
 // Field colours by crop. A field keeps one tint of its palette throughout, so
 // the patchwork reads as a set of distinct fields rather than mottled ground.
 const CROP_PALETTES = {
-  wheat: ['#e5b53d', '#eebf46', '#dcaa36'], stubble: ['#dcc272', '#e3c97a', '#d3b866'], ploughed: ['#95552f', '#9e5d36', '#8a4c2a'],
+  wheat: ['#e5b53d', '#eebf46', '#dcaa36'], stubble: ['#dcc272', '#e3c97a', '#d3b866'], ploughed: ['#a8734d', '#b07b53', '#9f6a45'],
   pasture: ['#86b03e', '#8fb844', '#7da739'], hay: ['#cfc25a', '#d6c860', '#c5b852'],
 };
 // How the rows are cut in each crop: metres between furrows, and how much
 // darker the trough is than the ridge. Pasture is not worked.
-const FURROWS = { wheat: [2.2, .08], stubble: [3, .09], ploughed: [1.7, .17], pasture: [4, 0], hay: [4.5, .07] };
+const FURROWS = { wheat: [2.2, .08], stubble: [3, .09], ploughed: [1.7, .13], pasture: [4, 0], hay: [4.5, .07] };
 const NO_FURROW = () => [0, 0, 99];
 const gravel = new THREE.Color('#c1b088'), verge = new THREE.Color('#9aad4f'), ditch = new THREE.Color('#7a9a43'), lush = new THREE.Color('#699e42'), mud = new THREE.Color('#77704f');
 const haze = new THREE.Color('#cdbf7c'), pastureLight = new THREE.Color('#a3b84c');

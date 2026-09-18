@@ -153,7 +153,9 @@ export function fieldAt(s, u) {
   let band = 0;
   while (band < bands.length - 1 && cross >= bands[band + 1]) band++;
   const seed = row * 8 + band, salt = side > 0 ? 2741 : 2751, r = randomAt(seed, salt);
-  const kind = band >= 4 ? 'pasture' : CROPS[r < .3 ? 0 : r < .5 ? 1 : r < .64 ? 2 : r < .84 ? 3 : 4];
+  // Ploughed earth is the one dark patch in a gold country, so it is the
+  // rare field: a few to a drive, not a checkerboard of them.
+  const kind = band >= 4 ? 'pasture' : CROPS[r < .32 ? 0 : r < .55 ? 1 : r < .62 ? 2 : r < .83 ? 3 : 4];
   return { row, band, side, kind, seed, salt, rows: randomAt(seed, salt + 1) < .5 ? 'along' : 'across',
     from: bands[band], to: bands[band + 1] ?? 600, start: fieldBoundary(row), end: fieldBoundary(row + 1) };
 }
