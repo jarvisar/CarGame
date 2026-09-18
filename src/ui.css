@@ -160,7 +160,7 @@ body[data-journey=jungle] #touch-stick.active .stick-thumb { background: #a9d48f
   .pause-overlay h2 { font-size: 32px; margin-top: 10px; }
   .pause-overlay p { margin: 8px 0 14px; }
   .chooser { max-height: calc(100dvh - 20px - var(--safe-top) - var(--safe-bottom)); }
-  .chooser-options { grid-template-columns: repeat(4, 1fr); }
+  .chooser-options { grid-template-columns: repeat(3, 1fr); }
   .chooser-card { display: block; }
   .chooser-art { height: 70px; min-height: 0; }
   .chooser-card-copy { padding: 10px; }

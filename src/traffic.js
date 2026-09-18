@@ -4,7 +4,10 @@ import { createTrafficModels, TRAFFIC_COLORS, TRAFFIC_MODELS } from './traffic-m
 
 const LANE = 2.4;
 const BEHIND = 380, AHEAD = 620;
-const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5 };
+const DENSITY = { coast: 1, snow: .75, desert: .5, jungle: .6, plains: .5, city: 1 };
+// The city runs half as many cars again over the same stretch of road.
+const FLEET = { city: 9 };
+const LIGHTS = { snow: 1, city: .55 };
 
 // Four separating axes give a forgiving rectangular footprint even when the
 // player is sideways. All collision coordinates are independent of render origin.
@@ -39,27 +42,33 @@ export class Traffic {
       rig.add(light, light.target);
       return { rig, light };
     });
-    // Three cars in each direction over a kilometer: usually one or two in view.
-    this.vehicles = Array.from({ length: 6 }, (_, index) => {
+    // Three cars in each direction over a kilometer: usually one or two in
+    // view. The pool holds a few more for the routes that run heavier traffic.
+    this.pool = Array.from({ length: 9 }, (_, index) => {
       const model = this.models.create(index % TRAFFIC_MODELS.length, TRAFFIC_COLORS[0]);
       this.group.add(model.car);
       return { ...model, index, direction: index % 2 ? -1 : 1, position: new THREE.Vector3(), previousPosition: new THREE.Vector3(), quaternion: new THREE.Quaternion(), previousQuaternion: new THREE.Quaternion() };
     });
+    this.vehicles = this.pool.slice(0, 6);
     this.nearest = [];
     this.reset(route, s, journey);
   }
   random(car, salt) { return randomAt(car.index + car.generation * 31, salt + this.salt); }
   reset(route, s, journey = this.journey) {
-    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500 }[journey];
+    this.route = route; this.journey = journey; this.salt = { coast: 2100, desert: 2200, snow: 2300, jungle: 2400, plains: 2500, city: 2600 }[journey];
     this.spacing = 1 / (DENSITY[journey] ?? 1);
+    const fleet = FLEET[journey] ?? 6;
+    this.vehicles = this.pool.slice(0, fleet);
+    for (const car of this.pool) car.car.visible = car.index < fleet;
     for (const { rig } of this.headlightRigs) {
       rig.removeFromParent();
       if (journey === 'snow') this.group.add(rig);
     }
-    this.lastPlayerS = s; this.models.setNight(journey === 'snow');
+    this.lastPlayerS = s; this.models.setLights(LIGHTS[journey] ?? 0);
+    const span = 1080 / Math.ceil(fleet / 2);
     for (const car of this.vehicles) {
       car.generation = 0; car.u = car.direction * LANE;
-      car.s = s + (-280 + Math.floor(car.index / 2) * 360 + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35) * this.spacing;
+      car.s = s + (-280 + Math.floor(car.index / 2) * span + (car.direction < 0 ? 80 : 0) + this.random(car, 1) * 35) * this.spacing;
       this.respawn(car, car.s);
     }
   }

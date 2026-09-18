@@ -8,6 +8,8 @@ import { JungleWorld } from './world/jungle.js';
 import { jungleDrivingRoute } from './world/jungle-route.js';
 import { PlainsWorld } from './world/plains.js';
 import { plainsDrivingRoute } from './world/plains-route.js';
+import { CityWorld } from './world/city.js';
+import { cityDrivingRoute } from './world/city-route.js';
 
 export const JOURNEYS = {
   coast: {
@@ -39,5 +41,11 @@ export const JOURNEYS = {
     introduction: 'Roll through harvest-gold farmland under a low evening sun.',
     sound: 'Prairie wind, crickets and engine sounds on',
     canvas: 'A country road across open farmland at golden hour, between wheat fields, hay bales, fences and shelterbelts, with a creek, red barns and wind turbines. Drive with WASD or the arrow keys.',
+  },
+  city: {
+    title: 'Rainy Downtown', label: 'RAINY DOWNTOWN', routeNumber: '6', World: CityWorld, route: cityDrivingRoute,
+    introduction: 'Follow a riverside boulevard through a city in a daytime storm.',
+    sound: 'Rain, traffic and engine sounds on',
+    canvas: 'A wet city boulevard beside a grey river in heavy daytime rain, between rows of buildings under a stormy sky, with a skyline fading into the mist. Drive with WASD or the arrow keys.',
   },
 };

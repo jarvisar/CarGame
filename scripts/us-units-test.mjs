@@ -22,8 +22,8 @@ try {
     await page.evaluate(distance => { window.__coastline.vehicle.distance = distance; }, distance);
     await page.waitForFunction(expected => document.querySelector('#distance').textContent === expected, expected);
   }
-  const names = { desert: 'RED ROCK DESERT', snow: 'MIDNIGHT ALPINE', jungle: 'EMERALD JUNGLE', plains: 'GOLDEN PLAINS', coast: 'PACIFIC COAST' };
-  for (const id of ['desert', 'snow', 'jungle', 'plains', 'coast']) {
+  const names = { desert: 'RED ROCK DESERT', snow: 'MIDNIGHT ALPINE', jungle: 'EMERALD JUNGLE', plains: 'GOLDEN PLAINS', city: 'RAINY DOWNTOWN', coast: 'PACIFIC COAST' };
+  for (const id of ['desert', 'snow', 'jungle', 'plains', 'city', 'coast']) {
     await page.locator('#change-journey').click();
     await page.locator(`[data-journey="${id}"]`).click();
     await page.waitForFunction(id => window.__coastline.journey === id && !window.__coastline.changingJourney, id);

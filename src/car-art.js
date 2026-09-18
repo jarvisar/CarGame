@@ -114,6 +114,18 @@ function accessories(entry, draw) {
       disc(cz + .05, roofY + .51, .08, '#d8b566'),
       slab(cz - .5, cz + .6, roofY + .09, roofY + .14, '#6b5a3c', 1),
     ];
+    // A bicycle stands on the rack for the city: two wheels and a frame.
+    case 'city': {
+      const wheel = z => `<circle cx="${px(z)}" cy="${py(roofY + .42)}" r="${size(.32)}" fill="none" stroke="#2f3336" stroke-width="2.2"/>`;
+      const tube = (a, b) => `<line x1="${px(a[0])}" y1="${py(a[1])}" x2="${px(b[0])}" y2="${py(b[1])}" stroke="#c9453f" stroke-width="2.4" stroke-linecap="round"/>`;
+      return [
+        rack(cz - .9, cz + .9),
+        wheel(cz - .58), wheel(cz + .58),
+        tube([cz - .58, roofY + .42], [cz - .2, roofY + .95]), tube([cz - .2, roofY + .95], [cz + .32, roofY + .95]),
+        tube([cz + .32, roofY + .95], [cz + .58, roofY + .42]), tube([cz - .2, roofY + .95], [cz + .12, roofY + .42]), tube([cz + .12, roofY + .42], [cz + .58, roofY + .42]),
+        slab(cz - .34, cz - .1, roofY + 1.02, roofY + 1.08, '#2f3336', 1),
+      ];
+    }
     case 'coast': return [
       rack(cz - .9, cz + .9),
       shape2d([[cz - 1.45, roofY + .09], [cz - 1.2, roofY + .3], [cz + 1.2, roofY + .3], [cz + 1.45, roofY + .09]], '#f5e8c8'),

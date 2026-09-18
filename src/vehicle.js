@@ -85,6 +85,22 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     end.rotation.z = Math.PI / 2; end.position.set(x, 2.66, .05); bale.add(end);
   }
   for (const z of [-.35, .45]) box(bale, [1.5, .88, .04], [0, 2.66, z], mat('#5e4c33'));
+  // A bicycle standing on the rack for the city commute.
+  const bike = new THREE.Group(); bike.name = 'city-bike'; body.add(bike);
+  const frameMat = mat('#c9453f'), rubber = mat('#2f3336');
+  for (const z of [-.58, .58]) {
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(.3, .035, 5, 14), rubber);
+    wheel.rotation.y = Math.PI / 2; wheel.position.set(0, 2.62, z); wheel.castShadow = true; bike.add(wheel);
+  }
+  const tube = (a, b) => {
+    const from = new THREE.Vector3(...a), to = new THREE.Vector3(...b), direction = to.clone().sub(from);
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, direction.length(), 5), frameMat);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+    mesh.position.copy(from.add(to).multiplyScalar(.5)); mesh.castShadow = true; bike.add(mesh);
+  };
+  tube([0, 2.62, -.58], [0, 3.14, -.2]); tube([0, 3.14, -.2], [0, 3.14, .32]); tube([0, 3.14, .32], [0, 2.62, .58]);
+  tube([0, 3.14, -.2], [0, 2.62, .12]); tube([0, 2.62, .12], [0, 2.62, .58]);
+  box(bike, [.34, .04, .04], [0, 3.2, -.2], rubber); box(bike, [.08, .05, .22], [0, 3.22, .3], rubber);
   const wheels = [];
   for (const x of [-1.02, 1.02]) for (const z of [-1.18, 1.21]) {
     const pivot = new THREE.Group(); pivot.position.set(x, .49, z); car.add(pivot);
@@ -100,8 +116,8 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     kitJourney = journey;
     const kit = entry.trim ?? journey;
     paint.color.set(customPaint ?? ROUTE_PAINT[kit] ?? ROUTE_PAINT.coast);
-    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains';
-    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible;
+    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains'; bike.visible = kit === 'city';
+    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible || bike.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
   function paintCar(color) { customPaint = color || null; applyTrim(kitJourney); }
@@ -147,7 +163,7 @@ export class DrivingController {
     this.spec = { name: carId, width, length };
     this.stats = carStats(carId);
     parent?.add(this.car);
-    this.setNight(this.night); this.setAppearance(this.journeyId); this.setPaint(paint);
+    this.setLights(Number(this.night)); this.setAppearance(this.journeyId); this.setPaint(paint);
     if (!rebuild) return;
     this.speed = clamp(this.speed, -this.stats.reverseSpeed, this.stats.topSpeed);
     this.wheelSpin = 0;
@@ -156,7 +172,9 @@ export class DrivingController {
   // A garage colour, or null for the finish the car left the factory in.
   setPaint(color) { this.paintColor = color ?? null; this.paintCar(this.paintColor); }
   reset() { this.u = 2.4; this.speed = 0; this.steer = 0; this.heading = this.route.frame(this.s).angle; this.update(0, {}); }
-  setNight(enabled) { this.night = enabled; for (const light of this.nightLights) light.material.emissiveIntensity = enabled ? light.night : light.day; }
+  // Lamps from daytime (0) to night (1); a storm runs them part way up.
+  setLights(level) { this.night = level; for (const light of this.nightLights) light.material.emissiveIntensity = light.day + (light.night - light.day) * level; }
+  setNight(enabled) { this.setLights(enabled ? 1 : 0); }
   setAppearance(journey) { this.journeyId = journey; this.applyTrim(journey); }
   setRoute(route, state = {}) {
     this.route = route; this.s = state.s ?? 24; this.distance = state.distance ?? 0;
