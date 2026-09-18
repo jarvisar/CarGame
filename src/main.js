@@ -25,6 +25,10 @@ setupControlHelp();
 
 const $ = selector => document.querySelector(selector);
 const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
+// A chooser's ring holds its cards and paint chips; the pause screen's holds
+// resume, the garage and every graphics setting.
+const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
+const PAUSE_CONTROLS = '#resume, #change-car, [data-quality], #soft-shading';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -74,8 +78,11 @@ async function boot() {
     let changingJourney = true, journeyWasPaused = false;
     const savedJourneys = Object.fromEntries(Object.entries(JOURNEYS).map(([id, data]) => [id, journeyStart(Number(data.routeNumber))]));
     const vehicle = new DrivingController(JOURNEYS.coast.route, savedJourneys.coast, carId, paint); const audio = new DriveAudio();
-    const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog');
+    const journeyDialog = $('#journey-dialog'), carDialog = $('#car-dialog'), pauseOverlay = $('#pause-overlay');
     const openChooser = () => [journeyDialog, carDialog].find(dialog => dialog.open) ?? null;
+    // The pause screen is a menu too: it is up whenever the drive is paused
+    // with no chooser over it, and the controller walks it the same way.
+    const openPauseMenu = () => paused && !pauseOverlay.hidden ? pauseOverlay : null;
     scene.add(vehicle.car);
     const traffic = new Traffic(scene, vehicle.route, vehicle.s);
     function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
@@ -232,12 +239,15 @@ async function boot() {
     }
     // Cards are laid out in a grid that changes with the viewport and holds one
     // full-width row, so up and down follow the rendered geometry rather than a
-    // column count. A single row of cards steps along itself instead.
-    function moveChooserFocus(chooser, name) {
-      // Cards and paint chips share one ring; anything laid out is reachable.
-      const cards = [...chooser.querySelectorAll('[data-journey], [data-car], [data-paint]')].filter(card => card.offsetParent);
+    // column count. A single row of cards steps along itself instead, and the
+    // pause screen's stack of settings is walked by the same rules.
+    function moveMenuFocus(menu, name) {
+      // Everything in the menu's ring that is laid out is reachable.
+      const cards = [...menu.querySelectorAll(menu === pauseOverlay ? PAUSE_CONTROLS : MENU_CARDS)].filter(card => card.offsetParent);
       if (!cards.length) return;
-      const index = Math.max(0, cards.indexOf(document.activeElement)), current = cards[index];
+      const index = cards.indexOf(document.activeElement);
+      if (index < 0) { cards[0].focus(); return; }
+      const current = cards[index];
       const step = name === 'menuNext' || name === 'menuDown' ? 1 : -1;
       if (name === 'menuUp' || name === 'menuDown') {
         const box = current.getBoundingClientRect();
@@ -272,8 +282,19 @@ async function boot() {
       const chooser = openChooser();
       if (chooser) {
         if (name === 'menuClose') chooser.close();
-        if (MENU_MOVES.includes(name)) moveChooserFocus(chooser, name);
+        if (MENU_MOVES.includes(name)) moveMenuFocus(chooser, name);
         if (name === 'menuConfirm' && chooser.contains(document.activeElement)) document.activeElement.click();
+        return;
+      }
+      // The pause screen is not modal, so it takes the menu actions and leaves
+      // the drive's own shortcuts — the garage, the routes, the next scene — to
+      // the handling below. B closes it the way it closes a chooser.
+      const pauseMenu = openPauseMenu();
+      if (pauseMenu && name.startsWith('menu')) {
+        if (name === 'menuClose') setPaused(false);
+        else if (name !== 'menuConfirm') moveMenuFocus(pauseMenu, name);
+        else if (pauseMenu.contains(document.activeElement)) document.activeElement.click();
+        else $('#resume').focus();
         return;
       }
       if (name === 'nextJourney') {
@@ -426,7 +447,7 @@ async function boot() {
       traffic.update(dt, vehicle);
     };
     function frame(timestamp) {
-      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: Boolean(openChooser()) });
+      input.gamepad.update({ blocked: document.hidden || !document.hasFocus() || changingJourney, paused, menu: openChooser() ? 'chooser' : openPauseMenu() ? 'pause' : false });
       frameClock.tick(timestamp, !paused, simulate);
       const dt = frameClock.dt;
       if (!paused) {

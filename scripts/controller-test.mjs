@@ -113,6 +113,42 @@ try {
   await press(1); await frames();
   assert.equal(await page.locator('#car-dialog').isVisible(), false, 'B closes the garage');
   await page.evaluate(() => window.__coastline.chooseCar('auto')); await frames();
+  // The pause screen answers the pad as a menu of its own: the ring walks
+  // resume, the garage and the graphics settings, A presses the focused one,
+  // and B resumes the drive.
+  await press(9); await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.paused), true);
+  assert.equal(await page.locator('#pause-overlay').isVisible(), true);
+  const focus = () => page.evaluate(() => document.activeElement?.id || document.activeElement?.dataset?.quality || null);
+  assert.equal(await focus(), 'resume', 'the pause screen opens on Resume');
+  await press(13); await frames();
+  assert.equal(await focus(), 'change-car', 'down reaches the garage button');
+  await press(13); await frames();
+  const level = await page.evaluate(() => document.activeElement?.dataset?.quality ?? null);
+  assert.ok(level, 'down reaches the graphics levels');
+  await press(15); await frames();
+  const nextLevel = await page.evaluate(() => document.activeElement?.dataset?.quality ?? null);
+  assert.ok(nextLevel && nextLevel !== level, `right steps along the graphics levels (${nextLevel})`);
+  await press(0); await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.graphics.mode), nextLevel, 'A sets the focused level');
+  assert.equal(await page.evaluate(() => window.__coastline.paused), true, 'a setting does not resume the drive');
+  // The five levels wrap to a second row on a narrow screen, so down walks the
+  // rows it finds rather than a fixed count.
+  for (let step = 0; step < 4 && await focus() !== 'soft-shading'; step++) { await press(13); await frames(); }
+  assert.equal(await focus(), 'soft-shading', 'down reaches the soft shading switch');
+  const shading = await page.locator('#soft-shading').getAttribute('aria-pressed');
+  await press(0); await frames();
+  assert.notEqual(await page.locator('#soft-shading').getAttribute('aria-pressed'), shading, 'A flips soft shading');
+  await press(12); await frames();
+  assert.ok(await page.evaluate(() => document.activeElement?.dataset?.quality ?? null), 'up returns to the levels above');
+  await press(10); await frames();
+  assert.equal(await page.locator('#car-dialog').isVisible(), true, 'the garage still opens from the pause screen');
+  await press(1); await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.paused), true, 'closing the garage returns to the pause screen');
+  assert.equal(await focus(), 'resume');
+  await press(1); await frames();
+  assert.equal(await page.evaluate(() => window.__coastline.paused), false, 'B resumes from the pause screen');
+  await page.evaluate(() => window.__coastline.graphics.setMode('auto')); await frames();
   await button(7, 1); await frames();
   await page.evaluate(() => { window.testPads = []; });
   await page.waitForFunction(() => document.body.dataset.controller === 'false');
@@ -135,5 +171,5 @@ try {
   await page.waitForFunction(() => window.__coastline.vehicle.speed > 3);
   await page.keyboard.up('w');
   assert.deepEqual(errors, []);
-  console.log('Controller detection, analog driving, reverse, shortcuts, menus, garage grid and paint navigation, disconnect/reconnect, focus loss, touch visibility and keyboard fallback passed (simulated gamepad).');
+  console.log('Controller detection, analog driving, reverse, shortcuts, menus, pause-screen navigation, garage grid and paint navigation, disconnect/reconnect, focus loss, touch visibility and keyboard fallback passed (simulated gamepad).');
 } finally { await browser.close(); }

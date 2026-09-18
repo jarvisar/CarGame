@@ -85,6 +85,35 @@ test('chooser routes controller inputs to navigation without driving', () => {
   assert.equal(actions.length, 12);
 });
 
+test('the pause screen takes the pad as a menu while its shortcuts stay live', () => {
+  const { input, device, actions } = fixture();
+  const pauseMenu = { paused: true, menu: 'pause' };
+  for (const [index, action] of [[15, 'menuNext'], [14, 'menuPrevious'], [12, 'menuUp'], [13, 'menuDown'], [0, 'menuConfirm'], [1, 'menuClose']]) {
+    hold(device, index); input.update(pauseMenu); input.update(pauseMenu);
+    assert.equal(actions.at(-1), action);
+    assert.deepEqual(input.state, {}, 'a menu press never reaches the car');
+    hold(device, index, 0); input.update(pauseMenu);
+  }
+  assert.equal(actions.length, 6);
+  // The pause screen is a layer over the drive, not a modal, so the shortcuts
+  // that open the garage or the routes from it still work.
+  for (const [index, action] of [[9, 'pause'], [8, 'journey'], [10, 'car'], [5, 'nextJourney'], [4, 'fullscreen'], [11, 'fps']]) {
+    hold(device, index); input.update(pauseMenu); input.update(pauseMenu);
+    assert.equal(actions.at(-1), action);
+    hold(device, index, 0); input.update(pauseMenu);
+  }
+  // Both stick axes steer the focus ring here too.
+  device.axes[0] = 1; input.update(pauseMenu); input.update(pauseMenu);
+  assert.equal(actions.at(-1), 'menuNext');
+  device.axes[0] = 0; device.axes[1] = -1; input.update(pauseMenu); input.update(pauseMenu);
+  assert.equal(actions.at(-1), 'menuUp');
+  device.axes[1] = 0; input.update(pauseMenu);
+  // Paused without the screen up — a chooser is over it — nothing moves a ring.
+  const before = actions.length;
+  hold(device, 13); input.update({ paused: true }); input.update({ paused: true });
+  assert.equal(actions.length, before);
+});
+
 test('focus loss and menus consume held inputs until the controller returns to neutral', () => {
   const { input, device, actions } = fixture();
   hold(device, 7); input.update(); input.clear();
