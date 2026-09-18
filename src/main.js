@@ -427,8 +427,8 @@ async function boot() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;
       $('#view').setAttribute('aria-label', `${rendering.viewLabel}. Change camera`);
       const thirdPerson = rendering.camera.isPerspectiveCamera;
-      $('#stick-help').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag to drive';
-      $('#stick-help > span').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
+      $('.stick-help-copy').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag to drive';
+      $('.stick-help-line').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
       $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
       $('.touch-hint').firstChild.textContent = thirdPerson
         ? 'Push up to accelerate, left or right to steer, and down to brake or reverse. Release to stop.'

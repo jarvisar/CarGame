@@ -118,9 +118,8 @@ body[data-controller=true] .controller-hint { display: block; }
 .stick-guide { position: absolute; inset: 15px; border: 1px dashed #25473e55; border-radius: 50%; pointer-events: none; }
 .stick-thumb { position: absolute; left: calc(50% - 24px); top: calc(50% - 24px); width: 48px; height: 48px; border: 1px solid #25473e30; border-radius: 50%; background: var(--cream); box-shadow: 0 3px 10px #183f3626; transform: translate(var(--stick-x, 0px), var(--stick-y, 0px)); pointer-events: none; }
 #touch-stick.active .stick-thumb { background: var(--ink); border-color: var(--cream); }
-#stick-help { align-self: center; text-align: right; font-size: 12px; line-height: 1.8; padding: 10px 40px 10px 12px; border-radius: 10px; background: #f9f8eebf; backdrop-filter: blur(12px); }
-#stick-help .dismiss-control-help { right: 0; top: 0; }
-#stick-help > span { font-size: 11px; }
+#stick-help { align-self: center; font-size: 12px; border-radius: 10px; background: #f9f8eebf; backdrop-filter: blur(12px); }
+.stick-help-line { font-size: 11px; }
 body[data-journey=snow] :is(#touch-stick, #stick-help) { background: #17273ee8; border-color: #93acc64a; }
 body[data-journey=snow] .stick-guide { border-color: #93acc680; }
 body[data-journey=snow] .stick-thumb { background: #dce5f3; }

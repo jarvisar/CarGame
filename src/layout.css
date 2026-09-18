@@ -141,7 +141,7 @@ body[data-journey=jungle] .location { background: #1c3423d1; border-color: #9cbf
 }
 .bottom-bar, body[data-controller=true] .bottom-bar { bottom: var(--ui-bottom); }
 .touch-controls { flex-direction: row-reverse; }
-#stick-help { position: absolute; right: 0; bottom: calc(var(--stick-size) + 12px); max-width: 160px; }
+#stick-help { position: absolute; right: 0; bottom: calc(var(--stick-size) + 12px); }
 @media (max-width: 600px) and (orientation: landscape) {
   .controls button { min-width: 44px; padding: 0; justify-content: center; }
   .controls .control-label { display: none; }
@@ -160,8 +160,6 @@ body[data-journey=jungle] .location { background: #1c3423d1; border-color: #9cbf
 .dismiss-control-help:hover { background: transparent; }
 .dismiss-control-help:hover > span { background: #25473e15; border-radius: 50%; }
 .controls > [data-control-help] { position: static; }
-#stick-help { padding: 28px 14px 12px; }
-#stick-help .dismiss-control-help { top: 2px; right: 2px; }
 @media (min-width: 1101px) and (pointer: fine) {
   body:not([data-control-help-dismissed=true]) .controls { padding-right: 36px; }
 }
@@ -242,3 +240,27 @@ body[data-journey=jungle] .drive-actions button:hover { background: #2f5136e0; }
 @media (max-width: 760px) {
   .drive-actions :is(#view, #reset, #pause) .control-label { display: none; }
 }
+
+/* The joystick's caption is a caption, not a dialog: the copy and its dismiss
+   button share one line instead of the button floating in a band of reserved
+   space above the text. The button keeps a 44px tap target through a halo, so
+   it can look like the small control it is. */
+#stick-help {
+  display: flex; align-items: center; gap: 8px;
+  width: max-content; max-width: min(230px, 62vw);
+  padding: 8px 8px 8px 13px; line-height: 1.45;
+}
+/* Both lines start together so the arrows line up as a legend. */
+.stick-help-copy { min-width: 0; text-align: left; }
+#stick-help .stick-help-line { display: inline-block; margin-top: 1px; opacity: .8; }
+#stick-help .dismiss-control-help {
+  position: relative; inset: auto; flex: none;
+  width: 26px; height: 26px; min-width: 26px; min-height: 26px;
+  border-radius: 50%; background: #25473e14; font-size: 14px; line-height: 1;
+}
+#stick-help .dismiss-control-help::after { content: ''; position: absolute; inset: -9px; }
+#stick-help .dismiss-control-help > span { position: static; width: auto; height: auto; }
+#stick-help .dismiss-control-help:hover { background: #25473e29; }
+#stick-help .dismiss-control-help:hover > span { background: none; }
+body:is([data-journey=snow], [data-journey=jungle]) #stick-help .dismiss-control-help { background: #f2f7ff1f; }
+body:is([data-journey=snow], [data-journey=jungle]) #stick-help .dismiss-control-help:hover { background: #f2f7ff38; }

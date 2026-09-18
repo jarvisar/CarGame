@@ -54,6 +54,25 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#start').tap();
   await page.waitForTimeout(1000);
+  // The joystick's caption is a caption: it hugs two lines, clears the stick,
+  // and its dismiss button stays a 44px target while looking like a small one.
+  const captionIssues = await page.evaluate(() => {
+    const failures = [];
+    const help = document.querySelector('#stick-help'), close = help.querySelector('.dismiss-control-help');
+    const h = help.getBoundingClientRect(), c = close.getBoundingClientRect();
+    const stick = document.querySelector('#touch-stick').getBoundingClientRect();
+    if (h.height > 60) failures.push(`the caption is ${h.height.toFixed(1)}px tall`);
+    if (h.bottom > stick.top + 1) failures.push('the caption sits over the joystick');
+    if (h.right > innerWidth + 1 || h.left < 0) failures.push('the caption runs off screen');
+    if (c.bottom > h.bottom || c.top < h.top) failures.push('the dismiss button escapes the caption');
+    for (const [dx, dy] of [[-21, -21], [21, 21], [-21, 21], [21, -21]]) {
+      const hit = document.elementFromPoint(c.left + c.width / 2 + dx, c.top + c.height / 2 + dy);
+      if (!close.contains(hit) && hit !== close) failures.push(`the dismiss target misses at ${dx}, ${dy}`);
+    }
+    return failures;
+  });
+  assert.deepEqual(captionIssues, [], 'joystick caption');
+  checks.push('joystick caption sizing, clearance and dismiss target');
   const client = await page.context().newCDPSession(page);
   const point = async selector => { const r = await page.locator(selector).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; };
   const center = { ...await point('#touch-stick'), id: 1 };
