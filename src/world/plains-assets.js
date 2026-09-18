@@ -121,13 +121,17 @@ function conifer(seed) {
     const t = i / (tiers - 1);
     const radius = (.30 - t * .19) * (.9 + randomAt(i, seed + 981) * .2);
     const height = .3 - t * .12;
-    const g = new THREE.ConeGeometry(radius, height, 7, 1);
+    // Triangle soup, like the lobes: the bake below shades each face from its
+    // three vertices, and on an indexed cone that walked past the last
+    // vertex and left the faces sharing it with no colour, which drew black.
+    const g = new THREE.ConeGeometry(radius, height, 7, 1).toNonIndexed();
+    g.deleteAttribute('uv');
     g.rotateY(randomAt(i, seed + 982) * 6.28);
     g.translate(0, .16 + t * .68 + height * .5, 0);
     const colors = [], normals = g.attributes.normal;
     for (let j = 0; j < normals.count; j += 3) {
       const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
-      const shade = .66 + Math.max(0, upward) * .3 + t * .08 + randomAt(j, seed + 983) * .04;
+      const shade = .74 + Math.max(0, upward) * .26 + t * .06 + randomAt(j, seed + 983) * .04;
       for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .95);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -152,7 +156,7 @@ function cypress(seed) {
     const colors = [], normals = g.attributes.normal;
     for (let j = 0; j < normals.count; j += 3) {
       const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
-      const shade = .62 + Math.max(0, upward) * .36 + randomAt(j, salt + seed * 3 + 994) * .05;
+      const shade = .7 + Math.max(0, upward) * .3 + randomAt(j, salt + seed * 3 + 994) * .05;
       for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .96);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));

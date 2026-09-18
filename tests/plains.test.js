@@ -215,6 +215,11 @@ test('every plains asset is built from real geometry, so no part is silently mis
     variant.bark.computeBoundingBox(); variant.leaves.computeBoundingBox();
     assert.ok(variant.bark.boundingBox.min.y < -.05, 'the trunk must reach below the ground it stands on');
     assert.ok(variant.bark.boundingBox.max.y > variant.leaves.boundingBox.min.y, 'the trunk must reach into its crown');
+    // Every crown vertex carries a finite baked shade: a bake that read past
+    // the end of an indexed tier once left whole faces black.
+    const colors = variant.leaves.attributes.color;
+    assert.equal(colors.count, variant.leaves.attributes.position.count, 'one colour per crown vertex');
+    for (let i = 0; i < colors.array.length; i++) assert.ok(Number.isFinite(colors.array[i]) && colors.array[i] > .4, `crown colour ${i} is ${colors.array[i]}`);
   }
   for (const geometry of [baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
 });

@@ -102,8 +102,12 @@ const CROP_PALETTES = {
 // darker the trough is than the ridge. Pasture is not worked.
 const FURROWS = { wheat: [2.2, .08], stubble: [3, .09], ploughed: [1.7, .13], pasture: [4, 0], hay: [4.5, .07] };
 const NO_FURROW = () => [0, 0, 99];
-const gravel = new THREE.Color('#c1b088'), verge = new THREE.Color('#9aad4f'), ditch = new THREE.Color('#7a9a43'), lush = new THREE.Color('#699e42'), mud = new THREE.Color('#77704f');
+const gravel = new THREE.Color('#c1b088'), verge = new THREE.Color('#9aad4f'), ditch = new THREE.Color('#7a9a43'), lush = new THREE.Color('#7aa34d'), mud = new THREE.Color('#8a7c58');
 const haze = new THREE.Color('#cdbf7c'), pastureLight = new THREE.Color('#a3b84c');
+// The spruces and cypresses are the dark trees of the country, but only by
+// a step: a green much deeper than this took no light on its shaded side
+// and stood among the crowns as a black shape, worst on a phone's screen.
+const CONIFER_GREENS = ['#4c7c3e', '#427037', '#558544'], CYPRESS_GREENS = ['#457a3c', '#4c8042', '#3f7137'];
 // Standing stalks at a field's edge take the crop's own tone; the verge
 // and the pastures are long grass.
 const FRINGE_TINTS = { wheat: ['#d9a93a', '#e3b545'], stubble: ['#d6bd6a', '#cbb060'], hay: ['#c9b855', '#bfae4e'], ploughed: ['#c8b070', '#bfa768'],
@@ -193,7 +197,7 @@ export class PlainsChunk {
       furrow = p => [(along ? Math.abs(p.u) - field.from : p.s - field.start) / period, depth * dry, headlandDistance(p.s, p.u, field)];
     }
     // Wet meadow along the creek and around the ponds, and bare mud under the water.
-    if (d < 11) color.lerp(lush, 1 - smoothstep(6.5, 11, d));
+    if (d < 9.5) color.lerp(lush, (1 - smoothstep(6, 9.5, d)) * .85);
     if (cross > 40 && cross < 220) {
       const pond = pondDistance(s, u);
       if (pond.d < 1.6) color.lerp(lush, 1 - smoothstep(1.1, 1.6, pond.d));
@@ -242,7 +246,9 @@ export class PlainsChunk {
   buildCreek() {
     const creek = plainsCreekAt(this.start + CHUNK_LENGTH / 2);
     if (Math.abs(creek.center - this.start - CHUNK_LENGTH / 2) > CHUNK_LENGTH / 2 + 150) return;
-    const vertices = [], colors = [], shallow = new THREE.Color('#7fa08a'), deep = new THREE.Color('#557b6c');
+    // The creek is the same water as the ponds, a little greener for being
+    // shallow; a grey-green ribbon read as a ditch against their blue.
+    const vertices = [], colors = [], shallow = new THREE.Color('#6a9cb0'), deep = new THREE.Color('#487a94');
     // Water quads follow the wandering channel; each belongs to the chunk its
     // middle falls in, so neighbours meet edge to edge without overlap.
     for (let u = -400; u < 568; u += 4) {
@@ -287,12 +293,12 @@ export class PlainsChunk {
   buildScenery() {
     const random = seededRandom(this.index + 27113), { posts, wires, poles, shrubs, bales, squareBales, boxes } = this.scenery;
     const hedgeGreens = ['#46722f', '#4f7a35', '#3d672b', '#557f3a'], strawTints = ['#d9b566', '#d1ab5c', '#dfbc6d'];
-    const cypressGreens = ['#2f5a2c', '#365f31', '#2a5127'];
+    const cypressGreens = CYPRESS_GREENS;
     const oakGreens = ['#587f3a', '#4d7434', '#65883f', '#43682e'], poplarGreens = ['#5f8a3b', '#6a9542', '#547d34'], willowGreens = ['#7f9c4a', '#8aa552', '#73923f'];
     // Boundary belts carry the widest spread of greens, with a few dark
     // conifers among them so the line is not one flat mass of the same tone.
     const lineGreens = ['#5d8a39', '#6b9942', '#4f7c32', '#76a54a', '#598136', '#6fa03f'];
-    const coniferGreens = ['#39602f', '#2f5228', '#426a35'];
+    const coniferGreens = CONIFER_GREENS;
     const clear = (s, u, r = 1) => this.clearAt(s, u, r);
     const stone = ['#a9a496', '#9b9789', '#b5b0a3', '#8f8b80'];
     const inChunk = s => s >= this.start && s < this.start + CHUNK_LENGTH;
@@ -704,8 +710,8 @@ export class PlainsChunk {
   // dark cypress or a broad oak among them at the given shares.
   mixedTree(s, u, height, random, shares) {
     const r = random(), pick = list => list[Math.floor(random() * list.length)];
-    if (r < shares.conifer) this.tree('conifer', s, u, height * 1.15, pick(['#39602f', '#2f5228', '#426a35']), random() * 6.28);
-    else if (r < shares.conifer + shares.cypress) this.tree('cypress', s, u, height * 1.35, pick(['#2f5a2c', '#365f31', '#2a5127']), random() * 6.28);
+    if (r < shares.conifer) this.tree('conifer', s, u, height * 1.15, pick(CONIFER_GREENS), random() * 6.28);
+    else if (r < shares.conifer + shares.cypress) this.tree('cypress', s, u, height * 1.35, pick(CYPRESS_GREENS), random() * 6.28);
     else if (r < shares.conifer + shares.cypress + shares.oak) this.tree('oak', s, u, height * 1.1, pick(['#587f3a', '#4d7434', '#65883f', '#43682e']), random() * 6.28);
     else this.tree('hedge', s, u, height, pick(['#5d8a39', '#6b9942', '#4f7c32', '#76a54a', '#598136', '#6fa03f']), random() * 6.28);
   }
@@ -723,7 +729,7 @@ export class PlainsChunk {
     // as a haystack from the road.
     const tank = this.ground(s + 6.2, u + (u > 0 ? 2.5 : -2.5));
     this.scenery.tanks.push({ p: [tank.x, tank.y + 1, tank.z], scale: [1.7, 2.1, 1.7], r: [0, random() * 6.28, 0], color: '#6c746f' });
-    for (const [ds, du, kind, height, color] of [[-8.5, 5, 'oak', 9, '#587f3a'], [7, -7, 'hedge', 7.5, '#4d7434'], [-6, -8, 'cypress', 11, '#2f5a2c']]) {
+    for (const [ds, du, kind, height, color] of [[-8.5, 5, 'oak', 9, '#587f3a'], [7, -7, 'hedge', 7.5, '#4d7434'], [-6, -8, 'cypress', 11, CYPRESS_GREENS[0]]]) {
       if (this.clearAt(s + ds, u + du, 2)) this.tree(kind, s + ds, u + du, height + random() * 2, color, random() * 6.28);
     }
   }

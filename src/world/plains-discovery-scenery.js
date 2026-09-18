@@ -78,7 +78,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       // Conifers shelter the yard, the way a farm's windbreak does.
       for (const [ds, du, height] of [[-24, 3, 10], [-21, 8, 8.5], [7, 16, 9], [21, -3, 9.5]]) {
         const [treeS, treeU] = local(ds, du);
-        chunk.tree('conifer', treeS, treeU, height, ['#39602f', '#2f5228', '#426a35'][Math.abs(ds) % 3], randomAt(site.index, 2936 + ds) * 6.28);
+        chunk.tree('conifer', treeS, treeU, height, ['#4c7c3e', '#427037', '#558544'][Math.abs(ds) % 3], randomAt(site.index, 2936 + ds) * 6.28);
       }
       // A machine shed at the back, and a fence round the yard with its gate
       // where the drive comes in.
