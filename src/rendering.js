@@ -67,6 +67,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
+    plains: { color: '#e6cf9f', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
   };
   function updateFog() {
     const profile = fogProfiles[journey];
@@ -140,6 +141,15 @@ export function createRendering(canvas, graphics = new Graphics()) {
       sky.color.set('#c4dcb0'); sky.groundColor.set('#2f4d28'); sky.intensity = 1.75;
       sun.color.set('#eef2c4'); sun.intensity = 1.35; sunOffset.set(-55, 245, 40);
       renderer.toneMappingExposure = .9;
+      return;
+    }
+    if (id === 'plains') {
+      // Golden hour over open country: a low, warm sun throws long shadows
+      // from every bale and fence post, under a pale hazy sky.
+      scene.background.set('#ecd8ab'); updateFog();
+      sky.color.set('#efe0c2'); sky.groundColor.set('#7d6a3f'); sky.intensity = 1.02;
+      sun.color.set('#ffd99c'); sun.intensity = 2.75; sunOffset.set(-185, 150, 125);
+      renderer.toneMappingExposure = .96;
       return;
     }
     const desert = id === 'desert';

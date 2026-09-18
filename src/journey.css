@@ -85,6 +85,15 @@ body[data-journey=jungle] .pause-overlay { background: #16301c66; }
 body[data-journey=jungle] .eyebrow>span { background: #c9dd7e; }
 body[data-journey=jungle] .start-button:hover { background: #cfe3bf; }
 body[data-journey=jungle] .touch-controls button.active { background: #e4efd8; }
+body[data-journey=plains] { --ink: #5a4422; --cream: #fff7e2; color: var(--ink); background: #e8cd8c; }
+body[data-journey=plains] .vignette { background: linear-gradient(180deg,#ffe8bb4a,transparent 22%,transparent 82%,#f1cf8a33); }
+body[data-journey=plains] .chooser { background: #fff6e3f7; }
+body[data-journey=plains] .chooser::backdrop { background: #6a4d2035; }
+body[data-journey=plains] #journey-transition { background: #efd9a8; }
+body[data-journey=plains] .pause-overlay { background: #f0d9a850; }
+body[data-journey=plains] .eyebrow>span { background: #a87c2f; }
+body[data-journey=plains] .start-button:hover { background: #7d5a2c; }
+body[data-journey=plains] .touch-controls button.active { background: var(--ink); }
 @media(max-width:1000px) { .weather { display: none; } }
 @media(max-width:600px) {
   .journey-button { position: absolute; right: 0; top: 53px; padding: 9px 13px; font-size: 10px; }

@@ -32,7 +32,7 @@ try {
   await page.keyboard.press('KeyO');
   assert.equal(await page.evaluate(() => window.__coastline.rendering.ambientOcclusion.enabled), true);
 
-  for (const journey of ['coast', 'desert', 'snow', 'jungle', 'coast']) {
+  for (const journey of ['coast', 'desert', 'snow', 'jungle', 'plains', 'coast']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), journey);
     for (const perspective of [false, true]) {
       const result = await page.evaluate(perspective => {

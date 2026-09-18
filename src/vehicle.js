@@ -75,6 +75,16 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
   for (const x of [-.52, .52]) box(cargo, [.44, .34, .3], [x, 2.42, -.55], olive);
   const roll = new THREE.Mesh(new THREE.CylinderGeometry(.19, .19, 1.5, 8), canvas);
   roll.rotation.z = Math.PI / 2; roll.position.set(0, 2.44, .55); roll.castShadow = true; cargo.add(roll);
+  // A round hay bale strapped across the rack for the plains.
+  const bale = new THREE.Group(); bale.name = 'plains-bale'; body.add(bale);
+  const straw = mat('#d8b566'), cutEnd = mat('#b8964f');
+  const baleRoll = new THREE.Mesh(new THREE.CylinderGeometry(.42, .42, 1.4, 10), straw);
+  baleRoll.rotation.z = Math.PI / 2; baleRoll.position.set(0, 2.66, .05); baleRoll.castShadow = true; bale.add(baleRoll);
+  for (const x of [-.7, .7]) {
+    const end = new THREE.Mesh(new THREE.CylinderGeometry(.36, .36, .03, 10), cutEnd);
+    end.rotation.z = Math.PI / 2; end.position.set(x, 2.66, .05); bale.add(end);
+  }
+  for (const z of [-.35, .45]) box(bale, [1.5, .88, .04], [0, 2.66, z], mat('#5e4c33'));
   const wheels = [];
   for (const x of [-1.02, 1.02]) for (const z of [-1.18, 1.21]) {
     const pivot = new THREE.Group(); pivot.position.set(x, .49, z); car.add(pivot);
@@ -90,8 +100,8 @@ export function createClassicCar(entry = carEntry(DEFAULT_CAR)) {
     kitJourney = journey;
     const kit = entry.trim ?? journey;
     paint.color.set(customPaint ?? ROUTE_PAINT[kit] ?? ROUTE_PAINT.coast);
-    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle';
-    rack.visible = surfboard.visible || roofBox.visible || cargo.visible;
+    surfboard.visible = kit === 'coast'; spare.visible = kit === 'desert'; roofBox.visible = kit === 'snow'; cargo.visible = kit === 'jungle'; bale.visible = kit === 'plains';
+    rack.visible = surfboard.visible || roofBox.visible || cargo.visible || bale.visible;
     plate.position.x = spare.visible ? -.65 : 0;
   }
   function paintCar(color) { customPaint = color || null; applyTrim(kitJourney); }

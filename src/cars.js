@@ -11,7 +11,7 @@ export const CLASSIC_SHAPE = {
 const shape = name => TRAFFIC_MODELS.find(spec => spec.name === name);
 
 // The default car dresses for the scenery; every other car brings its own paint.
-export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a' };
+export const ROUTE_PAINT = { coast: '#d96143', desert: '#78977b', snow: '#9fc4d5', jungle: '#e0b44a', plains: '#4f8f8b' };
 
 // Almost every car is the same kind of relaxed tourer. Stats stay within about
 // a tenth of the coastal wagon so a choice changes character, not the game. The
@@ -46,6 +46,10 @@ export const CARS = {
   jungle: {
     name: 'Jungle Expedition', kind: 'classic', trim: 'jungle', paint: '#e0b44a', shape: CLASSIC_SHAPE,
     stats: { topSpeed: 26.6, acceleration: 11.5, braking: 19.2, grip: .96, offRoad: 18.6 },
+  },
+  plains: {
+    name: 'Prairie Cruiser', kind: 'classic', trim: 'plains', paint: '#4f8f8b', shape: CLASSIC_SHAPE,
+    stats: { topSpeed: 27.8, acceleration: 11.2, braking: 19.8, grip: .99, offRoad: 18.8 },
   },
   hatchback: {
     name: 'City Hatch', kind: 'built', paint: '#6fa9c2', shape: shape('hatchback'),

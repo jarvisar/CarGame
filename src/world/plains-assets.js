@@ -1,0 +1,80 @@
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { randomAt } from './route.js';
+
+const up = new THREE.Vector3(0, 1, 0);
+
+// Farm-country trees, one unit tall, built like the coast's cypresses: a few
+// open bark cylinders for the trunk and limbs, and lobed crowns whose shading
+// is baked into vertex colours so a per-instance tint still reads as foliage.
+function plainsTree(seed, kind) {
+  const bark = [], leaves = [];
+  const branch = (from, to, width) => {
+    const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to), direction = b.clone().sub(a);
+    const g = new THREE.CylinderGeometry(width * .6, width, direction.length(), 5, 1, true);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
+    g.translate(...a.add(b).multiplyScalar(.5).toArray()); bark.push(g);
+  };
+  const lobe = (center, size, angle, salt) => {
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    g.scale(size[0] * (.9 + randomAt(salt, seed + 931) * .2), size[1], size[0] * (.9 + randomAt(salt, seed + 932) * .2));
+    g.rotateY(angle); g.translate(...center);
+    const colors = [], normals = g.attributes.normal;
+    for (let j = 0; j < normals.count; j += 3) {
+      const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+      const shade = .74 + Math.max(0, upward) * .25 + randomAt(j, salt + seed * 7 + 933) * .05;
+      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .97);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    leaves.push(g);
+  };
+  if (kind === 'poplar') {
+    // Tall and narrow: a straight trunk with crowns stacked up it.
+    branch([0, -.08, 0], [.01, .5, 0], .05); branch([.01, .5, 0], [.02, .82, 0], .03);
+    lobe([0, .38, 0], [.2, .24], 0, 1); lobe([.01, .6, 0], [.18, .22], 1.1, 2); lobe([.02, .82, 0], [.13, .19], 2.3, 3);
+  } else if (kind === 'willow') {
+    // A short leaning trunk under a wide, drooping crown along the creek.
+    branch([0, -.08, 0], [.12, .3, .04], .07); branch([.12, .3, .04], [.22, .52, .02], .045);
+    for (let i = 0; i < 5; i++) {
+      const angle = i * 1.26 + randomAt(i, seed + 941) * .5, r = .24 + randomAt(i, seed + 942) * .14;
+      branch([.16, .4, .03], [.2 + Math.cos(angle) * r * .8, .5 + randomAt(i, seed + 943) * .12, Math.sin(angle) * r * .8], .022);
+      lobe([.2 + Math.cos(angle) * r, .5 + randomAt(i, seed + 944) * .1, Math.sin(angle) * r], [.3, .17], angle, i + 10);
+    }
+    lobe([.2, .66, 0], [.3, .16], .7, 20);
+  } else {
+    // A broad oak: a forked trunk with five crowns around a taller one.
+    const lean = .16;
+    branch([0, -.08, 0], [lean * .3, .32, .02], .075); branch([lean * .3, .32, .02], [lean, .56, -.02], .05);
+    for (let i = 0; i < 5; i++) {
+      const angle = i * 1.26 + randomAt(i, seed + 951) * .6, r = .2 + randomAt(i, seed + 952) * .16;
+      const crown = [lean + Math.cos(angle) * r, .6 + randomAt(i, seed + 953) * .14, Math.sin(angle) * r * .85];
+      branch([lean * .7, .38 + i * .03, 0], crown, .028);
+      lobe(crown, [.27 + randomAt(i, seed + 954) * .1, .2 + randomAt(i, seed + 955) * .06], angle, i);
+    }
+    lobe([lean, .8, 0], [.3, .21], .4, 30);
+  }
+  const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
+  for (const part of [...bark, ...leaves]) part.dispose();
+  result.bark.computeBoundingSphere(); result.leaves.computeBoundingSphere();
+  return result;
+}
+export const plainsTrees = { oak: [plainsTree(1, 'oak'), plainsTree(2, 'oak')], poplar: [plainsTree(3, 'poplar'), plainsTree(4, 'poplar')], willow: [plainsTree(5, 'willow')] };
+
+// A round bale lying on its side, axis across x. The wrapped side is lighter
+// than the cut ends, with a faint band every few segments.
+function bale() {
+  const g = new THREE.CylinderGeometry(.75, .75, 1.3, 10, 1).toNonIndexed();
+  g.deleteAttribute('uv'); g.rotateZ(Math.PI / 2);
+  const colors = [], positions = g.attributes.position, normals = g.attributes.normal;
+  for (let i = 0; i < positions.count; i += 3) {
+    const nx = (normals.getX(i) + normals.getX(i + 1) + normals.getX(i + 2)) / 3;
+    const end = Math.abs(nx) > .5;
+    const band = Math.floor(Math.atan2(positions.getY(i), positions.getZ(i)) / Math.PI * 5 + 5) % 3 === 0;
+    const shade = end ? .8 : band ? .93 : 1;
+    for (let k = 0; k < 3; k++) colors.push(shade, shade * (end ? .95 : 1), shade * .92);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  g.computeVertexNormals(); g.computeBoundingSphere();
+  return g;
+}
+export const baleGeometry = bale();

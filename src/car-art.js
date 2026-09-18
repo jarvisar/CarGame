@@ -103,9 +103,17 @@ function formulaParts(entry) {
 }
 
 function accessories(entry, draw) {
-  const { slab, shape2d, px, py, size, l, cz, cabinLength, roofY, radius } = draw;
+  const { slab, shape2d, disc, px, py, size, l, cz, cabinLength, roofY, radius } = draw;
   const rack = (front, rear) => slab(front, rear, roofY, roofY + .09, '#3a4441', 1);
   switch (entry.trim ?? entry.shape.name) {
+    // A round bale lying across the rack shows its wrapped end from the side.
+    case 'plains': return [
+      rack(cz - .9, cz + .9),
+      disc(cz + .05, roofY + .51, .42, '#d8b566'),
+      disc(cz + .05, roofY + .51, .24, '#c4a058'),
+      disc(cz + .05, roofY + .51, .08, '#d8b566'),
+      slab(cz - .5, cz + .6, roofY + .09, roofY + .14, '#6b5a3c', 1),
+    ];
     case 'coast': return [
       rack(cz - .9, cz + .9),
       shape2d([[cz - 1.45, roofY + .09], [cz - 1.2, roofY + .3], [cz + 1.2, roofY + .3], [cz + 1.45, roofY + .09]], '#f5e8c8'),

@@ -101,7 +101,7 @@ async function boot() {
       $('#welcome .eyebrow').lastChild.textContent = ` ${data.label}`;
       $('#welcome p').textContent = data.introduction;
       $('#scene').setAttribute('aria-label', data.canvas);
-      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a' }[journey];
+      document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
     }
     function buildCarCards() {

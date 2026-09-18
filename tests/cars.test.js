@@ -182,7 +182,7 @@ test('a chosen car keeps its own paint and kit on every route', () => {
   // Route Match is the one that still dresses for the scenery.
   const matching = new DrivingController(straightRoute, {}, 'auto'), paints = new Set();
   for (const journey of Object.keys(JOURNEYS)) { matching.setAppearance(journey); paints.add(palette(matching)); }
-  assert.equal(paints.size, 4);
+  assert.equal(paints.size, Object.keys(JOURNEYS).length);
 });
 
 test('the racers stay in the chooser, and traffic keeps its own five shapes', () => {
@@ -240,7 +240,7 @@ test('one colour dresses the whole garage and follows the car swap', () => {
   car.setCar('auto');
   const scenic = new Set();
   for (const journey of Object.keys(JOURNEYS)) { car.setAppearance(journey); scenic.add(palette(car)); }
-  assert.equal(scenic.size, 4);
+  assert.equal(scenic.size, Object.keys(JOURNEYS).length);
   car.setAppearance('desert');
   assert.ok(wears(car, ROUTE_PAINT.desert));
 });

@@ -55,7 +55,7 @@ try {
     if (visit === 0) await page.goto(url.href, { waitUntil: 'networkidle' });
     else await page.reload({ waitUntil: 'networkidle' });
     await ready();
-    for (const id of ['coast', 'desert', 'snow', 'jungle']) {
+    for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains']) {
       await select(id);
       const state = await snapshot(); checkSpawn(state); assert.equal(state.seed, 4817);
       if (visit === 0) {
@@ -75,7 +75,7 @@ try {
     a.rendering.snap(); a.rendering.update(a.vehicle.car, 1, a.world.origin); a.world.animate(0, a.vehicle);
     a.rendering.renderer.render(a.rendering.scene, a.rendering.camera);
   }, s);
-  for (const id of ['coast', 'desert', 'snow', 'jungle']) {
+  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains']) {
     await select(id);
     for (const s of [pinned[id].s + 4096, -pinned[id].s - 4096, pinned[id].s]) {
       await placeCar(s);

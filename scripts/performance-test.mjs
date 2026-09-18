@@ -17,7 +17,7 @@ try {
   });
   await page.click('#start');
   await page.keyboard.press('KeyP');
-  for (const id of ['coast', 'desert', 'snow', 'jungle']) {
+  for (const id of ['coast', 'desert', 'snow', 'jungle', 'plains']) {
     await page.evaluate(id => window.__coastline.changeJourney(id), id);
     await settle();
     const frozenFrame = await renderFrame();

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#c2e7e8" />
-    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, snowy mountain roads, and a misty jungle river valley." />
+    <meta name="description" content="A scenic driving game with coastal highways, desert canyons, snowy mountain roads, a misty jungle river valley, and golden farmland plains." />
     <title>Coastline — A scenic driving game</title>
     <!-- Keep startup styles inline so the page is covered before the game module loads. -->
     <style>
@@ -54,7 +54,7 @@
         <h1>Pick a road.<br><em>Start driving.</em></h1>
         <p>Drive the Pacific Coast through green hills and ocean views.</p>
         <button id="start" class="start-button">Let’s drive <span aria-hidden="true">↗</span></button>
-        <span class="start-hint">W / ↑ to drive · 1–4: select route · C: choose car · N: next scene · F: fullscreen</span>
+        <span class="start-hint">W / ↑ to drive · 1–5: select route · C: choose car · N: next scene · F: fullscreen</span>
         <span class="touch-hint">Drag the stick toward where you want to go on screen. Push farther to speed up; release to stop.</span>
         <span class="controller-hint">Left stick / D-pad: steer · RT / R2: gas<br>LT / L2: brake or reverse · Start / Menu: pause<br>Left face button: view · Top face button: reset<br>RB / R1: next scene · LB / L1: fullscreen<br>Select / View: choose scenery · R3: choose car</span>
       </section>
@@ -92,7 +92,7 @@
       <dialog id="journey-dialog" class="chooser" aria-labelledby="journey-heading" aria-describedby="journey-description">
         <div class="chooser-heading"><span class="eyebrow">ROUTES</span><button id="close-journeys" class="icon-button" aria-label="Close route chooser"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.5"/></svg></button></div>
         <h2 id="journey-heading" class="chooser-title">Choose a route</h2>
-        <p id="journey-description" class="chooser-intro">Coast, desert, mountains, or jungle. Choose where to drive.</p>
+        <p id="journey-description" class="chooser-intro">Coast, desert, mountains, jungle, or plains. Choose where to drive.</p>
         <span class="controller-hint">D-pad / stick: choose · A / Cross: select · B / Circle: close</span>
         <div class="chooser-options">
           <button class="chooser-card journey-card" data-journey="coast" aria-label="Pacific Coast" aria-current="true">
@@ -110,6 +110,10 @@
           <button class="chooser-card journey-card" data-journey="jungle" aria-label="Emerald Jungle" aria-current="false">
             <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#b4cfaa"/><path d="m132 46 46-30 42 22 38-16 22 18v40H132Z" fill="#7fa48e"/><path d="M0 150V88l36-26 44 18 48-30 58 24 40-20 54 28v68Z" fill="#2c6035"/><path d="M0 128c26-4 40-16 56-28s28-10 40-2c14 8 16 22 34 24" fill="none" stroke="#5fc4b3" stroke-width="13"/><path d="M0 128c26-4 40-16 56-28s28-10 40-2c14 8 16 22 34 24" fill="none" stroke="#8fe0cf" stroke-width="3" stroke-dasharray="7 11"/><path d="m56 100 6-11 8 9" fill="#eafff5"/><path d="m50 112 9-6 7 5-5 5Z" fill="#dff8ec"/><g fill="#7b8a80"><path d="m44 92 7-8 8 3-3 8-9 1Z"/><path d="m92 92 8-7 9 4-2 9-10 1Z"/><path d="m104 118 6-6 8 3-2 7Z"/></g><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#c9b98a" stroke-width="13"/><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#525a5c" stroke-width="9"/><path d="M126 150c6-30-18-50 2-76s54-24 66-74" fill="none" stroke="#e0bd47" stroke-width="1.2"/><g fill="#3c8a3b"><circle cx="24" cy="70" r="15"/><circle cx="76" cy="58" r="13"/><circle cx="160" cy="112" r="17"/><circle cx="238" cy="96" r="16"/><circle cx="112" cy="40" r="12"/></g><g fill="#5aa244"><circle cx="40" cy="60" r="10"/><circle cx="196" cy="126" r="12"/><circle cx="256" cy="72" r="11"/><circle cx="152" cy="26" r="9"/><circle cx="222" cy="120" r="9"/></g><g fill="#2a5a2c"><circle cx="8" cy="96" r="11"/><circle cx="120" cy="66" r="9"/><circle cx="182" cy="90" r="11"/><circle cx="264" cy="130" r="13"/><circle cx="92" cy="78" r="8"/></g><g fill="none" stroke="#6fb34f" stroke-width="3" stroke-linecap="round"><path d="M172 74v-16m0 0-9-7m9 7 9-6m-9 6-6 9m6-9 7 9"/><path d="M60 136v-14m0 0-8-6m8 6 8-5m-8 5-5 8m5-8 6 8"/></g><g stroke="#3a6a30" stroke-width="1.5" fill="none"><path d="M236 84v26m10-28v18m-20-14v14"/></g></svg>
             <span class="chooser-card-copy"><span class="chooser-card-title">Emerald Jungle <span aria-hidden="true">↗</span></span><span class="chooser-card-description">Dense canopy, waterfalls &amp; hanging vines.</span><span class="chooser-current">CURRENT ROUTE</span></span>
+          </button>
+          <button class="chooser-card journey-card" data-journey="plains" aria-label="Golden Plains" aria-current="false">
+            <svg class="chooser-art" viewBox="0 0 280 150" aria-hidden="true"><rect width="280" height="150" fill="#f0d9a6"/><path d="M0 62c40-9 80-12 130-8s90 10 150 4v92H0Z" fill="#d9b55a"/><path d="M0 92c50-8 100-10 150-4s90 10 130 2v60H0Z" fill="#c9ab5e"/><path d="M0 118c60-6 120-4 180 4s70 2 100-2v30H0Z" fill="#96a54c"/><circle cx="214" cy="38" r="14" fill="#ffe6a8"/><path d="M0 62c40-9 80-12 130-8s90 10 150 4" fill="none" stroke="#e2c26b" stroke-width="2"/><g stroke="#c39d4f" stroke-width="1.2"><path d="M20 78h44M26 84h44M40 90h40"/><path d="M160 74h60M166 80h58M180 86h50"/></g><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#cbb587" stroke-width="13"/><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#5d5e59" stroke-width="9"/><path d="M112 150c4-30-8-56 6-80s36-34 62-70" fill="none" stroke="#e2be4b" stroke-width="1"/><path d="M186 92h30v18h-30Z" fill="#a6412f"/><path d="m186 92 15-11 15 11Z" fill="#5e4d45"/><rect x="221" y="86" width="9" height="24" rx="1.5" fill="#c3c7c2"/><path d="M221 86a4.5 4.5 0 0 1 9 0Z" fill="#8f9594"/><g fill="#d9b566"><ellipse cx="34" cy="126" rx="7" ry="5.5"/><ellipse cx="60" cy="132" rx="7" ry="5.5"/><ellipse cx="86" cy="124" rx="7" ry="5.5"/></g><g fill="#b8964f"><ellipse cx="34" cy="126" rx="3" ry="2.4"/><ellipse cx="60" cy="132" rx="3" ry="2.4"/><ellipse cx="86" cy="124" rx="3" ry="2.4"/></g><g stroke="#8b7455" stroke-width="1.6"><path d="M8 104v10m16-11v10m16-11v10m16-11v10"/><path d="M8 108h48" stroke-width=".8"/></g><g fill="#587f3a"><path d="M248 74c-8 0-12-8-10-16s6-14 10-14 8 6 10 14-2 16-10 16Z"/><path d="M262 84c-6 0-9-6-8-12s4-11 8-11 7 5 8 11-2 12-8 12Z"/><path d="M150 132c-8 0-12-8-10-16s6-14 10-14 8 6 10 14-2 16-10 16Z"/></g><g stroke="#e7e9e4" stroke-width="2.2" stroke-linecap="round"><path d="M40 62V26m0 0-9-10m9 10 12-6m-12 6-2 13"/><path d="M78 56V28m0 0-8-8m8 8 10-4m-10 4-1 11"/></g></svg>
+            <span class="chooser-card-copy"><span class="chooser-card-title">Golden Plains <span aria-hidden="true">↗</span></span><span class="chooser-card-description">Wheat fields, red barns &amp; a wide sky.</span><span class="chooser-current">CURRENT ROUTE</span></span>
           </button>
         </div>
         <p class="chooser-note">Your position and mileage on each route are saved for this visit.</p>
