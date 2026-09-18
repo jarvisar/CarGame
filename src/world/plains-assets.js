@@ -77,7 +77,70 @@ function plainsTree(seed, kind) {
   result.bark.computeBoundingSphere(); result.leaves.computeBoundingSphere();
   return result;
 }
-export const plainsTrees = { oak: [plainsTree(1, 'oak'), plainsTree(2, 'oak')], poplar: [plainsTree(3, 'poplar'), plainsTree(4, 'poplar')], willow: [plainsTree(5, 'willow')] };
+// A cheap two-lobe tree for the boundary lines, where a belt of a hundred
+// trees has to cost what a hedge did. The feature oaks keep their six lobes.
+function hedgeTree(seed) {
+  const bark = [], leaves = [];
+  const branch = (from, to, bottom, top) => {
+    const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to), direction = b.clone().sub(a);
+    const g = new THREE.CylinderGeometry(top, bottom, direction.length() + bottom * 1.6, 5);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
+    g.translate(...a.add(b).multiplyScalar(.5).toArray()); bark.push(g);
+  };
+  const lobe = (center, radius, squash, salt) => {
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    g.scale(radius * (.9 + randomAt(salt, seed + 971) * .25), radius * squash, radius * (.9 + randomAt(salt, seed + 972) * .25));
+    g.rotateY(randomAt(salt, seed + 973) * 6.28); g.translate(...center);
+    const colors = [], normals = g.attributes.normal;
+    for (let j = 0; j < normals.count; j += 3) {
+      const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+      const shade = .72 + Math.max(0, upward) * .28 + randomAt(j, salt + seed * 5 + 974) * .05;
+      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .97);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    leaves.push(g);
+  };
+  const lean = (randomAt(seed, 975) - .5) * .12;
+  branch([0, -.12, 0], [lean, .44, 0], .07, .045);
+  lobe([lean, .62, 0], .34 + randomAt(seed, 976) * .08, .82, 1);
+  lobe([lean * 1.6 + .1, .44, .06], .24 + randomAt(seed, 977) * .06, .78, 2);
+  const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
+  for (const part of [...bark, ...leaves]) part.dispose();
+  result.bark.computeBoundingSphere(); result.leaves.computeBoundingSphere();
+  return result;
+}
+
+// A spruce: a bare stem under stacked skirts, for the farm yards and for
+// contrast against all the round broadleaf crowns.
+function conifer(seed) {
+  const bark = [], leaves = [];
+  const stem = new THREE.CylinderGeometry(.022, .05, 1.06, 5);
+  stem.translate(0, .41, 0); bark.push(stem);
+  const tiers = 5;
+  for (let i = 0; i < tiers; i++) {
+    const t = i / (tiers - 1);
+    const radius = (.30 - t * .19) * (.9 + randomAt(i, seed + 981) * .2);
+    const height = .3 - t * .12;
+    const g = new THREE.ConeGeometry(radius, height, 7, 1);
+    g.rotateY(randomAt(i, seed + 982) * 6.28);
+    g.translate(0, .16 + t * .68 + height * .5, 0);
+    const colors = [], normals = g.attributes.normal;
+    for (let j = 0; j < normals.count; j += 3) {
+      const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
+      const shade = .66 + Math.max(0, upward) * .3 + t * .08 + randomAt(j, seed + 983) * .04;
+      for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .95);
+    }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    leaves.push(g);
+  }
+  const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
+  for (const part of [...bark, ...leaves]) part.dispose();
+  result.bark.computeBoundingSphere(); result.leaves.computeBoundingSphere();
+  return result;
+}
+
+export const plainsTrees = { oak: [plainsTree(1, 'oak'), plainsTree(2, 'oak')], poplar: [plainsTree(3, 'poplar'), plainsTree(4, 'poplar')], willow: [plainsTree(5, 'willow')],
+  hedge: [hedgeTree(6), hedgeTree(7), hedgeTree(8)], conifer: [conifer(9), conifer(10)] };
 
 // A round bale lying on its side, axis across x. The wrapped side is lighter
 // than the cut ends, with a faint band every few segments.
@@ -112,6 +175,11 @@ function cow() {
   box([.62, .12, .12], [0, 1.48, -1.02], .55);
   for (const x of [-.3, .3]) for (const z of [-.62, .62]) box([.19, .66, .19], [x, .33, z], .78);
   box([.08, .5, .08], [0, .95, .9], .6);
+  // Dark patches over the flanks and shoulder. A pale instance colour then
+  // reads as a Holstein and a brown one as a brown cow, from one mesh.
+  box([.97, .34, .52], [0, 1.24, -.34], .3);
+  box([.97, .3, .4], [0, .86, .5], .34);
+  box([.52, .3, .26], [0, 1.3, .74], .32);
   const g = mergeGeometries(parts); parts.forEach(part => part.dispose());
   g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }

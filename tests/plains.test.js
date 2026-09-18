@@ -186,7 +186,8 @@ test('every plains asset is built from real geometry, so no part is silently mis
   assert.ok(lowest < .6, 'the turbine tower must stand on the ground');
   for (const list of Object.values(plainsTrees)) for (const variant of list) {
     // Trunk limbs overlap at their joints, so the bark is one connected solid.
-    assert.ok(variant.bark.attributes.position.count >= 72, 'a tree needs a trunk');
+    // A conifer is a single bare stem, so the floor is one closed cylinder.
+    assert.ok(variant.bark.attributes.position.count >= 30, 'a tree needs a trunk');
     variant.bark.computeBoundingBox(); variant.leaves.computeBoundingBox();
     assert.ok(variant.bark.boundingBox.min.y < -.05, 'the trunk must reach below the ground it stands on');
     assert.ok(variant.bark.boundingBox.max.y > variant.leaves.boundingBox.min.y, 'the trunk must reach into its crown');

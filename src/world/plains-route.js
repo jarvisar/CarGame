@@ -4,7 +4,7 @@ export const PLAINS_STEP = 8;
 // The road runs over long, gentle swells rather than the coast's hills, so a
 // straight can be held for a while and the fields read as one wide surface.
 const swellPhase = [randomAt(0, 2701) * Math.PI * 2, randomAt(1, 2701) * Math.PI * 2];
-export const plainsRoadHeight = s => 24 + 3.4 * Math.sin(s / 310 + swellPhase[0]) + 1.5 * Math.sin(s / 127 + swellPhase[1]);
+export const plainsRoadHeight = s => 24 + 5.4 * Math.sin(s / 310 + swellPhase[0]) + 2.4 * Math.sin(s / 127 + swellPhase[1]) + .9 * Math.sin(s / 61 + swellPhase[0]);
 export const plainsFrame = s => ({ ...roadFrame(s), y: plainsRoadHeight(s) });
 
 // A creek crosses the road at world-space intervals, independently of the
@@ -78,7 +78,10 @@ export function distantRise(s, u) {
 }
 
 function fieldSwell(s, u) {
-  return 2.2 * Math.sin(s / 97 + u / 71 + swellPhase[0]) + 1.5 * Math.sin(s / 53 - u / 89) + .9 * Math.sin(s / 29 + u / 37) + .5 * Math.sin(s / 17 - u / 23);
+  // Long, broad waves carry the country; the short ones only break up their
+  // surface, so the fields roll without the road ever pitching.
+  return 5.2 * Math.sin(s / 231 + u / 173 + swellPhase[1]) + 3.1 * Math.sin(s / 97 + u / 71 + swellPhase[0])
+    + 1.7 * Math.sin(s / 53 - u / 89) + .9 * Math.sin(s / 29 + u / 37) + .5 * Math.sin(s / 17 - u / 23);
 }
 // The plain without its creek: a flat road reserve with a drainage ditch on
 // each side, then rolling fields that ease down toward the camera and up
@@ -157,13 +160,14 @@ export function fieldAt(s, u) {
 // are where the tall shelterbelts go; band boundaries run along the road.
 export function rowBoundaryKind(row, side) {
   const r = randomAt(row, side > 0 ? 2781 : 2782);
-  return r < .3 ? null : r < .58 ? 'fence' : r < .8 ? 'hedge' : 'shelterbelt';
+  return r < .26 ? null : r < .48 ? 'fence' : r < .64 ? 'hedge' : r < .84 ? 'treeline' : 'shelterbelt';
 }
 export function bandBoundaryKind(row, side, band) {
   const r = randomAt(row * 4 + band, side > 0 ? 2783 : 2784);
   // Most band edges are just a change of crop. A line on every one of them
-  // turned the fields into a thicket of dots at driving zoom.
-  return r < .56 ? null : r < .78 ? 'fence' : 'hedge';
+  // turned the fields into a thicket of dots at driving zoom. The rest are a
+  // fence, a low clipped hedge, or a belt of trees.
+  return r < .5 ? null : r < .68 ? 'fence' : r < .84 ? 'hedge' : 'treeline';
 }
 // Stone piles cleared off the fields, and a stock pond in some pastures.
 export function fieldCorner(row, side, band) {
