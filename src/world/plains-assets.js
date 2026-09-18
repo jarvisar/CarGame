@@ -10,9 +10,12 @@ const up = new THREE.Vector3(0, 1, 0);
 // is baked into vertex colours so a per-instance tint still reads as foliage.
 function plainsTree(seed, kind) {
   const bark = [], leaves = [];
-  const branch = (from, to, width) => {
+  // Limbs are closed, tapered cylinders that overrun their joint by a radius,
+  // so two segments always overlap. Open-ended tubes with mismatched radii
+  // left a visible hole at every fork, which read as a broken trunk.
+  const branch = (from, to, bottom, top = bottom * .66) => {
     const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to), direction = b.clone().sub(a);
-    const g = new THREE.CylinderGeometry(width * .6, width, direction.length(), 5, 1, true);
+    const g = new THREE.CylinderGeometry(top, bottom, direction.length() + bottom * 1.6, 6);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
     g.translate(...a.add(b).multiplyScalar(.5).toArray()); bark.push(g);
   };
@@ -29,30 +32,45 @@ function plainsTree(seed, kind) {
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     leaves.push(g);
   };
+  // Every limb leaves the trunk at a point on the trunk itself, so none of
+  // them floats beside it.
+  const onTrunk = (line, height) => {
+    for (let i = 0; i < line.length - 1; i++) {
+      const [a, b] = [line[i], line[i + 1]];
+      if (height > b[1] && i < line.length - 2) continue;
+      const t = Math.max(0, Math.min(1, (height - a[1]) / (b[1] - a[1])));
+      return [a[0] + (b[0] - a[0]) * t, height, a[2] + (b[2] - a[2]) * t];
+    }
+    return line.at(-1);
+  };
   if (kind === 'poplar') {
-    // Tall and narrow: a straight trunk with crowns stacked up it.
-    branch([0, -.08, 0], [.01, .5, 0], .05); branch([.01, .5, 0], [.02, .82, 0], .03);
+    // Tall and narrow: one straight trunk with crowns stacked up it.
+    const line = [[0, -.1, 0], [.01, .46, 0], [.02, .88, 0]];
+    branch(line[0], line[1], .05, .038); branch(line[1], line[2], .038, .022);
     lobe([0, .38, 0], [.2, .24], 0, 1); lobe([.01, .6, 0], [.18, .22], 1.1, 2); lobe([.02, .82, 0], [.13, .19], 2.3, 3);
   } else if (kind === 'willow') {
     // A short leaning trunk under a wide, drooping crown along the creek.
-    branch([0, -.08, 0], [.12, .3, .04], .07); branch([.12, .3, .04], [.22, .52, .02], .045);
+    const line = [[0, -.1, 0], [.12, .3, .04], [.22, .54, .02]];
+    branch(line[0], line[1], .075, .055); branch(line[1], line[2], .055, .035);
     for (let i = 0; i < 5; i++) {
       const angle = i * 1.26 + randomAt(i, seed + 941) * .5, r = .24 + randomAt(i, seed + 942) * .14;
-      branch([.16, .4, .03], [.2 + Math.cos(angle) * r * .8, .5 + randomAt(i, seed + 943) * .12, Math.sin(angle) * r * .8], .022);
-      lobe([.2 + Math.cos(angle) * r, .5 + randomAt(i, seed + 944) * .1, Math.sin(angle) * r], [.3, .17], angle, i + 10);
+      const root = onTrunk(line, .38 + randomAt(i, seed + 945) * .1);
+      const tip = [.2 + Math.cos(angle) * r, .5 + randomAt(i, seed + 943) * .12, Math.sin(angle) * r];
+      branch(root, tip, .03, .02);
+      lobe(tip, [.3, .17], angle, i + 10);
     }
     lobe([.2, .66, 0], [.3, .16], .7, 20);
   } else {
-    // A broad oak: a forked trunk with five crowns around a taller one.
-    const lean = .16;
-    branch([0, -.08, 0], [lean * .3, .32, .02], .075); branch([lean * .3, .32, .02], [lean, .56, -.02], .05);
+    // A broad oak: a forked trunk carrying five crowns around a taller one.
+    const lean = .16, line = [[0, -.1, 0], [lean * .3, .32, .02], [lean, .6, -.02]];
+    branch(line[0], line[1], .085, .062); branch(line[1], line[2], .062, .04);
     for (let i = 0; i < 5; i++) {
       const angle = i * 1.26 + randomAt(i, seed + 951) * .6, r = .2 + randomAt(i, seed + 952) * .16;
       const crown = [lean + Math.cos(angle) * r, .6 + randomAt(i, seed + 953) * .14, Math.sin(angle) * r * .85];
-      branch([lean * .7, .38 + i * .03, 0], crown, .028);
+      branch(onTrunk(line, .36 + i * .04), crown, .036, .022);
       lobe(crown, [.27 + randomAt(i, seed + 954) * .1, .2 + randomAt(i, seed + 955) * .06], angle, i);
     }
-    lobe([lean, .8, 0], [.3, .21], .4, 30);
+    lobe([lean, .82, 0], [.3, .21], .4, 30);
   }
   const result = { bark: mergeGeometries(bark), leaves: mergeGeometries(leaves) };
   for (const part of [...bark, ...leaves]) part.dispose();

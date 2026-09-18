@@ -7,6 +7,10 @@ import { waterClock } from './water.js';
 class Parts {
   constructor() { this.parts = []; }
   add(source, position, color, rotation = [0, 0, 0]) {
+    // A colour in the segment-count slot yields a geometry with no vertices,
+    // which merges away silently and leaves a part missing from the scene.
+    if (typeof color !== 'string') throw new Error(`Part colour must be a string, got ${typeof color}`);
+    if (!source.attributes.position.count) throw new Error('Part geometry has no vertices');
     let g = source;
     if (g.index) { g = source.toNonIndexed(); source.dispose(); }
     g.deleteAttribute('uv');
@@ -64,8 +68,8 @@ function barn() {
 // A tower silo beside the barn, with hoops, a domed cap and a ladder.
 function silo() {
   const p = new Parts();
-  p.cylinder([0, 5.5, 0], 2.3, 2.3, 11, 12, galvanised);
-  for (let y = 1.4; y < 11; y += 2.4) p.cylinder([0, y, 0], 2.36, 2.36, .16, 12, '#a8adaa');
+  p.cylinder([0, 5.5, 0], 2.3, 2.3, 11, galvanised, 12);
+  for (let y = 1.4; y < 11; y += 2.4) p.cylinder([0, y, 0], 2.36, 2.36, .16, '#a8adaa', 12);
   p.add(new THREE.SphereGeometry(2.3, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), [0, 11, 0], tin);
   p.box([0, 12.8, 0], [.5, 1.4, .5], iron); p.box([0, 13.5, .7], [.12, .12, 1.6], iron);
   for (const x of [-.3, .3]) p.box([x, 5.6, 2.42], [.06, 11.2, .06], iron);
@@ -145,8 +149,8 @@ function grainElevator() {
   p.box([-4.5, 2.6, 5.2], [2.6, .2, 5], tin); for (const z of [3, 7.3]) p.box([-5.6, 1.25, z], [.16, 2.5, .16], iron);
   for (const z of [-3, 1.5]) p.box([-3.55, 2.4, z], [.08, 1.6, 1.9], '#5c5750');
   for (const x of [7.6, 14.2]) {
-    p.cylinder([x, 3.8, 1], 3.2, 3.2, 7.6, 14, galvanised);
-    for (let y = 1.2; y < 7.6; y += 1.8) p.cylinder([x, y, 1], 3.26, 3.26, .12, 14, '#adb2ae');
+    p.cylinder([x, 3.8, 1], 3.2, 3.2, 7.6, galvanised, 14);
+    for (let y = 1.2; y < 7.6; y += 1.8) p.cylinder([x, y, 1], 3.26, 3.26, .12, '#adb2ae', 14);
     p.cone([x, 8.6, 1], 3.3, 2, tin, 14);
     p.box([x, 9.9, 1], [.6, .8, .6], iron);
   }
@@ -157,15 +161,15 @@ function grainElevator() {
 // A wind turbine: a tapered tower with its nacelle; the rotor spins separately.
 function turbineTower() {
   const p = new Parts(), white = '#e7e9e4';
-  p.cylinder([0, 19, 0], .78, 1.35, 38, 10, white);
+  p.cylinder([0, 19, 0], .78, 1.35, 38, white, 10);
   p.box([0, 38.6, -.4], [2.4, 2.3, 4.4], '#d6d9d3');
-  p.cylinder([0, 38.6, -2.7], .9, 1.1, .8, 8, '#c7cac5', [Math.PI / 2, 0, 0]);
+  p.cylinder([0, 38.6, -2.7], .9, 1.1, .8, '#c7cac5', 8, [Math.PI / 2, 0, 0]);
   p.box([0, .5, 0], [3.6, 1, 3.6], '#b3b0a4');
   return p.finish();
 }
 function turbineRotor() {
   const p = new Parts(), white = '#eceeea';
-  p.cylinder([0, 0, .2], 1, 1.1, 1.2, 8, '#d3d6d1', [Math.PI / 2, 0, 0]);
+  p.cylinder([0, 0, .2], 1, 1.1, 1.2, '#d3d6d1', 8, [Math.PI / 2, 0, 0]);
   for (let i = 0; i < 3; i++) {
     const angle = i * Math.PI * 2 / 3;
     const g = new THREE.BoxGeometry(1, 1, 1, 1, 4, 1).toNonIndexed();

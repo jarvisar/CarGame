@@ -4,7 +4,7 @@ import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch } from './instance-batches.js';
 import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
-import { PLAINS_STEP, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
+import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
   rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, fieldCorner, pondsNear, pondDistance } from './plains-route.js';
 import { createWaterMaterial, animateWater } from './water.js';
@@ -28,6 +28,9 @@ const strawMaterial = material('#ffffff', { vertexColors: true });
 const timberMaterial = material('#8b7455');
 const poleMaterial = material('#7d6a50');
 const wireMaterial = material('#3f3c36', { flatShading: false });
+// Fence rails are weathered timber, not the near-black of an overhead wire,
+// which at driving zoom turned every boundary into a line of harsh specks.
+const railMaterial = material('#86714e', { flatShading: false });
 const metalMaterial = material('#8e948f', { metalness: .15 });
 const concreteMaterial = material('#bcb7a8');
 // Signs, rails and field stones carry their own instance colours.
@@ -39,7 +42,7 @@ const poleGeometry = new THREE.CylinderGeometry(.85, 1, 1, 6);
 const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
 registerChunkResources('plains', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, dirtMaterial, waterMaterial, leavesMaterial,
-  barkMaterial, shrubMaterial, strawMaterial, timberMaterial, poleMaterial, wireMaterial, metalMaterial, concreteMaterial, paintedMaterial, hideMaterial, rushMaterial, boxGeometry, poleGeometry, shrubGeometry, plainsTrees, baleGeometry, cowGeometry, rushGeometry, crowGeometry, crowMaterial });
+  barkMaterial, shrubMaterial, strawMaterial, timberMaterial, poleMaterial, wireMaterial, railMaterial, metalMaterial, concreteMaterial, paintedMaterial, hideMaterial, rushMaterial, boxGeometry, poleGeometry, shrubGeometry, plainsTrees, baleGeometry, cowGeometry, rushGeometry, crowGeometry, crowMaterial });
 
 function geometry(vertices, colors) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
@@ -81,7 +84,7 @@ export class PlainsChunk {
     this.features = { discoveries: [] };
     // A row of turbines reaches well past its own district anchor.
     this.discoveries = plainsDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
-    this.scenery = { posts: [], wires: [], poles: [], shrubs: [], bales: [], boxes: [], painted: [], cows: [], rushes: [], farLumps: [], concrete: [], bark: new Map(), leaves: new Map(), dirt: [] };
+    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], boxes: [], painted: [], cows: [], rushes: [], farLumps: [], concrete: [], bark: new Map(), leaves: new Map(), dirt: [] };
     this.buildTerrain(); this.buildRoad(); this.buildCreek(); this.buildScenery();
     buildPlainsDiscoveries(this, this.discoveries);
     this.finishScenery();
@@ -108,7 +111,12 @@ export class PlainsChunk {
       const next = row + plainsRowStep(row);
       for (let col = 0; col < PLAINS_COLUMN_COUNT - 1; col++) {
         const a = vertex(row, col), b = vertex(next, col), c = vertex(row, col + 1), d = vertex(next, col + 1);
-        const tris = (Math.round(row * 2) + col) % 2 ? [[a, b, c], [b, d, c]] : [[a, b, d], [a, d, c]];
+        // A checkerboard of diagonals reads as herringbone wherever the
+        // vertices are not jittered, which is the whole road reserve. Hash the
+        // choice out in the fields, and keep one consistent diagonal across the
+        // reserve so the verge and ditch read as smooth bands beside the road.
+        const reserve = Math.abs(PLAINS_COLUMNS[col] + PLAINS_COLUMNS[col + 1]) / 2 < ROAD_RESERVE;
+        const tris = reserve || randomAt(Math.round(row * 2), col + 2805) > .5 ? [[a, b, d], [a, d, c]] : [[a, b, c], [b, d, c]];
         tris.forEach((tri, i) => triangle(vertices, colors, ...tri, this.facetColor(tri, row, col, i), this.start));
       }
     }
@@ -116,12 +124,23 @@ export class PlainsChunk {
     this.sampleGround = terrainSampler(this.terrain);
   }
   facetColor(tri, row, col, i) {
-    const s = tri.reduce((sum, p) => sum + p.s, 0) / 3, u = tri.reduce((sum, p) => sum + p.u, 0) / 3, cross = Math.abs(u);
+    const s = tri.reduce((sum, p) => sum + p.s, 0) / 3, u = tri.reduce((sum, p) => sum + p.u, 0) / 3;
     const facet = randomAt(Math.round(row * 2) * 2 + i, col + 2801);
     const d = creekDistance(s, u);
+    // Beside the road the columns are fixed, so a colour taken at the triangle's
+    // own centroid differs between the two halves of one rectangular cell and
+    // the ditch gradient turns into a zigzag. Shade those cells as a whole.
+    const cellCross = Math.abs(PLAINS_COLUMNS[col] + PLAINS_COLUMNS[col + 1]) / 2;
+    const inReserve = cellCross < ROAD_RESERVE;
+    const cross = inReserve ? cellCross : Math.abs(u);
     let color;
     if (cross < 7.2) color = new THREE.Color('#7d7c72');
-    else if (cross < ROAD_RESERVE) color = verge.clone().lerp(ditch, 1 - smoothstep(0, 1.7, Math.abs(cross - 10.8)));
+    else if (inReserve) {
+      // Mown verge either side of a shallow grassy ditch, varying along the
+      // road rather than across it, so the strip never reads as a pattern.
+      color = verge.clone().lerp(ditch, 1 - smoothstep(0, 2.4, Math.abs(cross - 10.8)));
+      color.multiplyScalar(.98 + .04 * (.5 + .5 * Math.sin(s / 23 + col)));
+    }
     else {
       const field = fieldAt(s, u), palette = CROP_PALETTES[field.kind];
       color = new THREE.Color(palette[Math.floor(randomAt(field.seed, field.salt + 5) * palette.length)]);
@@ -140,7 +159,7 @@ export class PlainsChunk {
       if (pond.d < .85) color.lerp(mud, 1 - smoothstep(.7, .85, pond.d));
     }
     if (d < 5.4) color.lerp(mud, 1 - smoothstep(4.6, 5.4, d));
-    return color.multiplyScalar(.975 + facet * .05);
+    return color.multiplyScalar(inReserve ? 1 : .975 + facet * .05);
   }
   ribbon(ranges, lift, mat, name) {
     const vertices = [];
@@ -232,8 +251,8 @@ export class PlainsChunk {
     const hedge = points => {
       for (const point of points) {
         if (point.own === false || !clear(point.s, point.u, 1)) continue;
-        const p = this.ground(point.s + (random() - .5) * .8, point.u + (random() - .5) * .8), size = 1.1 + random() * .7;
-        shrubs.push({ p: [p.x, p.y + size * .3, p.z], scale: [size, size * .78, size * .9], r: [0, random() * 6.28, 0], color: hedgeGreens[Math.floor(random() * hedgeGreens.length)] });
+        const p = this.ground(point.s + (random() - .5) * .5, point.u + (random() - .5) * .5), size = 1.5 + random() * .7;
+        shrubs.push({ p: [p.x, p.y + size * .28, p.z], scale: [size, size * .82, size * 1.05], r: [0, random() * 6.28, 0], color: hedgeGreens[Math.floor(random() * hedgeGreens.length)] });
       }
     };
     // Posts stand on a lattice offset from the chunk seams, where the terrain's
@@ -257,8 +276,8 @@ export class PlainsChunk {
           if (roadsideFence(row, side)) fence(along(side * ROAD_RESERVE, s0, s1, 4, gate?.s, rowEnd - 2));
           for (let band = 1; band <= 3; band++) {
             const kind = bandBoundaryKind(row, side, band);
-            if (kind === 'fence') fence(along(side * bands[band], s0, s1, 4, null, rowEnd - 2));
-            else if (kind === 'hedge') hedge(along(side * bands[band], s0, s1, 2.4));
+            if (kind === 'fence') fence(along(side * bands[band], s0, s1, 6, null, rowEnd - 2));
+            else if (kind === 'hedge') hedge(along(side * bands[band], s0, s1, 1.7));
           }
         }
         if (gate && inChunk(gate.s)) {
@@ -273,9 +292,12 @@ export class PlainsChunk {
           const field = fieldAt(rowStart + 1, side * (bands[band] + .5)), from = bands[band], to = bands[band + 1];
           if (field.kind === 'hay') {
             // Bales in loose rows, as the baler left them, anchored to the field.
-            for (let s = rowStart + 9; s < rowEnd - 6; s += 15) for (let cross = from + 7; cross < to - 6; cross += 12) {
-              const t = s + (randomAt(Math.round(s), Math.round(cross) + 2821) - .5) * 4, v = side * (cross + (randomAt(Math.round(s), Math.round(cross) + 2822) - .5) * 4);
-              if (!inChunk(t) || randomAt(Math.round(s), Math.round(cross) + 2823) < .32 || !clear(t, v, 1.4)) continue;
+            // Bales are dropped along the swath, so they line up down a field
+            // rather than speckling it.
+            for (let s = rowStart + 12; s < rowEnd - 8; s += 23) for (let cross = from + 9; cross < to - 8; cross += 17) {
+              const lane = randomAt(Math.round(cross), field.seed + 2826) - .5;
+              const t = s + (randomAt(Math.round(s), Math.round(cross) + 2821) - .5) * 3, v = side * (cross + lane * 5);
+              if (!inChunk(t) || randomAt(Math.round(s), Math.round(cross) + 2823) < .42 || !clear(t, v, 1.4)) continue;
               const p = this.ground(t, v);
               bales.push({ p: [p.x, p.y + .85, p.z], scale: [1.2, 1.2, 1.2], r: [0, -roadFrame(t).angle + (randomAt(Math.round(s), Math.round(cross) + 2824) - .5) * .5, 0], color: strawTints[Math.floor(randomAt(Math.round(s), Math.round(cross) + 2825) * 3)] });
             }
@@ -332,8 +354,8 @@ export class PlainsChunk {
       const line = rowStart + 2.2;
       for (const side of [-1, 1]) {
         const kind = rowBoundaryKind(row, side), far = Math.min(fieldBands(row, side)[4], 330);
-        if (kind === 'fence') fence(acrossPoints(line, side, 15, far, 4));
-        else if (kind === 'hedge') hedge(acrossPoints(line, side, 15, far, 2.4));
+        if (kind === 'fence') fence(acrossPoints(line, side, 15, far, 6));
+        else if (kind === 'hedge') hedge(acrossPoints(line, side, 15, far, 1.7));
         else if (kind === 'shelterbelt') for (let cross = 18; cross < Math.min(far, 260); cross += 6.5) {
           const t = line + (random() - .5) * 1.6, v = side * (cross + (random() - .5) * 1.4);
           if (!clear(t, v, 2)) continue;
@@ -382,19 +404,27 @@ export class PlainsChunk {
     const sign = (s, side, kind) => {
       if (!inChunk(s) || creekDistance(s, side * 8.4) < 12) return;
       const p = this.ground(s, side * 8.4), angle = -roadFrame(s).angle;
-      posts.push({ p: [p.x, p.y + 1.1, p.z], scale: [.09, 2.2, .09], r: [0, angle, 0] });
-      if (kind === 'diamond') this.scenery.painted.push({ p: [p.x, p.y + 2.35, p.z], scale: [.62, .62, .05], r: [0, angle, Math.PI / 4], color: '#e9b52e' });
-      else this.scenery.painted.push({ p: [p.x, p.y + 2.3, p.z], scale: [.55, .7, .05], r: [0, angle, 0], color: '#f2efe6' });
+      posts.push({ p: [p.x, p.y + 1.15, p.z], scale: [.12, 2.3, .12], r: [0, angle, 0] });
+      if (kind === 'diamond') this.scenery.painted.push({ p: [p.x, p.y + 2.6, p.z], scale: [.92, .92, .07], r: [0, angle, Math.PI / 4], color: '#e9b52e' });
+      else this.scenery.painted.push({ p: [p.x, p.y + 2.55, p.z], scale: [.78, .98, .07], r: [0, angle, 0], color: '#f2efe6' });
     };
     const creekHere = plainsCreekAt(this.start + CHUNK_LENGTH / 2);
     sign(creekHere.start - 70, 1, 'diamond'); sign(creekHere.end + 70, -1, 'diamond');
     for (let s = Math.ceil((this.start - 200) / 448) * 448 + 200; s < this.start + CHUNK_LENGTH; s += 448) sign(s, 1, 'speed');
+    // A timber field gate stands back from the road where a farm track leaves
+    // it: two posts and three rails, which reads as a gate at driving zoom.
     for (let row = fieldRowAt(this.start) - 1; fieldBoundary(row) < this.start + CHUNK_LENGTH; row++) for (const side of [-1, 1]) {
       const gate = farmGate(row, side);
       if (!gate || !inChunk(gate.s)) continue;
-      const p = this.ground(gate.s, side * 10.8), q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -roadFrame(gate.s).angle, Math.PI / 2, 'YXZ'));
-      poles.push({ p: [p.x, p.y + .3, p.z], scale: [.42, 5, .42], q });
-      for (const end of [-1, 1]) { const h = this.ground(gate.s, side * (10.8 + end * 2.5)); this.scenery.concrete.push({ p: [h.x, h.y + .55, h.z], scale: [3.6, 1.1, .3], r: [0, -roadFrame(gate.s).angle, 0] }); }
+      const angle = -roadFrame(gate.s).angle, u = side * 15.5;
+      for (const end of [-1, 1]) {
+        const p = this.ground(gate.s + end * 2.6, u);
+        posts.push({ p: [p.x, p.y + .72, p.z], scale: [.26, 1.5, .26], r: [0, angle, 0] });
+      }
+      const a = this.ground(gate.s - 2.6, u), b = this.ground(gate.s + 2.6, u);
+      for (const height of [.5, .88, 1.26]) {
+        this.beam(this.scenery.rails, { ...a, y: a.y + height }, { ...b, y: b.y + height }, .09);
+      }
     }
     // Rushes along the creek's waterline, thicker where the banks are gentle.
     if (Math.abs(creekHere.center - this.start - CHUNK_LENGTH / 2) < CHUNK_LENGTH / 2 + 150) {
@@ -472,19 +502,23 @@ export class PlainsChunk {
   // Posts and a single wire between neighbours; a gap where a post is
   // missing (a gate, the creek, a yard) breaks the wire too.
   fence(points, keepClear = true) {
-    const { posts, wires } = this.scenery;
+    const { posts, rails } = this.scenery;
     let previous = null;
     for (const point of points) {
       if (keepClear && !this.clearAt(point.s, point.u, .3)) { previous = null; continue; }
       const p = this.ground(point.s, point.u);
       // A point past the chunk's end is the next chunk's post; only its wire is ours.
-      if (point.own !== false) posts.push({ p: [p.x, p.y + .55, p.z], scale: [.2, 1.16, .2], r: [0, -roadFrame(point.s).angle, 0] });
-      if (previous) this.beam(wires, { ...previous, y: previous.y + 1.02 }, { ...p, y: p.y + 1.02 }, .055);
+      if (point.own !== false) posts.push({ p: [p.x, p.y + .58, p.z], scale: [.22, 1.22, .22], r: [0, -roadFrame(point.s).angle, 0] });
+      // Two rails carry the line between posts; a single hairline wire left the
+      // posts reading as loose specks across the fields.
+      if (previous) for (const height of [.72, 1.08]) {
+        this.beam(rails, { ...previous, y: previous.y + height }, { ...p, y: p.y + height }, .085);
+      }
       previous = p;
     }
   }
   cow(s, u, heading, random) {
-    const p = this.ground(s, u), coats = ['#7a5636', '#3a332d', '#c8b596', '#8e6a48', '#5a4234'];
+    const p = this.ground(s, u), coats = ['#8a6340', '#6b4c33', '#cbb99a', '#9b7551', '#7d5a3c'];
     this.scenery.cows.push({ p: [p.x, p.y, p.z], scale: [1, 1, 1], r: [0, heading, 0], color: coats[Math.floor(random() * coats.length)] });
   }
   tree(kind, s, u, height, color, yaw) {
@@ -495,10 +529,11 @@ export class PlainsChunk {
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
   }
   finishScenery() {
-    const { posts, wires, poles, shrubs, bales, boxes, painted, cows, rushes, farLumps, concrete, bark, leaves, dirt } = this.scenery;
+    const { posts, wires, rails, poles, shrubs, bales, boxes, painted, cows, rushes, farLumps, concrete, bark, leaves, dirt } = this.scenery;
     if (dirt.length) this.addMesh(geometry(dirt), dirtMaterial, 'farm-tracks');
     instances(this.group, boxGeometry, timberMaterial, posts, 'fence-posts');
-    instances(this.group, boxGeometry, wireMaterial, wires, 'fence-wires', false);
+    instances(this.group, boxGeometry, railMaterial, rails, 'fence-rails', false);
+    instances(this.group, boxGeometry, wireMaterial, wires, 'overhead-wires', false);
     instances(this.group, poleGeometry, poleMaterial, poles, 'utility-poles');
     instances(this.group, shrubGeometry, shrubMaterial, shrubs, 'hedgerows');
     instances(this.group, baleGeometry, strawMaterial, bales, 'hay-bales');

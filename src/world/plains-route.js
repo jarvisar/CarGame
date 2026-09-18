@@ -161,7 +161,9 @@ export function rowBoundaryKind(row, side) {
 }
 export function bandBoundaryKind(row, side, band) {
   const r = randomAt(row * 4 + band, side > 0 ? 2783 : 2784);
-  return r < .34 ? null : r < .66 ? 'fence' : 'hedge';
+  // Most band edges are just a change of crop. A line on every one of them
+  // turned the fields into a thicket of dots at driving zoom.
+  return r < .56 ? null : r < .78 ? 'fence' : 'hedge';
 }
 // Stone piles cleared off the fields, and a stock pond in some pastures.
 export function fieldCorner(row, side, band) {

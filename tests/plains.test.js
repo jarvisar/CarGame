@@ -163,3 +163,33 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   assert.ok(chunk.group.getObjectByName('plains-fields').geometry.attributes.position.count / 3 < 4000, 'terrain stays within the shared budget');
   chunk.dispose();
 });
+
+test('every plains asset is built from real geometry, so no part is silently missing', async () => {
+  const { plainsDiscoveryAssets } = await import('../src/world/plains-discovery-assets.js');
+  const { plainsTrees, baleGeometry, cowGeometry, rushGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
+  // A colour passed where a segment count belongs yields an empty geometry that
+  // merges away without complaint, which is how the turbines lost their towers.
+  const expected = { barn: 400, silo: 900, farmhouse: 400, windmillTower: 900, windmillRotor: 600,
+    tractor: 400, grainElevator: 1500, turbineTower: 200, turbineRotor: 300, box: 24 };
+  for (const [name, geometry] of Object.entries(plainsDiscoveryAssets)) {
+    const count = geometry.attributes.position.count;
+    assert.ok(count >= expected[name], `${name} has ${count} vertices, expected at least ${expected[name]}`);
+    for (let i = 0; i < count * 3; i++) assert.ok(Number.isFinite(geometry.attributes.position.array[i]), `${name} has a non-finite vertex`);
+  }
+  // The tower must be tall enough to carry its own nacelle, and the nacelle must
+  // sit at the top of it rather than in the air.
+  const tower = plainsDiscoveryAssets.turbineTower;
+  tower.computeBoundingBox();
+  assert.ok(tower.boundingBox.max.y > 38 && tower.boundingBox.min.y < .6, 'the turbine tower must reach the ground and the hub');
+  let lowest = Infinity;
+  for (let i = 1; i < tower.attributes.position.count * 3; i += 3) lowest = Math.min(lowest, tower.attributes.position.array[i]);
+  assert.ok(lowest < .6, 'the turbine tower must stand on the ground');
+  for (const list of Object.values(plainsTrees)) for (const variant of list) {
+    // Trunk limbs overlap at their joints, so the bark is one connected solid.
+    assert.ok(variant.bark.attributes.position.count >= 72, 'a tree needs a trunk');
+    variant.bark.computeBoundingBox(); variant.leaves.computeBoundingBox();
+    assert.ok(variant.bark.boundingBox.min.y < -.05, 'the trunk must reach below the ground it stands on');
+    assert.ok(variant.bark.boundingBox.max.y > variant.leaves.boundingBox.min.y, 'the trunk must reach into its crown');
+  }
+  for (const geometry of [baleGeometry, cowGeometry, rushGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
+});
