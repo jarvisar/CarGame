@@ -42,15 +42,16 @@ try {
         const panel = state === 'garage' ? '#car-dialog' : '#journey-dialog';
         const selectors = dialogState
           ? [`${panel} .chooser-heading`, `${panel} .chooser-title`, `${panel} .garage-title`, `${panel} .chooser-intro`, `${panel} .chooser-options`, `${panel} .chooser-note`]
-          : ['.brand', '#change-journey', '#fullscreen', '#sound', '#pause', '.controls', '.location', '.speedometer', '#touch-stick', '#stick-help', ...(state === 'menu' ? ['#welcome'] : [])];
+          : ['.brand', '#change-journey', '#pause', '.controls', '.location', '#touch-stick', '#stick-help', ...(state === 'menu' ? ['#welcome'] : [])];
         const items = selectors.map(selector => ({ selector, element: document.querySelector(selector) })).filter(item => visible(item.element)).map(item => ({ ...item, rect: rect(item.element) }));
         for (let i = 0; i < items.length; i++) {
           const a = items[i];
           if (!dialogState && (a.rect.left < -1 || a.rect.right > innerWidth + 1 || a.rect.top < -1 || a.rect.bottom > innerHeight + 1)) issues.push(`${a.selector} outside viewport`);
           for (const b of items.slice(i + 1)) if (!a.element.contains(b.element) && !b.element.contains(a.element) && overlaps(a.rect, b.rect)) issues.push(`${a.selector} overlaps ${b.selector}`);
         }
-        const buttons = state === 'menu' ? ['#start', '#change-journey', '#sound'] : state === 'pause' ? ['#resume', '#change-car', '#change-journey', '#sound', '#pause'] : state === 'chooser' ? ['#close-journeys'] : state === 'garage' ? ['#close-cars'] : ['#view', '#reset', '#pause', '#sound', '#change-journey'];
-        if (!dialogState) buttons.push('#fullscreen');
+        // Sound and fullscreen are settings now, so they are asked for where
+        // they live: on the pause screen, beside the garage and the levels.
+        const buttons = state === 'menu' ? ['#start', '#change-journey'] : state === 'pause' ? ['#resume', '#change-car', '#sound', '#fullscreen', '#change-journey', '#pause'] : state === 'chooser' ? ['#close-journeys'] : state === 'garage' ? ['#close-cars'] : ['#view', '#reset', '#pause', '#change-journey'];
         for (const selector of buttons) {
           const el = document.querySelector(selector);
           if (document.body.dataset.controller === 'true' && ['#view', '#reset', '#pause', '#change-journey'].includes(selector)) continue;
@@ -65,11 +66,19 @@ try {
           const el = document.querySelector(selector);
           if (visible(el) && el.scrollWidth > el.clientWidth + 1) issues.push(`${selector} horizontal overflow`);
         }
+        // The route and its mileage read on the pause screen; the drive keeps
+        // the scene clear.
+        if (state === 'pause') {
+          const location = document.querySelector('.location');
+          if (!visible(location)) issues.push('pause readout missing');
+          else {
+            const title = document.querySelector('.location-title').getBoundingClientRect();
+            if (document.querySelector('.location-sub').getBoundingClientRect().top < title.bottom - 1) issues.push('distance is not below the route');
+            if (overlaps(rect(location), rect(document.querySelector('#resume')))) issues.push('the readout covers Resume');
+          }
+        }
         if (state === 'driving') {
-          const location = document.querySelector('.location'), speed = document.querySelector('.speedometer');
-          if (!visible(location) || !location.contains(speed)) issues.push('combined area/distance/speed readout missing');
-          const line = document.querySelector('.location-sub').getBoundingClientRect();
-          if (speed.getBoundingClientRect().top < line.bottom - 1) issues.push('speed is not below distance');
+          if (visible(document.querySelector('.location'))) issues.push('the drive still shows a readout');
           const stick = document.querySelector('#touch-stick');
           // On a 320 px screen the stick is wider than half the viewport, so
           // its centre, not its left edge, says which side it sits on.

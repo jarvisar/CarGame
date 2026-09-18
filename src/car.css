@@ -16,6 +16,11 @@
 .panel-button:hover { background: #f9f8eecc; }
 .panel-button svg { width: 18px; height: 18px; flex-shrink: 0; }
 .panel-button-value { margin-left: auto; opacity: .7; font-weight: 500; }
+/* Sound and fullscreen read as switch rows beside the garage, and soft
+   shading follows the same shape inside the graphics panel. */
+.panel-toggle { justify-content: flex-start; }
+.panel-toggle .panel-switch { margin-left: auto; }
+.panel-button-label { min-width: 0; }
 body[data-journey=snow] .panel-button { background: #17273ed1; border-color: #93acc64a; }
 body[data-journey=snow] .panel-button:hover { background: #304663e0; }
 body[data-journey=jungle] .panel-button { background: #1c3423e0; border-color: #9cbf8f4a; }

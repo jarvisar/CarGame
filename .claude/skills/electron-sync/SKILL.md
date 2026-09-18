@@ -23,7 +23,7 @@ Then look at `.artifacts/electron/*.png` and `report.json`. Before a release als
 | `public/manifest.webmanifest` (`short_name`, `description`, `background_color`) | `electron/builder.config.cjs` (product name, artifact names), `main.js` (window title, background) | Nothing to do; a renamed `short_name` renames the packages and the profile folder. `appId` stays fixed on purpose. |
 | `public/favicon.svg` | `electron/build/icon.png` (generated) | Run `npm run electron:icons` and commit the PNG. |
 | Web-only script names `pwa-register.js`, `pwa-install.js` (injected by `scripts/pwa-plugin.mjs`) | `WEB_ONLY_SCRIPTS` in `main.js` (served as empty scripts) | Rename or add web-only scripts there too, otherwise install banners or a service worker appear on desktop. |
-| DOM hooks `#loading.loaded`, `#error[hidden]`, `#welcome.hidden`, `#speed`, `#pause-overlay`, `#journey-transition.active`, `body[data-journey]`, `button[data-journey]` | `scripts/electron-test.mjs` | Update the selectors in the smoke test. |
+| DOM hooks `#loading.loaded`, `#error[hidden]`, `#welcome.hidden`, `#distance`, `#pause-overlay`, `#journey-transition.active`, `body[data-journey]`, `button[data-journey]` | `scripts/electron-test.mjs` | Update the selectors in the smoke test. |
 | Keys W / P / F / N and the `?seed=` URL parameter | smoke test; `--seed` flag in `main.js` | Update the test; keep `--seed` mapping to the URL parameter. |
 | HTML fullscreen (`requestFullscreen` on F / LB) | Electron maps it to the native window automatically | Nothing. F11 and Alt+Enter are shell-level extras handled in `main.js`. |
 | Storage (`localStorage`, session storage) | Works on the `app://` origin | Nothing; the profile lives in the user-data folder. |

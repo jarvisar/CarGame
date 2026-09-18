@@ -117,7 +117,7 @@ Because the wrapper ships the web build as-is, new routes, scenery, cars, audio,
 | `public/manifest.webmanifest` | product name, window title, colors, artifact names | Nothing to edit; a new `short_name` renames the packages and profile folder. |
 | `public/favicon.svg` | `electron/build/icon.png` | Run `npm run electron:icons` and commit the result. |
 | `pwa-register.js`, `pwa-install.js` (from `scripts/pwa-plugin.mjs`) | `WEB_ONLY_SCRIPTS` in `main.js` | Add or rename entries, or install UI and a service worker appear on desktop. |
-| `#loading`, `#error`, `#welcome`, `#speed`, `#pause-overlay`, `#journey-transition`, `body[data-journey]`, keys W / P / F / N, `?seed=` | `scripts/electron-test.mjs`, `--seed` | Update the smoke test. |
+| `#loading`, `#error`, `#welcome`, `#distance`, `#pause-overlay`, `#journey-transition`, `body[data-journey]`, keys W / P / F / N, `?seed=` | `scripts/electron-test.mjs`, `--seed` | Update the smoke test. |
 | Files in `public/` with a new extension | MIME table in `main.js` | Add the extension. |
 | New browser permissions (clipboard, pointer lock, notifications, camera) | Electron defaults | Add a permission handler in `main.js`. Gamepad, Web Audio, and WebGL need nothing. |
 | `package.json` `version` | app version and release tag | `npm version …`. |

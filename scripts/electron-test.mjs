@@ -113,7 +113,7 @@ try {
 
   // Keyboard driving through the shell.
   await page.keyboard.down('KeyW');
-  await page.waitForFunction(() => document.querySelector('#speed').textContent !== '00', null, { timeout: 15_000 });
+  await page.waitForFunction(() => document.querySelector('#distance').textContent !== '0.0', null, { timeout: 25_000 });
   await page.keyboard.up('KeyW');
   check('keyboard drives the car', await page.locator('#welcome').evaluate(el => el.classList.contains('hidden')));
   await page.keyboard.press('KeyP');

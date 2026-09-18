@@ -124,6 +124,10 @@ try {
   await press(13); await frames();
   assert.equal(await focus(), 'change-car', 'down reaches the garage button');
   await press(13); await frames();
+  assert.equal(await focus(), 'sound', 'down reaches the sound switch');
+  await press(13); await frames();
+  assert.equal(await focus(), 'fullscreen', 'down reaches the fullscreen switch');
+  await press(13); await frames();
   const level = await page.evaluate(() => document.activeElement?.dataset?.quality ?? null);
   assert.ok(level, 'down reaches the graphics levels');
   await press(15); await frames();

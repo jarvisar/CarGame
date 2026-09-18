@@ -19,7 +19,7 @@ try {
       // Subpixel layout reports a 44 px control as 43.999… often enough to
       // flake, so compare against the target size with a hair of tolerance.
       const TARGET = 44 - .05;
-      const selectors = document.querySelector('#welcome').classList.contains('hidden') ? ['#sound', '#pause', '#change-journey', '#view', '#reset', '#touch-stick'] : ['#sound', '#change-journey', '#start'];
+      const selectors = document.querySelector('#welcome').classList.contains('hidden') ? ['#pause', '#change-journey', '#view', '#reset', '#touch-stick'] : ['#change-journey', '#start'];
       const rects = selectors.map(selector => ({ selector, rect: document.querySelector(selector).getBoundingClientRect() }));
       for (const { selector, rect } of rects) {
         if (rect.width < TARGET || rect.height < TARGET) failures.push(`${selector} has a small touch target (${rect.width.toFixed(2)} x ${rect.height.toFixed(2)} at ${innerWidth} x ${innerHeight})`);

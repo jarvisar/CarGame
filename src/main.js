@@ -28,7 +28,7 @@ const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, [data-quality], #soft-shading';
+const PAUSE_CONTROLS = '#resume, #change-car, #sound, #fullscreen, [data-quality], #soft-shading';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -89,7 +89,8 @@ async function boot() {
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
       audio.setPaused(paused);
-      $('#pause-overlay').hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
+      pauseOverlay.hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
+      $('#pause .control-label').textContent = paused ? 'resume' : 'pause';
       if (paused) $('#resume').focus(); else $('#pause').blur();
     }
     function updateJourneyUi() {
@@ -98,7 +99,7 @@ async function boot() {
       $('.location-title').textContent = data.label;
       $('.location svg text').textContent = data.routeNumber;
       $('#welcome .eyebrow').lastChild.textContent = ` ${data.label}`;
-      $('#welcome p').textContent = data.introduction; $('#pause-overlay .eyebrow').textContent = data.label;
+      $('#welcome p').textContent = data.introduction;
       $('#scene').setAttribute('aria-label', data.canvas);
       document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
@@ -185,13 +186,13 @@ async function boot() {
     }
     function openCars() {
       if (changingJourney || openChooser()) return;
-      journeyWasPaused = paused; setPaused(true); $('#pause-overlay').hidden = true;
+      journeyWasPaused = paused; setPaused(true); pauseOverlay.hidden = true;
       carDialog.showModal();
       carDialog.querySelector(`[data-car="${carId}"]`).focus();
     }
     function openJourneys() {
       if (changingJourney || openChooser()) return;
-      journeyWasPaused = paused; setPaused(true); $('#pause-overlay').hidden = true;
+      journeyWasPaused = paused; setPaused(true); pauseOverlay.hidden = true;
       journeyDialog.showModal();
       journeyDialog.querySelector(`[data-journey="${journey}"]`).focus();
     }
@@ -205,7 +206,7 @@ async function boot() {
       graphics.relax();
       audio.setPaused(true);
       $('#journey-transition').classList.add('active'); journeyDialog.close(); carDialog.close();
-      $('#pause-overlay').hidden = true;
+      pauseOverlay.hidden = true;
       savedJourneys[journey] = { s: vehicle.s, distance: vehicle.distance };
       const nextState = regenerate ? freshSceneStart(vehicle.s) : savedJourneys[id];
       let nextWorld;
@@ -414,17 +415,13 @@ async function boot() {
     });
     for (const button of qualityButtons) button.addEventListener('click', () => graphics.setMode(button.dataset.quality));
     softShading.addEventListener('click', () => action('ambientOcclusion'));
-    const hud = { speed: $('#speed'), fill: $('#speed-fill'), distance: $('#distance'), gear: $('#gear') };
+    const hud = { distance: $('#distance') };
     function updateHud() {
-      // Physics uses meters and seconds; convert only the displayed measurements.
-      const mph = Math.round(Math.abs(vehicle.speed) * 3600 / 1609.344);
-      const speed = String(mph).padStart(2, '0'), distance = mileageFormat.format(vehicle.distance / 1609.344);
-      const gear = vehicle.speed < -.3 ? 'REVERSE' : Math.abs(vehicle.u) > 5.5 ? 'OFF ROAD' : mph > 1 ? 'DRIVING' : 'READY';
+      // Physics uses meters; convert only the displayed measurement. The drive
+      // itself shows nothing, so this is read on the pause screen.
+      const distance = mileageFormat.format(vehicle.distance / 1609.344);
       // Replacing unchanged text still invalidates layout, including while paused.
-      if (hud.speed.textContent !== speed) hud.speed.textContent = speed;
       if (hud.distance.textContent !== distance) hud.distance.textContent = distance;
-      if (hud.gear.textContent !== gear) hud.gear.textContent = gear;
-      hud.fill.style.width = `${Math.min(Math.abs(vehicle.speed) / vehicle.stats.topSpeed, 1) * 100}%`;
     }
     function updateViewUi() {
       $('#view').title = `${rendering.viewLabel} · Change camera (V)`;

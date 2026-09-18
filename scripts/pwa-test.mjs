@@ -127,7 +127,7 @@ async function checkProduction(base) {
     await page.waitForFunction(() => document.querySelector('#loading.loaded') && document.querySelector('#error').hidden);
     await page.locator('#start').click();
     await page.keyboard.down('ArrowUp');
-    await page.waitForFunction(() => Number(document.querySelector('#speed').textContent) > 0);
+    await page.waitForFunction(() => document.querySelector('#distance').textContent !== '0.0', null, { timeout: 20_000 });
     await page.keyboard.up('ArrowUp');
 
     await context.setOffline(false);

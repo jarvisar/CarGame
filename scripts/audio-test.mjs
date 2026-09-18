@@ -11,7 +11,8 @@ try {
   await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await page.waitForFunction(() => window.__coastline);
   assert.equal(await page.evaluate(() => window.__coastline.audio.context), null);
-  await page.locator('#sound').click();
+  // Sound is a pause-screen setting now; M still reaches it from the drive.
+  await page.keyboard.press('KeyM');
   await page.waitForFunction(() => window.__coastline.audio.context?.state === 'running');
   const graphSize = await page.evaluate(() => {
     const a = window.__coastline.audio;
@@ -120,9 +121,15 @@ try {
   mobile.on('pageerror', error => errors.push(error.message));
   await mobile.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
   await mobile.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
-  await mobile.locator('#sound').tap();
-  await mobile.waitForFunction(() => window.__coastline.audio.context?.state === 'running');
+  // A touchscreen reaches sound through the pause screen, which is also the
+  // one place it can be switched on without the drive running.
   await mobile.locator('#start').tap();
+  await mobile.locator('#pause').tap();
+  await mobile.locator('#sound').tap();
+  await mobile.waitForFunction(() => window.__coastline.audio.context);
+  assert.equal(await mobile.locator('#sound').getAttribute('aria-pressed'), 'true');
+  await mobile.locator('#resume').tap();
+  await mobile.waitForFunction(() => window.__coastline.audio.context.state === 'running');
   await mobile.locator('#pause').tap();
   await mobile.waitForFunction(() => window.__coastline.audio.context.state === 'suspended');
   await mobile.locator('#sound').tap();
