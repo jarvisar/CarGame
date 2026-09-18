@@ -163,6 +163,17 @@ test('plains scenery stands on the rendered facets and the world streams and rel
     }
     assert.ok(worked > 0 && flat > 0, 'a chunk has both worked fields and unworked ground');
   }
+  // The fringe is present in every chunk, throws no shadow, and stays out of
+  // the ambient occlusion prepass.
+  for (const chunk of world.chunks.values()) {
+    let stalks = 0;
+    chunk.group.traverse(object => {
+      if (object.name !== 'field-fringe') return;
+      stalks += object.count;
+      assert.equal(object.castShadow, false); assert.equal(object.userData.ambientOcclusion, false);
+    });
+    assert.ok(stalks > 20, 'stalks fringe the fields');
+  }
   let disposed = 0;
   for (const chunk of world.chunks.values()) for (const source of chunk.owned) source.addEventListener('dispose', () => disposed++);
   for (const s of [250, 1025, 9000, -300]) {
@@ -179,7 +190,7 @@ test('plains scenery stands on the rendered facets and the world streams and rel
 
 test('every plains asset is built from real geometry, so no part is silently missing', async () => {
   const { plainsDiscoveryAssets } = await import('../src/world/plains-discovery-assets.js');
-  const { plainsTrees, baleGeometry, cowGeometry, rushGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
+  const { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
   // A colour passed where a segment count belongs yields an empty geometry that
   // merges away without complaint, which is how the turbines lost their towers.
   const expected = { barn: 400, silo: 900, farmhouse: 400, windmillTower: 900, windmillRotor: 600,
@@ -205,5 +216,5 @@ test('every plains asset is built from real geometry, so no part is silently mis
     assert.ok(variant.bark.boundingBox.min.y < -.05, 'the trunk must reach below the ground it stands on');
     assert.ok(variant.bark.boundingBox.max.y > variant.leaves.boundingBox.min.y, 'the trunk must reach into its crown');
   }
-  for (const geometry of [baleGeometry, cowGeometry, rushGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
+  for (const geometry of [baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, crowGeometry]) assert.ok(geometry.attributes.position.count > 12);
 });

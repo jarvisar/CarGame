@@ -26,7 +26,7 @@ function plainsTree(seed, kind) {
     const colors = [], normals = g.attributes.normal;
     for (let j = 0; j < normals.count; j += 3) {
       const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
-      const shade = .74 + Math.max(0, upward) * .25 + randomAt(j, salt + seed * 7 + 933) * .05;
+      const shade = .66 + Math.max(0, upward) * .36 + randomAt(j, salt + seed * 7 + 933) * .05;
       for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .97);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -94,7 +94,7 @@ function hedgeTree(seed) {
     const colors = [], normals = g.attributes.normal;
     for (let j = 0; j < normals.count; j += 3) {
       const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
-      const shade = .72 + Math.max(0, upward) * .28 + randomAt(j, salt + seed * 5 + 974) * .05;
+      const shade = .64 + Math.max(0, upward) * .38 + randomAt(j, salt + seed * 5 + 974) * .05;
       for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .97);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -152,7 +152,7 @@ function cypress(seed) {
     const colors = [], normals = g.attributes.normal;
     for (let j = 0; j < normals.count; j += 3) {
       const upward = (normals.getY(j) + normals.getY(j + 1) + normals.getY(j + 2)) / 3;
-      const shade = .68 + Math.max(0, upward) * .28 + randomAt(j, salt + seed * 3 + 994) * .05;
+      const shade = .62 + Math.max(0, upward) * .36 + randomAt(j, salt + seed * 3 + 994) * .05;
       for (let k = 0; k < 3; k++) colors.push(shade, shade, shade * .96);
     }
     g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -240,6 +240,23 @@ function rushes() {
   g.computeVertexNormals(); g.computeBoundingSphere(); return g;
 }
 export const rushGeometry = rushes();
+
+// A tuft of standing stalks for the fringe of a field: a few bent blades,
+// taller and slimmer than the rushes, spread over a little ground, that read
+// as uncut wheat or long grass where the field meets its edge.
+function stalks() {
+  const positions = [];
+  for (let i = 0; i < 7; i++) {
+    const angle = i * 2.399963 + .7, x = Math.cos(angle), z = Math.sin(angle);
+    const height = .85 + randomAt(i, 966) * .45, bend = .12 + randomAt(i, 967) * .16, spread = .1 + randomAt(i, 968) * .16;
+    const bx = x * spread, bz = z * spread;
+    positions.push(bx - z * .035, 0, bz + x * .035, bx + x * bend * .5, height * .7, bz + z * bend * .5, bx + z * .035, 0, bz - x * .035,
+      bx + z * .035, 0, bz - x * .035, bx + x * bend * .5, height * .7, bz + z * bend * .5, bx + x * bend, height, bz + z * bend);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.computeVertexNormals(); g.computeBoundingSphere(); return g;
+}
+export const stalkGeometry = stalks();
 
 // Crows: the gull's silhouette, smaller and dark. The flock circles a field
 // in the vertex shader off the shared water clock, so it costs one draw call
