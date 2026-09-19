@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, seededRandom, smoothstep, lerp, clamp } from './route.js';
 import { snowPosition, snowGroundHeight } from './snow-route.js';
-import { CABLE_ROPE_OFFSET, CABIN_DROP, spanSag, cableTravel } from './snow-discoveries.js';
+import { CABLE_ROPE_OFFSET, CABIN_DROP, CABLE_CYCLE, spanSag, cableTravel } from './snow-discoveries.js';
 import { SnowDiscoveryParts, snowDiscoveryMaterial, cableCabinGeometry } from './snow-discovery-assets.js';
 
 const up = new THREE.Vector3(0, 1, 0), transform = new THREE.Object3D();
@@ -179,14 +179,53 @@ export function cableCabinPose(feature, side, travel) {
   return { position, yaw: Math.atan2(direction.x, direction.z) + (side < 0 ? Math.PI : 0) };
 }
 
-// Every streamed cable car advances its two cabins on the scene's clock, so
-// they stop with the rest of the world when the drive is paused.
-export function animateSnowDiscoveries(chunks, time) {
+// Pick the point in the existing journey where the uphill cabin crosses the
+// road. The crossing is not necessarily halfway between the two stations.
+function roadCrossingTime(feature) {
+  let distance = 0;
+  const length = feature.rope[0].reduce((sum, span) => sum + span.length, 0);
+  for (let i = 0; i < feature.points.length - 1; i++) {
+    const a = feature.points[i], b = feature.points[i + 1];
+    distance += feature.rope[0][i].length * clamp(-a.u / (b.u - a.u), 0, 1);
+  }
+  // Invert cableTravel's smoothstep, including its eight-second station stop.
+  const fraction = .5 - Math.sin(Math.asin(1 - 2 * clamp(distance / length, 0, 1)) / 3);
+  return 8 + (CABLE_CYCLE / 2 - 8) * fraction - feature.index * 17.3;
+}
+
+function encounterClock(chunk, feature, time, vehicle) {
+  const distance = Math.abs(feature.s - vehicle.s);
+  // Schedule a fresh encounter outside the driving view, also on return visits.
+  if (distance > 400) { chunk.cableTiming = null; return time; }
+  const speed = Math.abs(vehicle.speed ?? 0);
+  const arrival = Math.max(0, distance - 30) / Math.max(8, speed);
+  if (!chunk.cableTiming) {
+    const crossing = roadCrossingTime(feature);
+    chunk.cableTiming = { crossing, offset: crossing - arrival - time, time, passed: false };
+  }
+  const timing = chunk.cableTiming, dt = Math.max(0, time - timing.time);
+  timing.time = time;
+  if (distance <= 30) timing.passed = true;
+  if (!timing.passed && speed > 2 && (feature.s - vehicle.s) * vehicle.speed > 0) {
+    const error = timing.crossing - arrival - (time + timing.offset);
+    const wrapped = ((error + CABLE_CYCLE / 2) % CABLE_CYCLE + CABLE_CYCLE) % CABLE_CYCLE - CABLE_CYCLE / 2;
+    // Accommodate changes in driving speed without jumping the cabins along
+    // the rope. Stopping the car lets the lift continue its ordinary cycle.
+    timing.offset += clamp(wrapped, -.75 * dt, dt);
+  }
+  return time + timing.offset;
+}
+
+// The scene clock still controls movement and pausing; approaching the lift
+// schedules a road crossing shortly before the driver passes underneath.
+export function animateSnowDiscoveries(chunks, time, vehicle) {
   for (const chunk of chunks) {
     for (const feature of chunk.features?.discoveries ?? []) {
       if (feature.kind !== 'cable-car') continue;
       chunk.cabins ??= chunk.group.getObjectByName('cable-car-cabins');
-      if (chunk.cabins) poseCabins(chunk.cabins, feature, time);
+      const clock = Number.isFinite(vehicle?.s) ? encounterClock(chunk, feature, time, vehicle)
+        : time + (chunk.cableTiming?.offset ?? 0);
+      if (chunk.cabins) poseCabins(chunk.cabins, feature, clock);
     }
   }
 }

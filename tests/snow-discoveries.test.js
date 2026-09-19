@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { snowDiscoveries, snowDiscoveryClears, cableTravel, CABLE_CYCLE, CABIN_DROP, CABLE_ROPE_OFFSET } from '../src/world/snow-discoveries.js';
-import { cableCabinPose } from '../src/world/snow-discovery-scenery.js';
+import { cableCabinPose, animateSnowDiscoveries } from '../src/world/snow-discovery-scenery.js';
 import { snowRoadHeight, snowPosition, alpineLake, snowBridgeAt, lampAt, LAMP_SPACING } from '../src/world/snow-route.js';
 import { SnowChunk, SnowWorld } from '../src/world/snow.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
@@ -103,6 +103,47 @@ test('cable cars carry lit cabins clear of the mountain, the road and the lamps'
         }
       }
     } finally { chunk.dispose(); }
+  }
+});
+
+test('approaching from either direction brings a cabin across the road without changing the lift', () => {
+  for (const site of nearest(snowDiscoveries(-90000, 90000), 'cable-car').slice(0, 3)) {
+    const original = chunkOf(site);
+    const { data, transfers } = packChunk(original);
+    const chunk = unpackChunk(structuredClone(data, { transfer: transfers }));
+    try {
+      const cabins = chunk.group.getObjectByName('cable-car-cabins');
+      assert.equal(cabins.count, 2);
+      const road = snowPosition(site.s, 0, 0), matrix = new THREE.Matrix4();
+      const position = () => {
+        cabins.getMatrixAt(0, matrix);
+        return new THREE.Vector3().setFromMatrixPosition(matrix);
+      };
+      for (const direction of [-1, 1]) for (const speed of [8, 20, 40, 65]) for (const start of [0, 137]) {
+        const vehicle = { s: site.s - direction * 401, speed: direction * speed };
+        animateSnowDiscoveries([chunk], start, vehicle);
+        // Revisit the same streamed chunk, exercising encounter reset too.
+        const duration = 370 / speed, steps = Math.ceil(duration * 20);
+        let previous;
+        for (let step = 0; step <= steps; step++) {
+          const elapsed = duration * step / steps;
+          vehicle.s = site.s - direction * (400 - elapsed * speed);
+          animateSnowDiscoveries([chunk], start + elapsed, vehicle);
+          const current = position();
+          if (previous) assert.ok(current.distanceTo(previous) < 1, 'cabins never jump during an approach');
+          previous = current;
+        }
+        const cabin = position();
+        assert.ok(Math.hypot(cabin.x - road.x, cabin.z - road.z - chunk.start) < 4,
+          `cabin misses the drive-by at ${site.s}, speed ${vehicle.speed}, clock ${start}`);
+        const frozen = cabins.instanceMatrix.array.slice();
+        animateSnowDiscoveries([chunk], start + duration, vehicle);
+        assert.deepEqual(cabins.instanceMatrix.array, frozen, 'pausing freezes the scheduled lift');
+        vehicle.speed = 0;
+        animateSnowDiscoveries([chunk], start + duration + 5, vehicle);
+        assert.notDeepEqual(cabins.instanceMatrix.array, frozen, 'stopping the car does not stop the lift');
+      }
+    } finally { original.dispose(); chunk.dispose(); }
   }
 });
 

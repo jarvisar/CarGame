@@ -11,7 +11,7 @@ try {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
   const initial = await page.evaluate(() => { const a = window.__coastline; return { rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(), color: a.rendering.scene.background.getHex(), exposure: a.rendering.renderer.toneMappingExposure, fog: a.rendering.scene.fog.near, lamps: a.vehicle.nightLights[0].material.emissiveIntensity }; });
-  await page.getByRole('button', { name: 'Change Route', exact: true }).click();
+  await page.getByRole('button', { name: /^Change route$/i }).click();
   assert.equal(await page.locator('.journey-card').count(), 6);
   await page.getByRole('button', { name: 'Rainy Downtown', exact: true }).click();
   await page.waitForFunction(() => window.__coastline.journey === 'city' && !window.__coastline.changingJourney);
@@ -41,10 +41,11 @@ try {
       const { behind, ahead } = a.graphics.settings.chunks;
       return { s: a.vehicle.s, chunks: a.world.chunks.size, resident: behind + ahead + 1, geometry: info.memory.geometries, triangles: info.render.triangles, calls: info.render.calls, origin: a.world.origin, carZ: a.vehicle.car.position.z,
         rotation: a.rendering.camera.quaternion.toArray(), top: a.rendering.camera.top, scale: a.vehicle.car.scale.toArray(),
-        blocks: names['city-blocks'] ?? 0, rivers: names['city-river'] ?? 0, skylines: names['city-skyline'] ?? 0, lamps: names['street-lamps'] ?? 0, rain: names['falling-rain'] ?? 0, effects: names['city-storm-effects'] ?? 0, oceans: names['animated-ocean'] ?? 0,
+        blocks: names['city-blocks'] ?? 0, rivers: names['city-river'] ?? 0, skylines: names['city-skyline'] ?? 0, promenades: names['city-promenade'] ?? 0, sideRoads: names['city-side-roads'] ?? 0, bridges: [...a.world.chunks.values()].flatMap(chunk => chunk.features.bridges).length, puddles: names.puddles ?? 0, lamps: names['street-lamps'] ?? 0, rain: names['falling-rain'] ?? 0, effects: names['city-storm-effects'] ?? 0, oceans: names['animated-ocean'] ?? 0,
         dropSizes: new Set(a.world.dropGeometry.attributes.dropSize.array).size };
     });
     assert.equal(result.chunks, result.resident); assert.equal(result.blocks, result.resident); assert.equal(result.rivers, result.resident); assert.equal(result.skylines, result.resident);
+    assert.equal(result.promenades, result.resident); assert.equal(result.sideRoads, result.resident); assert.equal(result.puddles, 0);
     assert.ok(result.lamps >= result.resident); assert.equal(result.rain, 1); assert.equal(result.effects, 1); assert.equal(result.oceans, 0);
     assert.ok(result.geometry < 240); assert.ok(Math.abs(result.carZ) < 1030); assert.ok(result.dropSizes > 100);
     assert.deepEqual(result.scale, initial.scale); assert.equal(result.top, initial.top);
@@ -78,7 +79,7 @@ try {
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   mobile.on('pageerror', e => errors.push(e.message));
   await mobile.goto(url, { waitUntil: 'networkidle' }); await mobile.waitForFunction(() => window.__coastline);
-  await mobile.getByRole('button', { name: 'Change Route', exact: true }).tap();
+  await mobile.getByRole('button', { name: /^Change route$/i }).tap();
   await mobile.screenshot({ path: '.artifacts/six-journeys-mobile.png' });
   await mobile.getByRole('button', { name: 'Rainy Downtown', exact: true }).tap();
   await mobile.waitForFunction(() => window.__coastline.journey === 'city' && !window.__coastline.changingJourney);

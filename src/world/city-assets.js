@@ -111,7 +111,61 @@ function manhole() {
   return p.finish();
 }
 
-export const cityAssets = { lamp: lampPost(), signal: trafficSignal(), bench: bench(), shelter: busShelter(), railing: railing(), bollard: bollard(), manhole: manhole() };
+function waterTank() {
+  const p = new Parts();
+  for (const x of [-1.05, 1.05]) for (const z of [-1.05, 1.05]) {
+    p.beam([x * 1.2, 0, z * 1.2], [x, 2.6, z], .11, iron);
+  }
+  for (const z of [-1.05, 1.05]) {
+    p.beam([-1.2, .2, z], [1.05, 2.5, z], .065, iron);
+    p.beam([1.2, .2, z], [-1.05, 2.5, z], .065, iron);
+  }
+  p.cylinder([0, 2.55, 0], 1.65, 1.65, .16, iron, 8);
+  p.cylinder([0, 3.9, 0], 1.4, 1.4, 2.6, '#655d50', 10);
+  for (const y of [2.75, 3.85, 5.1]) p.cylinder([0, y, 0], 1.43, 1.43, .09, '#41494b', 10);
+  p.cone([0, 5.65, 0], 1.55, 1, '#515b61', 10);
+  return p.finish();
+}
+
+// A small riverside coffee stand, with a pitched metal roof and a serving hatch.
+function kiosk() {
+  const p = new Parts();
+  p.box([0, .14, 0], [4, .28, 4.8], '#b0aaa0');
+  p.box([0, 1.5, 0], [3.2, 2.8, 4], '#778a80');
+  p.gable([0, 0, 0], 3.2, 4, 2.9, 3.7, '#819186', '#455d5e', .35);
+  p.box([-1.62, 1.75, 0], [.07, 1.35, 2.8], '#283f46');
+  p.box([-1.85, 1.03, 0], [.8, .14, 3.1], '#b19b7c');
+  for (const z of [-1.45, 0, 1.45]) p.box([-1.68, 1.75, z], [.08, 1.45, .1], '#d1c5ac');
+  p.box([-1.78, 2.66, 0], [.14, .36, 3.1], '#d1c5ac');
+  for (const z of [-.7, -.2, .3]) p.cylinder([-1.88, 1.19, z], .085, .065, .18, '#dad4bf', 6);
+  p.box([0, 1.3, -2.025], [1, 2.3, .05], '#394f50');
+  return p.finish();
+}
+
+function litterBin() {
+  const p = new Parts();
+  p.cylinder([0, .45, 0], .34, .29, .9, '#465450', 8);
+  p.cylinder([0, .95, 0], .36, .36, .12, '#353f40', 8);
+  p.box([-.34, .76, 0], [.03, .16, .28], '#252e30');
+  return p.finish();
+}
+
+// Pruned street trees: the same faceted geometry as the other routes, with a
+// narrower, upright crown that fits between the shopfronts and the kerb.
+function streetTree(variant) {
+  const trunk = new Parts(), crown = new Parts();
+  trunk.beam([0, -.04, 0], [.035, .64, 0], .038, '#ffffff', 5);
+  for (const side of [-1, 1]) trunk.beam([.02, .34, 0], [side * .18, .64, .06], .022, '#ffffff', 5);
+  for (const [x, y, z, radius, stretch] of [[0, .74, 0, .29, 1.12], [-.17, .59, .025, .21, 1], [.16, .6, -.03, .22, .94]]) {
+    const g = new THREE.IcosahedronGeometry(radius, x === 0 ? 1 : 0);
+    g.scale(1, stretch + variant * .12, .88); g.rotateY(variant * .8 + y);
+    crown.add(g, [x, y, z], x === 0 ? '#ffffff' : '#e2e8da');
+  }
+  return { bark: trunk.finish(), leaves: crown.finish() };
+}
+
+export const cityTrees = [streetTree(0), streetTree(1)];
+export const cityAssets = { lamp: lampPost(), signal: trafficSignal(), bench: bench(), shelter: busShelter(), railing: railing(), bollard: bollard(), manhole: manhole(), tank: waterTank(), kiosk: kiosk(), bin: litterBin() };
 
 // Parked cars reuse the traffic fleet's bodies: the paint shell carries a
 // per-instance colour and everything else keeps its own baked colours.

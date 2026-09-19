@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { CITY_STEP, CITY_COLUMN_COUNT, KERB, cityColumns, cityVertex, cityHeight, cityGroundHeight, cityRoadHeight, pavementHeight, cityDrivingRoute,
   quayOffset, QUAY_NEAR, QUAY_FAR, QUAY_WALL, RIVER_LEVEL, RIVER_BED, FAR_BANK, FAR_BANK_TOP, farBankHeight, blockBoundary, blockAt, crossStreetAt, onCrossStreet,
-  STREET_HALF_WIDTH, BANDS } from '../src/world/city-route.js';
+  STREET_HALF_WIDTH, BANDS, BANK_ROADS, nearStreet, cityPosition, cityStreetHeight, bridgeSurfaceHeight } from '../src/world/city-route.js';
+import { crossRoadHeight } from '../src/world/city-roads.js';
 import { CityWorld, CityChunk, lightning } from '../src/world/city.js';
 import { Rainfall } from '../src/world/rainfall.js';
 import { DrivingController } from '../src/vehicle.js';
@@ -100,7 +101,8 @@ test('city chunks carry buildings, a river and street furniture, and the world s
       assert.ok(mesh?.isInstancedMesh && mesh.count > 0, `${name} missing from chunk ${chunk.index}`);
     }
   }
-  for (const name of ['city-ground', 'city-road', 'kerbs', 'lit-windows', 'puddles', 'traffic-signals', 'benches', 'city-boxes', 'manholes', 'city-crowns']) assert.ok(names.has(name), `${name} never appears`);
+  for (const name of ['city-ground', 'city-road', 'city-side-roads', 'kerbs', 'lit-windows', 'city-promenade', 'traffic-signals', 'benches', 'city-boxes', 'manholes', 'city-crowns']) assert.ok(names.has(name), `${name} never appears`);
+  assert.ok(!names.has('puddles'), 'the city has no puddle overlays');
   // Streaming keeps the resident window and disposes what leaves it.
   const before = world.chunks.size;
   world.update(420 + CHUNK_LENGTH * 3);
@@ -148,4 +150,91 @@ test('a city chunk keeps its draw calls and triangles within the budget of the o
   }
   assert.ok(calls / 3 < 40, `${calls / 3} draw calls per chunk`);
   assert.ok(triangles / 3 < 40000, `${triangles / 3} triangles per chunk`);
+});
+
+test('building walls face outward and follow facade details through road bends', () => {
+  const chunk = Object.create(CityChunk.prototype); chunk.start = 0;
+  const material = new THREE.MeshBasicMaterial();
+  for (const s0 of [-840, -320, 180, 498, 1025, 8390]) for (const u0 of [14, 44]) {
+    const s1 = s0 + 23, u1 = u0 + 22, target = { vertices: [], colors: [] };
+    chunk.prism(target, s0, s1, u0, u1, 20, 40, new THREE.Color('#ffffff'));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(target.vertices, 3));
+    const mesh = new THREE.Mesh(geometry, material);
+    // A ray from outside must meet the expected facade first, within the
+    // window offset. Inward faces and a chord burying the windows both fail.
+    for (const fraction of [.1, .3, .5, .7, .9]) for (const [s, u, outward] of [
+      [s0, u0 + 22 * fraction, new THREE.Vector3(0, 0, 1)],
+      [s1, u0 + 22 * fraction, new THREE.Vector3(0, 0, -1)],
+      [s0 + 23 * fraction, u0, new THREE.Vector3(-1, 0, 0)],
+    ]) {
+      const p = chunk.at(s, u, 30), origin = new THREE.Vector3(p.x, p.y, p.z).addScaledVector(outward, 5);
+      const hits = new THREE.Raycaster(origin, outward.clone().negate()).intersectObject(mesh);
+      assert.ok(hits.length && Math.abs(hits[0].distance - 5) < .045, `facade at ${s}, ${u} hides its windows or faces inward (${hits[0]?.distance})`);
+    }
+    geometry.dispose();
+  }
+  material.dispose();
+});
+
+test('river-bound streets connect across both banks, including bridges split by a chunk seam', () => {
+  const streets = Array.from({ length: 240 }, (_, i) => i - 120).filter(nearStreet);
+  const selected = [streets.find(i => blockBoundary(i) % CHUNK_LENGTH === 0), streets.find(i => i >= 0), streets.find(i => i < 0 && blockBoundary(i) % CHUNK_LENGTH !== 0)];
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  for (const index of selected) {
+    assert.ok(index !== undefined, 'include a crossing at a chunk boundary');
+    const s = blockBoundary(index), center = Math.floor(s / CHUNK_LENGTH), scene = new THREE.Group();
+    const chunks = [-1, 0, 1].map(offset => new CityChunk(center + offset));
+    const roadMeshes = [], buildingMeshes = [], terrainMeshes = [], boulevardMeshes = [], pavingMeshes = [];
+    for (const chunk of chunks) {
+      chunk.group.position.z = -chunk.start; scene.add(chunk.group);
+      roadMeshes.push(chunk.group.getObjectByName('city-side-roads'));
+      buildingMeshes.push(chunk.group.getObjectByName('city-blocks'));
+      terrainMeshes.push(chunk.group.getObjectByName('city-ground'));
+      boulevardMeshes.push(chunk.group.getObjectByName('city-road'));
+      pavingMeshes.push(chunk.group.getObjectByName('city-promenade'));
+      const expected = [];
+      for (let i = blockAt(chunk.start) - 1; i <= blockAt(chunk.start + CHUNK_LENGTH) + 1; i++) if (nearStreet(i) && chunk.inChunk(blockBoundary(i))) expected.push(i);
+      assert.deepEqual(chunk.features.bridges.map(bridge => bridge.street), expected, 'every street reaching the river has exactly one bridge owner');
+    }
+    scene.updateMatrixWorld(true);
+    // Test real rendered road triangles through both traffic lanes, not just
+    // the bridge metadata. Gaps, disconnected landings and blocked far-bank
+    // intersections all fail this sweep.
+    for (const ds of [-2.7, 2.7]) for (let u = BANK_ROADS.at(-1) + .4; u < -5.6; u += 3.7) {
+      const point = cityPosition(s + ds, u, 150), expected = crossRoadHeight(s + ds, u, true);
+      ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
+      const road = ray.intersectObjects(roadMeshes)[0];
+      assert.ok(road && Math.abs(road.point.y - expected) < .06, `street ${index} has a gap or step at ${ds}, ${u}: ${road?.point.y} vs ${expected}`);
+      const terrain = ray.intersectObjects(terrainMeshes)[0];
+      assert.ok(!terrain || terrain.point.y < road.point.y + .008, `terrain covers the road at ${s + ds}, ${u}`);
+      assert.equal(ray.intersectObjects(buildingMeshes).length, 0, `a building blocks street ${index} at ${u}`);
+    }
+    // The side-road mouths must meet the boulevard without a step or a
+    // terrain ridge. The corner pavement must stay at the main kerb level.
+    for (const side of [-1, 1]) {
+      for (const u of [5.4, 5.6, 6.3, 7.2, 8.2, 11]) {
+        const point = cityPosition(s + 1.3, side * u, 150);
+        ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
+        const surface = ray.intersectObjects([...roadMeshes, ...boulevardMeshes, ...terrainMeshes])[0];
+        assert.ok(surface && Math.abs(surface.point.y - cityRoadHeight(s + 1.3) - .075) < .025, 'intersection mouth is flush with the boulevard');
+      }
+      for (const ds of [7, 8.2, 11, 15]) {
+        const point = cityPosition(s + side * ds, 9, 150);
+        ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
+        const pavement = ray.intersectObjects(pavingMeshes)[0];
+        assert.ok(pavement && Math.abs(pavement.point.y - pavementHeight(s + side * ds) - .02) < .025, 'sidewalk meets the boulevard pavement');
+      }
+    }
+    for (const u of BANK_ROADS) for (const ds of [-18, -4, 0, 4, 18]) {
+      const point = cityPosition(s + ds, u + 2.2, 150);
+      ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
+      assert.ok(ray.intersectObjects(roadMeshes).length, 'opposite-bank avenues join each bridge intersection');
+      assert.equal(ray.intersectObjects(buildingMeshes).length, 0, 'the avenue stays clear of wharf buildings');
+    }
+    for (const u of [quayOffset(s) + 1.5, FAR_BANK_TOP - 2]) {
+      assert.ok(Math.abs(bridgeSurfaceHeight(s, u) - cityStreetHeight(s, u)) < 1e-8, 'bridge profile meets the bank without a step');
+    }
+    for (const chunk of chunks) chunk.dispose();
+  }
 });

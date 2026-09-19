@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { roadFrame, randomAt } from './route.js';
-import { quayOffset, pavementHeight, RIVER_BED, FAR_BANK, FAR_BANK_TOP, BANDS } from './city-route.js';
+import { BANDS } from './city-route.js';
 import { cityDiscoveryAssets as assets, cityDiscoveryMaterial as material } from './city-discovery-assets.js';
 
 const transform = new THREE.Object3D();
@@ -17,32 +17,9 @@ export function buildCityDiscoveries(chunk, discoveries) {
     const { s, u, kind } = site, yaw = -roadFrame(s).angle;
     if (kind === 'river-bridge') {
       if (!chunk.inChunk(s)) continue;
-      // A concrete road bridge carries the side street from the quay across
-      // the river to the wharves: deck slabs on piers, kerbs, railings and
-      // lamps, all instanced boxes and furniture.
-      const q = quayOffset(s), deckY = pavementHeight(s) + .42, landing = FAR_BANK_TOP - 11;
-      for (let v = q + 2; v > landing; v -= 8) {
-        const v1 = Math.max(v - 8, landing), mid = (v + v1) / 2, length = v - v1;
-        const p = chunk.at(s, mid, deckY);
-        boxes.push({ p: [p.x, p.y - .45, p.z], scale: [length + .1, .9, 12.4], r: [0, yaw, 0], color: '#8a8b87' });
-        for (const k of [-1, 1]) {
-          const edge = chunk.at(s + k * 6.05, mid, deckY);
-          boxes.push({ p: [edge.x, edge.y + .12, edge.z], scale: [length + .1, .24, .5], r: [0, yaw, 0], color: '#a4a6a2' });
-          boxes.push({ p: [edge.x, edge.y + .72, edge.z], scale: [length + .1, .08, .08], r: [0, yaw, 0], color: '#3d4246' });
-          boxes.push({ p: [edge.x, edge.y + 1.08, edge.z], scale: [length + .1, .08, .08], r: [0, yaw, 0], color: '#3d4246' });
-        }
-        for (let post = v - 1; post > v1; post -= 2) {
-          for (const k of [-1, 1]) { const e = chunk.at(s + k * 6.05, post, deckY); boxes.push({ p: [e.x, e.y + .6, e.z], scale: [.08, 1.1, .08], r: [0, yaw, 0], color: '#2f3336' }); }
-        }
-      }
-      for (let v = q - 12; v > FAR_BANK + 4; v -= 24) {
-        const p = chunk.at(s, v, (deckY - .9 + RIVER_BED - 1) / 2);
-        boxes.push({ p: [p.x, p.y, p.z], scale: [2.4, deckY - .9 - RIVER_BED + 1, 8.4], r: [0, yaw, 0], color: '#77787a' });
-        for (const k of [-1, 1]) {
-          const ground = chunk.ground(s + k * 5.4, v);
-          chunk.furniture('lamp', s + k * 5.4, v, yaw + k * Math.PI / 2, { lift: deckY - ground.y });
-        }
-      }
+      // The street network already builds this crossing, together with every
+      // other road reaching the river. Retain the discovery without a second,
+      // overlapping deck or a different height at the landing.
       chunk.features.discoveries.push({ ...site });
       continue;
     }

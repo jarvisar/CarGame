@@ -449,7 +449,7 @@ export class SnowWorld {
   }
   animate(time, vehicle) {
     this.time = time; lakeClock.value = time;
-    animateSnowDiscoveries(this.chunks.values(), time);
+    animateSnowDiscoveries(this.chunks.values(), time, vehicle);
     if (vehicle) {
       this.headlights.position.copy(vehicle.car.position); this.headlights.quaternion.copy(vehicle.car.quaternion);
       this.headlight.shadow.camera.up.copy(up).applyQuaternion(vehicle.car.quaternion);
