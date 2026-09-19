@@ -6,7 +6,7 @@ import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
-  rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, fieldCorner, pondsNear, pondDistance, headlandDistance } from './plains-route.js';
+  rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, headlandDistance } from './plains-route.js';
 import { createWaterMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
@@ -147,7 +147,7 @@ export class PlainsChunk {
     this.features = { discoveries: [] };
     // A row of turbines reaches well past its own district anchor.
     this.discoveries = plainsDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
-    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], dirtTints: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
+    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], dirtTints: [], shores: [], shoreTints: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
     this.buildTerrain(); this.buildRoad(); this.buildCreek(); this.buildScenery();
     buildPlainsDiscoveries(this, this.discoveries);
     this.finishScenery();
@@ -219,16 +219,20 @@ export class PlainsChunk {
       // give way to the wet meadow at the creek and the ponds and to the haze.
       const [period, depth] = FURROWS[field.kind];
       let dry = smoothstep(6.5, 11, d) * (1 - smoothstep(280, 430, cross));
-      if (cross > 40 && cross < 220) dry *= smoothstep(1.1, 1.6, pondDistance(s, u).d);
+      if (cross > 16 && cross < 180) dry *= smoothstep(1.1, 1.6, pondDistance(s, u).d);
       const along = field.rows !== 'across';
       furrow = p => [(along ? Math.abs(p.u) - field.from : p.s - field.start) / period, depth * dry, headlandDistance(p.s, p.u, field)];
     }
     // Wet meadow along the creek and around the ponds, and bare mud under the water.
     if (d < 9.5) color.lerp(lush, (1 - smoothstep(6, 9.5, d)) * .85);
-    if (cross > 40 && cross < 220) {
+    // Out here the facets are twenty metres and more across, so a shore drawn
+    // by shading them alone came out as a green star with spikes as long as
+    // the pond was wide. The shore is its own ground cover now, and all the
+    // terrain keeps is a wash of damp green broad enough that no one facet
+    // turning green shows up as an edge.
+    if (cross > 16 && cross < 180) {
       const pond = pondDistance(s, u);
-      if (pond.d < 1.6) color.lerp(lush, 1 - smoothstep(1.1, 1.6, pond.d));
-      if (pond.d < .85) color.lerp(mud, 1 - smoothstep(.7, .85, pond.d));
+      if (pond.d < 2.6) color.lerp(lush, (1 - smoothstep(1.4, 2.6, pond.d)) * .4);
     }
     if (d < 5.4) color.lerp(mud, 1 - smoothstep(4.6, 5.4, d));
     return { color: color.multiplyScalar(inReserve ? 1 : .985 + facet * .03), furrow };
@@ -569,7 +573,17 @@ export class PlainsChunk {
           // track through; the rest open straight onto standing crop. The
           // mailbox stands at every one of them, since what it marks is the
           // way in to the farm rather than how often a tractor takes it.
-          if (gate.worn) this.track(gate.s, side, bands[1] - 6);
+          //
+          // Some tracks run out to a field shed and stop at its yard, which
+          // opens its own mouth onto the end of them. The shed wants level
+          // ground, so that is settled before a metre of track is drawn: a
+          // track that opens at its far end and then has nothing to open onto
+          // is worse than one that simply runs out into the crop.
+          const shedU = side * gate.reach;
+          const standing = gate.worn && gate.shed && inside(gate.s) && this.clearAt(gate.s, shedU, 10, true)
+            && this.levelGround(gate.s, shedU, 5, 2.4);
+          if (standing) this.outbuilding(gate.s, shedU, random, this.track(gate.s, side, gate.reach - 8.5, 5.8, true));
+          else if (gate.worn) this.track(gate.s, side, gate.reach);
           // The mailbox stays inside this chunk, on whichever side of the gate that is.
           const boxS = inChunk(gate.s - 4.5) ? gate.s - 4.5 : gate.s + 4.5;
           const p = this.ground(boxS, side * 7.4), angle = -roadFrame(gate.s).angle;
@@ -713,19 +727,24 @@ export class PlainsChunk {
     // Stock ponds: a level disc of water in each basin, its rim under the bank.
     for (const pond of pondsNear(this.start + CHUNK_LENGTH / 2)) {
       if (!inChunk(pond.s)) continue;
-      const vertices = [], colors = [], level = pond.rim - .55, tint = new THREE.Color('#5d93ad'), deep = new THREE.Color('#3f7492');
+      const steps = 28, vertices = [], colors = [], level = pond.rim - .55;
+      const tint = new THREE.Color('#5d93ad'), deep = new THREE.Color('#3f7492');
       const center = plainsPosition(pond.s, pond.u, level);
-      // An irregular outline, so a dug pond is not a perfect disc.
+      // An irregular outline, so a dug pond is not a perfect disc. The water
+      // and the shore round it are cut from the one waterline, so the mud
+      // meets the water on its own line rather than on a circle near it.
+      const angleAt = i => i / steps * Math.PI * 2;
+      const waterline = a => pond.radius * (.68 + .12 * Math.sin(a * 3 + pond.index) + .07 * Math.sin(a * 5 + pond.index * 2));
       const edge = i => {
-        const a = i / 18 * Math.PI * 2;
-        const r = pond.radius * (.68 + .12 * Math.sin(a * 3 + pond.index) + .07 * Math.sin(a * 5 + pond.index * 2));
+        const a = angleAt(i), r = waterline(a);
         return plainsPosition(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r, level);
       };
       // One still surface: a fan of visibly different wedges reads as a pinwheel.
       const surface = tint.clone().lerp(deep, .35);
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < steps; i++) {
         triangle(vertices, colors, center, edge(i), edge(i + 1), surface.clone().multiplyScalar(.99 + randomAt(i, pond.index + 2857) * .02), this.start);
       }
+      this.pondShore(pond, steps, angleAt, waterline, level);
       const water = this.addMesh(geometry(vertices, colors), waterMaterial, 'stock-pond');
       water.geometry.boundingSphere.radius += .5;
       // Rushes ring the water, and a few head of cattle stand at the edge.
@@ -861,9 +880,18 @@ export class PlainsChunk {
   }
   // Nothing plantable stands on the road reserve, in the creek, on a pond,
   // or inside a discovery's footprint.
-  clearAt(s, u, r = 1) {
+  // Pass `onTrack` for the things a track brings with it: the shed at the end
+  // of one stands in the very corridor the track keeps clear of all else.
+  clearAt(s, u, r = 1, onTrack = false) {
     return Math.abs(u) > r + 6.6 && creekDistance(s, u) > r + 5.5 && plainsDiscoveryClears(s, u, this.discoveries, r)
-      && pondsNear(s).every(pond => Math.hypot(s - pond.s, u - pond.u) > pond.radius * 1.2 + r);
+      && (onTrack || farmTrackClears(s, u, r)) && pondsNear(s).every(pond => Math.hypot(s - pond.s, u - pond.u) > pond.radius * 1.2 + r);
+  }
+  // Is the ground level enough here to stand something on it? Returns the
+  // low and the high a footing would have to span, or nothing if it is not.
+  levelGround(s, u, spread, limit) {
+    const heights = [-spread, 0, spread].flatMap(ds => [-spread, 0, spread].map(du => this.ground(s + ds, u + du).y));
+    const low = Math.min(...heights), high = Math.max(...heights);
+    return high - low > limit ? null : { low, high };
   }
   beam(list, a, b, width, color) {
     const from = new THREE.Vector3(a.x, a.y, a.z), to = new THREE.Vector3(b.x, b.y, b.z), direction = to.clone().sub(from);
@@ -891,6 +919,66 @@ export class PlainsChunk {
       previous = point.stop ? null : p;
     }
   }
+  // The ground a pond stands in, drawn as its own cover on the terrain: bare
+  // trodden mud at the waterline where the cattle come down to drink, wet
+  // meadow beyond it, and the field's own colour where the damp gives out, so
+  // a pond sits in its bank instead of being laid on the field like a coin.
+  pondShore(pond, steps, angleAt, waterline, level) {
+    const { shores, shoreTints } = this.scenery;
+    const wet = mud.clone().lerp(lush, .55), green = lush.clone().lerp(mud, .12);
+    // Out from the waterline: a narrow band of mud trodden by the cattle that
+    // come down to drink, then damp ground, meadow, and the field's own
+    // colour where the damp gives out. The innermost rings follow the water's
+    // own irregular line; beyond it they are set at shares of the pond's
+    // radius, because that is where the ground folds. A dug basin rises to a
+    // berm at about one and an eighth of the radius and is let back down to
+    // the lie of the land by one and a half, and a ring that steps over
+    // either of those folds bridges it and lets the bank through the shore.
+    const rings = [
+      { at: a => waterline(a) * .82, tint: mud, under: true },
+      { at: a => waterline(a), tint: mud, under: true },
+      { at: a => waterline(a) + .9, tint: mud },
+      { at: () => pond.radius, tint: mud.clone().lerp(wet, .55) },
+      { at: () => pond.radius * 1.12, tint: wet },
+      { at: () => pond.radius * 1.28, tint: wet.clone().lerp(green, .55) },
+      { at: () => pond.radius * 1.42, tint: green },
+      { at: () => pond.radius * 1.56, tint: green },
+      { at: () => pond.radius * 1.82, crop: .5 },
+      { at: () => pond.radius * 2.2, crop: .12 },
+    ];
+    // The bands wander in and out as they go round, so the bank does not read
+    // as a set of rings drawn with a compass, and each keeps outside the one
+    // within it whatever the waterline does.
+    const spans = rings.map(() => new Array(steps).fill(0));
+    for (const [k, ring] of rings.entries()) {
+      for (let i = 0; i < steps; i++) {
+        const a = angleAt(i);
+        const wobble = k < 2 ? 1 : 1 + .09 * Math.sin(a * 2.7 + pond.index + k) + .06 * Math.sin(a * 4.3 - pond.index * 1.7 + k * 2);
+        spans[k][i] = Math.max(ring.at(a) * wobble, k ? spans[k - 1][i] + .5 : 0);
+      }
+    }
+    const at = (i, k) => {
+      const a = angleAt(i), r = spans[k][i], { tint, under, crop } = rings[k];
+      const s = pond.s + Math.cos(a) * r, u = pond.u + Math.sin(a) * r, p = this.ground(s, u);
+      // Never below the ground the facets are cut from. A basin is a bowl, and
+      // a facet laid across one cuts the corner and runs above it, so a shore
+      // laid on the facets this chunk has and on the bare heights where it has
+      // none would step down at its own seam.
+      const y = Math.max(p.y, plainsGroundHeight(s, u)) + .18;
+      const color = tint ?? cropColor(s, u).color.lerp(green, crop);
+      return { x: p.x, y: under ? Math.min(y, level - .12) : y, z: p.z - this.start, color };
+    };
+    let inner = Array.from({ length: steps }, (_, i) => at(i, 0));
+    for (let k = 1; k < rings.length; k++) {
+      const outer = Array.from({ length: steps }, (_, i) => at(i, k));
+      for (let i = 0; i < steps; i++) {
+        const j = (i + 1) % steps;
+        triangle(shores, shoreTints, inner[i], inner[j], outer[i], mud, this.start);
+        triangle(shores, shoreTints, inner[j], outer[j], outer[i], mud, this.start);
+      }
+      inner = outer;
+    }
+  }
   // A tuft at a field's edge: long grass in the green fields and the verge,
   // standing wheat in a grain field, and nothing anywhere else.
   tuft(s, u, kind, random) {
@@ -916,12 +1004,12 @@ export class PlainsChunk {
   }
   // A field shed on a footing, with a water tank and a few trees for shade,
   // on a patch of bare yard: a farm's outlying corner, well short of a farmstead.
-  outbuilding(s, u, random) {
-    const samples = [-5, 0, 5].flatMap(ds => [-5, 0, 5].map(du => this.ground(s + ds, u + du).y));
-    const low = Math.min(...samples), high = Math.max(...samples);
-    if (high - low > 2.4) return;
+  outbuilding(s, u, random, mouth = null) {
+    const level = this.levelGround(s, u, 5, 2.4);
+    if (!level) return;
+    const { low, high } = level;
     const yaw = -roadFrame(s).angle + (random() - .5) * .6, p = this.ground(s, u);
-    this.dirtPatch(s, u, 8.4, 7.2);
+    this.dirtPatch(s, u, 8.4, 7.2, mouth);
     this.scenery.painted.push({ p: [p.x, (low - .3 + high + .05) / 2, p.z], scale: [7.2, high - low + .35, 9.6], r: [0, yaw, 0], color: '#b1a892' });
     this.scenery.sheds.push({ p: [p.x, high + .05, p.z], scale: [1.2, 1.2, 1.2], r: [0, yaw, 0] });
     // A squat galvanised tank, kept dull: a pale drum under the low sun read
@@ -940,8 +1028,9 @@ export class PlainsChunk {
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
   }
   finishScenery() {
-    const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt, dirtTints } = this.scenery;
+    const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt, dirtTints, shores, shoreTints } = this.scenery;
     if (dirt.length) this.addMesh(geometry(dirt, dirtTints), dirtMaterial, 'farm-tracks');
+    if (shores.length) this.addMesh(geometry(shores, shoreTints), dirtMaterial, 'pond-shores');
     instances(this.group, squareBaleGeometry, strawMaterial, squareBales, 'square-bales');
     instances(this.group, plainsDiscoveryAssets.shed, plainsDiscoveryMaterial, sheds, 'field-sheds');
     instances(this.group, poleGeometry, metalMaterial, tanks, 'water-tanks');

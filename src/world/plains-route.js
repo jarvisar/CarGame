@@ -35,9 +35,14 @@ export const CREEK_WATER_HALF_WIDTH = 4.6;
 export const POND_SPACING = 512;
 export function stockPondAt(index, side) {
   const salt = side > 0 ? 2861 : 2862;
-  if (randomAt(index, salt) > .42) return null;
-  const s = index * POND_SPACING + 60 + randomAt(index, salt + 1) * 390, cross = 72 + randomAt(index, salt + 2) * 120;
-  const radius = 11 + randomAt(index, salt + 3) * 4, u = side * cross;
+  if (randomAt(index, salt) > .54) return null;
+  // Dug in the near fields rather than out in the far ones. The terrain's
+  // columns are eight to eleven metres apart in close and better than twenty
+  // out where the ponds used to lie, where a whole pond covered one column
+  // and the basin had nothing to be cut into: the water sat on flat ground
+  // and the shore read as a stain on it.
+  const s = index * POND_SPACING + 60 + randomAt(index, salt + 1) * 390, cross = 46 + randomAt(index, salt + 2) * 54;
+  const radius = 11 + randomAt(index, salt + 3) * 5, u = side * cross;
   if (Math.abs(s - creekCenterS(plainsCreekAt(s), u)) < radius + 28) return null;
   return { index, side, s, u, radius, rim: plainsBaseHeight(s, u, true) };
 }
@@ -95,13 +100,16 @@ export function plainsBaseHeight(s, u, beforePonds = false) {
   const fall = u < 0 ? 9 * smoothstep(60, 420, cross) : 0;
   const rise = u > 0 ? 6 * smoothstep(60, 300, u) : 0;
   let height = h - ditch + swell - fall + rise + distantRise(s, u);
-  if (beforePonds || cross < 40 || cross > 220) return height;
+  if (beforePonds || cross < 18 || cross > 150) return height;
   // A dug pond: a level rim with a low berm around it, so the water lies
   // flat inside whatever slope the field has.
   const { pond, d } = pondDistance(s, u);
-  if (pond && d < 1.3) {
-    const basin = pond.rim + .35 - 2.6 * (1 - smoothstep(.45, 1, d));
-    height = lerp(basin, height, smoothstep(1, 1.3, d));
+  if (pond && d < 1.55) {
+    // The bank is held a good way out past the water and only then let back
+    // down to the lie of the land, so a pond dug on ground that falls away
+    // keeps a berm all the way round instead of spilling over the low side.
+    const basin = pond.rim + .35 - 2.6 * (1 - smoothstep(.45, 1.12, d));
+    height = lerp(basin, height, smoothstep(1.12, 1.55, d));
   }
   return height;
 }
@@ -136,14 +144,22 @@ export function fieldRowAt(s) {
   return index;
 }
 const BAND_EDGES = [ROAD_RESERVE, 64, 150, 268, 400];
+// A row's band edges are read for every clearance test along it, so they are
+// worked out once and kept.
+const bandRows = new Map();
 export function fieldBands(row, side) {
-  return BAND_EDGES.map((u, k) => {
+  const key = row * 2 + (side > 0 ? 1 : 0);
+  if (bandRows.has(key)) return bandRows.get(key);
+  const bands = BAND_EDGES.map((u, k) => {
     if (k === 0) return u;
     const target = u + (randomAt(row * 2 + (side > 0 ? 1 : 0), 2731 + k) - .5) * u * .32;
     // The near side's terrain ends sooner than the far side's.
     const columns = PLAINS_COLUMNS.filter(column => column > ROAD_RESERVE && column <= (side > 0 ? 568 : 400));
     return columns.reduce((best, column) => Math.abs(column - target) < Math.abs(best - target) ? column : best, Infinity);
   });
+  bandRows.set(key, bands);
+  if (bandRows.size > 512) bandRows.delete(bandRows.keys().next().value);
+  return bands;
 }
 const CROPS = ['wheat', 'stubble', 'ploughed', 'pasture', 'hay'];
 export function fieldAt(s, u) {
@@ -198,12 +214,30 @@ export function roadsideFence(row, side) { return randomAt(row, side > 0 ? 2785 
 export function farmGate(row, side) {
   if (randomAt(row, side > 0 ? 2787 : 2788) > .16) return null;
   const start = fieldBoundary(row), end = fieldBoundary(row + 1);
+  const s = Math.round(start + 18 + randomAt(row, side > 0 ? 2789 : 2790) * (end - start - 36));
   // Most field gates are only gates: a farmer takes a tractor through one a
   // few times a year and the crop closes over behind it. Only the few that
   // are used week in and week out wear a track across the field behind them,
   // and a track that runs out into a field and stops is worth coming upon.
   const worn = randomAt(row, side > 0 ? 2857 : 2858) < .34;
-  return { s: Math.round(start + 18 + randomAt(row, side > 0 ? 2789 : 2790) * (end - start - 36)), side, worn };
+  // How far it runs. Half stop at the first boundary, which is as short as a
+  // track gets; the rest carry on to the second or the third, and one now and
+  // again runs out past everything the view holds.
+  const far = randomAt(row, side > 0 ? 2871 : 2872), bands = fieldBands(row, side);
+  const reach = bands[far < .5 ? 1 : far < .76 ? 2 : far < .92 ? 3 : 4] - 6;
+  // And what stands at the end of it: some of these tracks are how a farm
+  // reaches the shed it keeps out in the fields.
+  return { s, side, worn, reach, shed: randomAt(row, side > 0 ? 2873 : 2874) < .45 };
+}
+// The corridor a worn track keeps to itself. A boundary fence, a hedge or a
+// line of trees that meets one simply stops either side of it, which reads as
+// the gateway it is, and nothing is planted in the ruts.
+export function farmTrackClears(s, u, radius = 0) {
+  const cross = Math.abs(u);
+  if (cross < ROAD_RESERVE - 4) return true;
+  const gate = farmGate(fieldRowAt(s), u < 0 ? -1 : 1);
+  if (!gate || !gate.worn || cross > gate.reach + 2) return true;
+  return Math.abs(s - gate.s) > 5 + radius;
 }
 
 // Terrain columns are fixed offsets from the road. Fine rows and columns keep

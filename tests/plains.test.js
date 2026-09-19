@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, plainsVertex, plainsRowStep, plainsHeight, plainsGroundHeight, plainsRoadHeight, plainsDrivingRoute,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_SPACING, CREEK_WATER_HALF_WIDTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands, ROAD_RESERVE,
-  stockPondAt, pondsNear, distantRise, farmGate } from '../src/world/plains-route.js';
+  stockPondAt, pondsNear, distantRise, farmGate, POND_SPACING } from '../src/world/plains-route.js';
 import { PlainsWorld, PlainsChunk } from '../src/world/plains.js';
 import { plainsDiscoveries, plainsDiscoveryClears } from '../src/world/plains-discoveries.js';
 import { CoastalWorld } from '../src/world/environment.js';
@@ -93,7 +93,7 @@ test('stock ponds are level basins in the fields, clear of the road and the cree
     const pond = stockPondAt(index, side);
     if (!pond) continue;
     count++;
-    assert.ok(Math.abs(pond.u) > 60 && Math.abs(pond.u) < 200);
+    assert.ok(Math.abs(pond.u) > 24 && Math.abs(pond.u) < 120, 'a pond lies in the near fields, clear of the ditch');
     assert.ok(creekDistance(pond.s, pond.u) > pond.radius + 20);
     const level = pond.rim - .55;
     for (let i = 0; i < 12; i++) {
@@ -105,7 +105,10 @@ test('stock ponds are level basins in the fields, clear of the road and the cree
     }
     assert.ok(pondsNear(pond.s).some(other => other.s === pond.s && other.u === pond.u));
   }
-  assert.ok(count > 20 && count < 60);
+  // Common enough to come upon on a drive, and not so common that the
+  // pastures read as a chain of waterholes.
+  const every = 80 * POND_SPACING / count;
+  assert.ok(every > 380 && every < 720, `a stock pond every ${Math.round(every)} m`);
 });
 
 test('plains driving stays grounded and a route swap restores the saved place', () => {
@@ -405,4 +408,63 @@ test('most field gates are only gates, so a track worn out into a field and stop
   for (const gate of lone(worn)) assert.ok(behind(gate) < 6, `no track behind a worn gate at ${gate.gate.s}`);
   for (const gate of lone(rows.filter(({ gate }) => !gate.worn))) assert.ok(behind(gate) > 12, `a track behind a gate that has none at ${gate.gate.s}`);
   assert.ok(worn.length > rows.length * .2, 'some gates must still be driven through');
+});
+
+test('a worn track runs as far as it likes, keeps its ruts clear, and some of them end at a shed', () => {
+  const span = 200000, worn = [];
+  for (let row = fieldRowAt(0); fieldBoundary(row) < span; row++) for (const side of [-1, 1]) {
+    const gate = farmGate(row, side);
+    if (gate?.worn) worn.push({ row, side, gate });
+  }
+  // The first field boundary is as short as a track ever was, and stays the
+  // shortest one there is; past that they run as far as they please.
+  for (const { row, side, gate } of worn) {
+    assert.ok(gate.reach >= fieldBands(row, side)[1] - 6.01, `a track stops short of the first boundary at ${gate.s}`);
+  }
+  const reaches = worn.map(({ gate }) => gate.reach);
+  assert.ok(reaches.filter(reach => reach > 150).length > worn.length * .15, 'some tracks cross more than one field');
+  assert.ok(Math.max(...reaches) > 300, 'and one now and then runs right out past the view');
+  assert.ok(worn.filter(({ gate }) => gate.shed).length > worn.length * .25, 'some tracks are how a farm reaches a shed');
+  // Nothing is planted in the ruts: a boundary fence, a hedge or a line of
+  // trees that meets a track stops either side of it.
+  const drive = worn.find(({ gate }) => gate.shed && gate.reach > 55), { gate, side } = drive;
+  const chunk = new PlainsChunk(Math.floor(gate.s / CHUNK_LENGTH));
+  const ruts = [];
+  for (let cross = 20; cross < gate.reach - 14; cross += 3) ruts.push(chunk.ground(gate.s, side * cross));
+  assert.ok(ruts.length > 4, 'not enough track to test');
+  const matrix = new THREE.Matrix4(), stood = new THREE.Vector3();
+  chunk.group.traverse(object => {
+    // The shed at the end of the track and what belongs to it stand on it by design.
+    if (!object.isInstancedMesh || object.name === 'field-sheds' || object.name === 'water-tanks') return;
+    for (let i = 0; i < object.count; i++) {
+      object.getMatrixAt(i, matrix); stood.setFromMatrixPosition(matrix);
+      for (const rut of ruts) {
+        assert.ok(Math.hypot(stood.x - rut.x, stood.z - rut.z) > 1.6, `${object.name} stands in the ruts at ${Math.round(gate.s)}`);
+      }
+    }
+  });
+  // And where a shed stands at the end of one, the track and the shed's yard
+  // are the one piece of bare earth, as a farm's drive and its yard are.
+  const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position;
+  const parent = [], root = t => parent[t] === t ? t : (parent[t] = root(parent[t]));
+  const seen = new Map(), middle = [];
+  for (let t = 0; t * 3 < dirt.count; t++) {
+    parent[t] = t;
+    let x = 0, z = 0;
+    for (let k = 0; k < 3; k++) {
+      const i = t * 3 + k, key = `${Math.round(dirt.getX(i) * 100)},${Math.round(dirt.getZ(i) * 100)}`;
+      x += dirt.getX(i) / 3; z += dirt.getZ(i) / 3;
+      if (seen.has(key)) parent[root(t)] = root(seen.get(key)); else seen.set(key, t);
+    }
+    middle.push([x, z]);
+  }
+  const nearest = (s, u) => {
+    const p = chunk.ground(s, u), gap = t => Math.hypot(middle[t][0] - p.x, middle[t][1] - p.z);
+    const best = middle.reduce((found, _, t) => gap(t) < gap(found) ? t : found, 0);
+    assert.ok(gap(best) < 4, `no bare earth at ${Math.round(s)}, ${Math.round(u)}`);
+    return best;
+  };
+  assert.equal(root(nearest(gate.s, side * 20)), root(nearest(gate.s, side * gate.reach)),
+    'the track stops short of the shed it runs to');
+  chunk.dispose();
 });
