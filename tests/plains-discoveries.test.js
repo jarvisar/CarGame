@@ -77,6 +77,47 @@ test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
   }
 });
 
+test('a farm wears its yard bare over most of the ground it takes in, and only some farms fence it', () => {
+  // Does the point stand on bare earth? A triangle's three edge tests agree
+  // on a sign for a point inside it, whichever way round the triangle is wound.
+  const bare = (triangles, x, z) => triangles.some(([a, b, c]) => {
+    const side = (p, q) => (q[0] - p[0]) * (z - p[1]) - (q[1] - p[1]) * (x - p[0]);
+    const ab = side(a, b), bc = side(b, c), ca = side(c, a);
+    return !((ab < 0 || bc < 0 || ca < 0) && (ab > 0 || bc > 0 || ca > 0));
+  });
+  let farms = 0, fenced = 0, worn = 0;
+  for (const site of plainsDiscoveries(0, 100000).filter(other => other.kind === 'farmstead')) {
+    const chunk = new PlainsChunk(Math.floor(site.s / 128));
+    const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position.array, triangles = [];
+    for (let i = 0; i < dirt.length; i += 9) {
+      triangles.push([[dirt[i], dirt[i + 2]], [dirt[i + 3], dirt[i + 5]], [dirt[i + 6], dirt[i + 8]]]);
+    }
+    // The ground the yard takes in, out to the line its fence stands on.
+    const yardS = site.halfS - 4, yardU = site.halfU - 3;
+    let earth = 0, ground = 0;
+    for (let ds = -yardS; ds <= yardS; ds += 3) for (let du = -yardU; du <= yardU; du += 3) {
+      const p = chunk.ground(site.s + ds, site.u + du * site.side);
+      ground++; if (bare(triangles, p.x, p.z)) earth++;
+    }
+    // Posts standing over the yard itself. Nothing else may stand this close
+    // to a compound, so a yard with a line of them round it is a fenced one.
+    const middle = chunk.ground(site.s, site.u), matrix = new THREE.Matrix4(), post = new THREE.Vector3();
+    let standing = 0;
+    chunk.group.traverse(object => {
+      if (object.name !== 'fence-posts') return;
+      for (let i = 0; i < object.count; i++) {
+        object.getMatrixAt(i, matrix); post.setFromMatrixPosition(matrix);
+        if (Math.hypot(post.x - middle.x, post.z - middle.z) < 24) standing++;
+      }
+    });
+    farms++; worn += earth / ground; if (standing > 8) fenced++;
+    chunk.dispose();
+  }
+  assert.ok(farms > 4, 'not enough farms to judge by');
+  assert.ok(worn / farms > .55, `a farm's yard is bare over only ${Math.round(worn / farms * 100)}% of the ground it takes in`);
+  assert.ok(fenced > farms * .2 && fenced < farms * .8, `${fenced} of ${farms} farms fence their yard`);
+});
+
 test('plains discovery meshes and the spinning rotor materials survive worker transfer', () => {
   const sites = plainsDiscoveries(-100000, 100000);
   for (const [kind, name] of [['farmstead', 'plains-barns'], ['farmstead', 'plains-windmill-rotors'], ['grain-elevator', 'plains-grain-elevators'], ['wind-turbines', 'plains-turbine-rotors']]) {

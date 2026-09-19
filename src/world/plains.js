@@ -311,10 +311,10 @@ export class PlainsChunk {
       const angle = k / steps * Math.PI * 2, c = Math.cos(angle), n = Math.sin(angle);
       // A superellipse: an oblong as long as the yard with its corners eaten
       // away, a corner being the first ground a farm stops driving over.
-      const box = Math.pow(Math.abs(c) ** 3 + Math.abs(n) ** 3, -1 / 3);
+      const box = Math.pow(Math.abs(c) ** 3.4 + Math.abs(n) ** 3.4, -1 / 3.4);
       // Long lobes for the bays the traffic wears out of it, and a shorter
       // wander over them so no stretch of the edge runs straight for long.
-      const r = box * (.74 + .18 * wander(k, 6, 0) + .08 * wander(k, 13, 91));
+      const r = box * (.79 + .16 * wander(k, 6, 0) + .07 * wander(k, 13, 91));
       rim.push([c * r * halfS, n * r * halfU]);
     }
     // A drive does not stop at a yard's edge and leave a strip of standing
@@ -330,11 +330,13 @@ export class PlainsChunk {
       const corners = [...mouth].sort((a, b) => turn(a) - turn(b));
       const first = Math.floor(centre / (Math.PI * 2) * steps);
       for (const [step, corner] of corners.entries()) {
-        const k = ((first + step) % steps + steps) % steps, reach = [corner[0] - s, corner[1] - u];
-        // Only ever outward: a drive that already ends inside the yard has
-        // nothing to reach for, and must not pull a notch into the rim.
-        if (Math.hypot(...reach) <= Math.hypot(...rim[k])) continue;
-        rim[k] = reach; opening.add(k);
+        const k = ((first + step) % steps + steps) % steps;
+        // The rim goes exactly where the drive ends, out to it or back to it:
+        // a rim that stopped short would leave standing crop in the gateway,
+        // and one carried past would lay a second skin of earth over the
+        // drive's own, two flat faces at one height with nothing to tell the
+        // renderer which of them to draw.
+        rim[k] = [corner[0] - s, corner[1] - u]; opening.add(k);
       }
     }
     // Barest in the middle, where the yard is crossed and re-crossed, dusty

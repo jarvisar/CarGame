@@ -74,7 +74,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     const drive = chunk.track(s + site.drive, side, Math.abs(u) - site.halfU + (kind === 'farmstead' ? 4 : 2), 5.8, true);
     let ground;
     if (kind === 'farmstead') {
-      chunk.dirtPatch(s, u, 20, 14, drive);
+      chunk.dirtPatch(s, u, 25, 17, drive);
       const layout = FARM_LAYOUTS[Math.floor(randomAt(site.index, 2938) * FARM_LAYOUTS.length)];
       // No farm sets its buildings out on a drawing board. Each stands a pace
       // off where the plan puts it and a few degrees off square with the rest,
@@ -118,14 +118,19 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       const shedGround = foundation(shed.s, shed.u, 2.2, 3.4, shed.yaw);
       chunk.scenery.painted.push({ p: point(shed.s, shed.u, shedGround + 1.3), scale: [4.2, 2.6, 6.6], r: [0, shed.yaw, 0], color: '#9c9585' });
       chunk.scenery.painted.push({ p: point(shed.s, shed.u, shedGround + 2.72), scale: [4.8, .22, 7.2], r: [0, shed.yaw, 0], color: '#6d655c' });
-      const yardS = site.halfS - 4, yardU = site.halfU - 3, ring = [];
-      for (let ds = -yardS; ds <= yardS; ds += 4) ring.push([ds, -yardU]);
-      for (let du = -yardU + 4; du < yardU; du += 4) ring.push([yardS, du]);
-      for (let ds = yardS; ds >= -yardS; ds -= 4) ring.push([ds, yardU]);
-      for (let du = yardU - 4; du > -yardU; du -= 4) ring.push([-yardS, du]);
-      chunk.fence(ring.filter(([ds, du]) => !(du === -yardU && Math.abs(ds - site.drive) < 4.5)).map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
+      // Half the farms fence their yard and half leave it open, with the worn
+      // earth the only boundary it has. Both are common enough in the country,
+      // and a fence round every last one of them read as one design repeated.
+      if (randomAt(site.index, 2939) > .5) {
+        const yardS = site.halfS - 4, yardU = site.halfU - 3, ring = [];
+        for (let ds = -yardS; ds <= yardS; ds += 4) ring.push([ds, -yardU]);
+        for (let du = -yardU + 4; du < yardU; du += 4) ring.push([yardS, du]);
+        for (let ds = yardS; ds >= -yardS; ds -= 4) ring.push([ds, yardU]);
+        for (let du = yardU - 4; du > -yardU; du -= 4) ring.push([-yardS, du]);
+        chunk.fence(ring.filter(([ds, du]) => !(du === -yardU && Math.abs(ds - site.drive) < 4.5)).map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
+      }
     } else {
-      chunk.dirtPatch(s + 1, u, 12, 9.5, drive);
+      chunk.dirtPatch(s + 1, u, 15, 11, drive);
       ground = foundation(s, u, 5, 8, angle);
       add('plains-grain-elevators', assets.grainElevator, material, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
       // A rail spur runs past the elevator on a ballast strip, with a hopper
