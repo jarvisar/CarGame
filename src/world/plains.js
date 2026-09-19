@@ -38,6 +38,9 @@ const shoulderMaterial = material('#c9b88f', { flatShading: false });
 const edgeMaterial = material('#f0e9d4', { flatShading: false });
 const centerMaterial = material('#e6c04a', { flatShading: false });
 const dirtMaterial = material('#ffffff', { vertexColors: true, flatShading: false, side: THREE.DoubleSide });
+// A pond's bank is faceted like the ground it is dug from, not smoothed like a
+// worn yard: it is relief, and flat facets are what let the light show it.
+const bankMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
 const waterMaterial = createWaterMaterial(true);
 const leavesMaterial = material('#ffffff', { vertexColors: true });
 const barkMaterial = material('#6a563f');
@@ -63,7 +66,7 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const poleGeometry = new THREE.CylinderGeometry(.85, 1, 1, 6);
 const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
-registerChunkResources('plains', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, dirtMaterial, waterMaterial, leavesMaterial,
+registerChunkResources('plains', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, dirtMaterial, bankMaterial, waterMaterial, leavesMaterial,
   barkMaterial, shrubMaterial, strawMaterial, timberMaterial, poleMaterial, wireMaterial, railMaterial, metalMaterial, concreteMaterial, paintedMaterial, hideMaterial, rushMaterial, boxGeometry, poleGeometry, shrubGeometry, plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, fringeMaterial, crowGeometry, crowMaterial });
 
 function geometry(vertices, colors, furrows) {
@@ -82,6 +85,11 @@ function triangle(vertices, colors, a, b, c, color, start, furrows, furrowAt) {
     if (furrows) furrows.push(...furrowAt(p));
   }
 }
+// Refinement of a terrain cell over a pond: facets a few metres wide along
+// the rows and across the columns, and a point a share of the way along an
+// edge, computed the one way so two cells sharing the edge share the point.
+const cellSteps = (from, to = null) => Math.max(1, Math.round((to === null ? PLAINS_COLUMNS[from + 1] - PLAINS_COLUMNS[from] : (to - from) * PLAINS_STEP) / 3.2));
+const edgePoint = (p, q, w) => Object.fromEntries(['x', 'y', 'z', 's', 'u'].map(key => [key, p[key] * (1 - w) + q[key] * w]));
 function instances(group, geo, mat, items, name, shadows = true, occlusion = true) {
   if (!items.length) return;
   for (const part of splitBatch(items)) {
@@ -170,10 +178,35 @@ export class PlainsChunk {
       if (!cache.has(key)) cache.set(key, plainsVertex(row, col));
       return cache.get(key);
     };
+    // A pond is a dozen metres across and the field facets round it are as
+    // much again, so a cell any part of a pond falls in is refined to facets
+    // a few metres wide that can follow the basin. Whether a cell is refined
+    // is decided from its own four corners, so a neighbour can tell.
+    const ponds = pondsNear(this.start + CHUNK_LENGTH / 2);
+    const underPond = (row, col) => {
+      if (!ponds.length || col < 1 || col >= PLAINS_COLUMN_COUNT - 1) return null;
+      const corners = [vertex(row, col), vertex(row + plainsRowStep(row), col), vertex(row, col + 1), vertex(row + plainsRowStep(row), col + 1)];
+      const lowS = Math.min(...corners.map(p => p.s)), highS = Math.max(...corners.map(p => p.s));
+      const lowU = Math.min(...corners.map(p => p.u)), highU = Math.max(...corners.map(p => p.u));
+      for (const pond of ponds) {
+        const reach = pond.radius * Math.sqrt(pond.stretch) * 1.17 * 1.5;
+        const ds = Math.max(lowS - pond.s, pond.s - highS, 0), du = Math.max(lowU - pond.u, pond.u - highU, 0);
+        if (Math.hypot(ds, du) < reach) return pond;
+      }
+      return null;
+    };
     for (let row = this.start / PLAINS_STEP; row < (this.start + CHUNK_LENGTH) / PLAINS_STEP; row += plainsRowStep(row)) {
       const next = row + plainsRowStep(row);
       for (let col = 0; col < PLAINS_COLUMN_COUNT - 1; col++) {
         const a = vertex(row, col), b = vertex(next, col), c = vertex(row, col + 1), d = vertex(next, col + 1);
+        if (underPond(row, col)) { this.refineCell(a, b, c, d, row, col, next, underPond, vertices, colors, furrows); continue; }
+        // A cell beside a refined one takes that cell's edge points into its
+        // own outline, so the two share every vertex along the edge. Set on
+        // the straight edge alone they would be a hair off it once rounded,
+        // and a T-junction that fine still sparkles.
+        const previous = plainsRowStep(row - 1) === 1 ? row - 1 : row - .5;
+        const split = { low: !!underPond(previous, col), high: !!underPond(next, col), left: !!underPond(row, col - 1), right: !!underPond(row, col + 1) };
+        if (split.low || split.high || split.left || split.right) { this.stitchCell(a, b, c, d, row, col, next, split, vertices, colors, furrows); continue; }
         // A checkerboard of diagonals reads as herringbone wherever the
         // vertices are not jittered, which is the whole road reserve. Hash the
         // choice out in the fields, and keep one consistent diagonal across the
@@ -188,6 +221,50 @@ export class PlainsChunk {
     }
     this.terrain = this.addMesh(geometry(vertices, colors, furrows), terrainMaterial, 'plains-fields', true);
     this.sampleGround = terrainSampler(this.terrain);
+  }
+  // A coarse cell beside a refined one: its outline takes in the refined
+  // cell's points along the shared edge, and it is fanned from its middle.
+  stitchCell(a, b, c, d, row, col, next, split, vertices, colors, furrows) {
+    const along = cellSteps(row, next), across = cellSteps(col), outline = [];
+    const edge = (p, q, n, cut) => { for (let k = 0; k < n; k++) outline.push(cut ? edgePoint(p, q, k / n) : k ? null : p); };
+    edge(a, c, across, split.low); edge(c, d, along, split.right); edge(d, b, across, split.high); edge(b, a, along, split.left);
+    const ring = outline.filter(Boolean);
+    const middle = Object.fromEntries(['x', 'y', 'z', 's', 'u'].map(key => [key, (a[key] + b[key] + c[key] + d[key]) / 4]));
+    const shade = this.facetShade([a, b, d], row, col, 0);
+    for (let k = 0; k < ring.length; k++) triangle(vertices, colors, ring[k], ring[(k + 1) % ring.length], middle, shade.color, this.start, furrows, shade.furrow);
+  }
+  // One field cell cut into facets a few metres wide, over a pond. Inside the
+  // cell the facets take the ground's own height; along an edge shared with a
+  // cell that is not refined they are set on that cell's straight edge, so
+  // the two meet without a crack.
+  refineCell(a, b, c, d, row, col, next, underPond, vertices, colors, furrows) {
+    const along = cellSteps(row, next), across = cellSteps(col);
+    const previous = plainsRowStep(row - 1) === 1 ? row - 1 : row - .5;
+    const straight = { low: !underPond(previous, col), high: !underPond(next, col), left: !underPond(row, col - 1), right: !underPond(row, col + 1) };
+    const grid = [];
+    for (let i = 0; i <= along; i++) {
+      grid.push([]);
+      for (let j = 0; j <= across; j++) {
+        const t = i / along, w = j / across;
+        // Points on the cell's edges come from the same two corners the
+        // neighbour uses, in the same arithmetic, so the two agree exactly.
+        const p = i === 0 ? edgePoint(a, c, w) : i === along ? edgePoint(b, d, w) : j === 0 ? edgePoint(a, b, t) : j === across ? edgePoint(c, d, t)
+          : Object.fromEntries(['x', 'y', 'z', 's', 'u'].map(key => [key, (a[key] * (1 - t) + b[key] * t) * (1 - w) + (c[key] * (1 - t) + d[key] * t) * w]));
+        const corner = (i === 0 || i === along) && (j === 0 || j === across);
+        const onEdge = (i === 0 && straight.low) || (i === along && straight.high) || (j === 0 && straight.left) || (j === across && straight.right);
+        if (!corner && !onEdge) p.y = plainsGroundHeight(p.s, p.u);
+        grid[i].push(p);
+      }
+    }
+    // One colour for the whole cell, taken where the coarse facet would have
+    // taken it: a field boundary lands on the cell's edge, and small facets
+    // shaded at their own centroids straddle its jitter in a sawtooth.
+    const shade = this.facetShade([a, b, d], row, col, 0);
+    for (let i = 0; i < along; i++) for (let j = 0; j < across; j++) {
+      const a = grid[i][j], b = grid[i + 1][j], c = grid[i][j + 1], d = grid[i + 1][j + 1], k = i * across + j;
+      const tris = randomAt(Math.round(row * 2) * 8 + k, col + 2806) > .5 ? [[a, b, d], [a, d, c]] : [[a, b, c], [b, d, c]];
+      for (const tri of tris) triangle(vertices, colors, ...tri, shade.color, this.start, furrows, shade.furrow);
+    }
   }
   // A facet's flat colour, and the per-vertex furrow data the shader draws
   // over it: the field's coordinate across its rows in furrow widths, the
@@ -218,10 +295,12 @@ export class PlainsChunk {
       // Rows run along the road or across it, from the field's own edge, and
       // give way to the wet meadow at the creek and the ponds and to the haze.
       const [period, depth] = FURROWS[field.kind];
-      let dry = smoothstep(6.5, 11, d) * (1 - smoothstep(280, 430, cross));
-      if (cross > 16 && cross < 180) dry *= smoothstep(1.1, 1.6, pondDistance(s, u).d);
+      const dry = smoothstep(6.5, 11, d) * (1 - smoothstep(280, 430, cross));
+      // The rows give out round a pond, vertex by vertex: the facets there are
+      // a few metres wide, and a depth set per facet stepped down in a sawtooth.
+      const damp = cross > 16 && cross < 180 ? p => smoothstep(1.25, 1.7, pondDistance(p.s, p.u).d) : () => 1;
       const along = field.rows !== 'across';
-      furrow = p => [(along ? Math.abs(p.u) - field.from : p.s - field.start) / period, depth * dry, headlandDistance(p.s, p.u, field)];
+      furrow = p => [(along ? Math.abs(p.u) - field.from : p.s - field.start) / period, depth * dry * damp(p), headlandDistance(p.s, p.u, field)];
     }
     // Wet meadow along the creek and around the ponds, and bare mud under the water.
     if (d < 9.5) color.lerp(lush, (1 - smoothstep(6, 9.5, d)) * .85);
@@ -715,52 +794,7 @@ export class PlainsChunk {
         }
       }
     }
-    // Stock ponds: a level disc of water in each basin, its rim under the bank.
-    for (const pond of pondsNear(this.start + CHUNK_LENGTH / 2)) {
-      if (!inChunk(pond.s)) continue;
-      const steps = 28, vertices = [], colors = [], level = pond.level;
-      const tint = new THREE.Color('#5d93ad'), deep = new THREE.Color('#3f7492');
-      const center = plainsPosition(pond.s, pond.u, level);
-      // The water fills the basin to the pond's own edge, which the ground
-      // rises to meet: one irregular line carries the floor, the waterline
-      // and every ring of the shore round it.
-      const angleAt = i => i / steps * Math.PI * 2;
-      const edge = i => {
-        const a = angleAt(i), r = pondEdge(pond, a);
-        return plainsPosition(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r, level);
-      };
-      // One still surface: a fan of visibly different wedges reads as a pinwheel.
-      const surface = tint.clone().lerp(deep, .35);
-      for (let i = 0; i < steps; i++) {
-        triangle(vertices, colors, center, edge(i), edge(i + 1), surface.clone().multiplyScalar(.99 + randomAt(i, pond.index + 2857) * .02), this.start);
-      }
-      this.pondShore(pond, steps, angleAt, level);
-      const water = this.addMesh(geometry(vertices, colors), waterMaterial, 'stock-pond');
-      water.geometry.boundingSphere.radius += .5;
-      // Rushes ring the water, and a few head of cattle stand at the edge.
-      for (let i = 0; i < 14; i++) {
-        const a = random() * Math.PI * 2, r = pondEdge(pond, a) * (1 + random() * .07), p = this.ground(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r), size = .8 + random() * .5;
-        this.scenery.rushes.push({ p: [p.x, p.y - .05, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: i % 2 ? '#8aa040' : '#9aa84a' });
-      }
-      const herdAngle = random() * Math.PI * 2;
-      for (let i = 0; i < 3; i++) {
-        const a = herdAngle + (random() - .5) * 1.2, r = pondEdge(pond, a) * (1.35 + random() * .25);
-        this.cow(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r, a + Math.PI + (random() - .5) * .8, random);
-      }
-      // A few trees stand over the water on the bank away from the cattle.
-      for (let i = 0; i < 3; i++) {
-        const a = herdAngle + Math.PI + (random() - .5) * 2, r = pondEdge(pond, a) * (1.7 + random() * .3);
-        const t = pond.s + Math.cos(a) * r, v = pond.u + Math.sin(a) * r;
-        if (inside(t) && clear(t, v, 3)) this.mixedTree(t, v, 8 + random() * 3.5, random, { conifer: 0, cypress: .3, oak: .4 });
-      }
-      // A stone or two lies on the bank.
-      for (let i = 0; i < 9; i++) {
-        const a = random() * Math.PI * 2, r = pondEdge(pond, a) * (1.06 + random() * .18);
-        const p = this.ground(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r), size = .8 + random() * .8;
-        if (i % 3) shrubs.push({ p: [p.x, p.y + size * .25, p.z], scale: [size, size * .6, size], r: [0, random() * 6.28, 0], color: '#7d9a3e' });
-        else this.scenery.painted.push({ p: [p.x, p.y + size * .2, p.z], scale: [size * .8, size * .5, size * .7], r: [0, random() * 6.28, .2], color: stone[i % stone.length] });
-      }
-    }
+    for (const pond of pondsNear(this.start + CHUNK_LENGTH / 2)) if (inChunk(pond.s)) this.pond(pond, random, shrubs, stone);
     // Road furniture: a warning diamond on each approach to the bridge, a
     // speed sign now and then, and a culvert where a farm track crosses the ditch.
     const sign = (s, side, kind) => {
@@ -872,9 +906,11 @@ export class PlainsChunk {
   // or inside a discovery's footprint.
   // Pass `onTrack` for the things a track brings with it: the shed at the end
   // of one stands in the very corridor the track keeps clear of all else.
-  clearAt(s, u, r = 1, onTrack = false) {
+  // `onPond` likewise for what a pond brings with it: the trees on its bank.
+  clearAt(s, u, r = 1, onTrack = false, onPond = false) {
     return Math.abs(u) > r + 6.6 && creekDistance(s, u) > r + 5.5 && plainsDiscoveryClears(s, u, this.discoveries, r)
-      && (onTrack || farmTrackClears(s, u, r)) && pondsNear(s).every(pond => Math.hypot(s - pond.s, u - pond.u) > pond.radius * 1.2 + r);
+      && (onTrack || farmTrackClears(s, u, r))
+      && (onPond || pondsNear(s).every(pond => Math.hypot(s - pond.s, u - pond.u) > pondEdge(pond, Math.atan2(u - pond.u, s - pond.s)) * 1.4 + r));
   }
   // Is the ground level enough here to stand something on it? Returns the
   // low and the high a footing would have to span, or nothing if it is not.
@@ -909,57 +945,108 @@ export class PlainsChunk {
       previous = point.stop ? null : p;
     }
   }
-  // The ground a pond stands in, drawn as its own cover on the terrain: bare
-  // trodden mud at the waterline where the cattle come down to drink, wet
-  // meadow beyond it, and the field's own colour where the damp gives out, so
-  // a pond sits in its bank instead of being laid on the field like a coin.
-  pondShore(pond, steps, angleAt, level) {
-    const { shores, shoreTints } = this.scenery;
-    const wet = mud.clone().lerp(lush, .55), green = lush.clone().lerp(mud, .12);
-    // Out from the waterline: a narrow band of mud trodden by the cattle that
-    // come down to drink, then damp ground, meadow, and the field's own
-    // colour where the damp gives out. The innermost rings follow the water's
-    // own irregular line; beyond it they are set at shares of the pond's
-    // radius, because that is where the ground folds. A dug basin rises to a
-    // berm at about one and an eighth of the radius and is let back down to
-    // the lie of the land by one and a half, and a ring that steps over
-    // either of those folds bridges it and lets the bank through the shore.
-    const rings = [
-      { d: .86, tint: mud, under: true }, { d: .98, tint: mud, under: true },
-      { d: 1.03, tint: mud.clone().lerp(wet, .4) }, { d: 1.1, tint: wet },
-      { d: 1.18, tint: green }, { d: 1.3, crop: .3 },
-    ];
-    // The bands wander in and out as they go round, so the bank does not read
-    // as a set of rings drawn with a compass, and each keeps outside the one
-    // within it whatever the waterline does.
-    const spans = rings.map(() => new Array(steps).fill(0));
-    for (const [k, ring] of rings.entries()) {
-      for (let i = 0; i < steps; i++) {
-        const a = angleAt(i);
-        const wobble = k < 2 ? 1 : 1 + .05 * Math.sin(a * 2.7 + pond.index + k) + .035 * Math.sin(a * 4.3 - pond.index * 1.7 + k * 2);
-        spans[k][i] = Math.max(pondEdge(pond, a) * ring.d * wobble, k ? spans[k - 1][i] + .4 : 0);
-      }
-    }
-    const at = (i, k) => {
-      const a = angleAt(i), r = spans[k][i], { tint, under, crop } = rings[k];
-      const s = pond.s + Math.cos(a) * r, u = pond.u + Math.sin(a) * r, p = this.ground(s, u);
-      // Never below the ground the facets are cut from. A basin is a bowl, and
-      // a facet laid across one cuts the corner and runs above it, so a shore
-      // laid on the facets this chunk has and on the bare heights where it has
-      // none would step down at its own seam.
-      const y = Math.max(p.y, plainsGroundHeight(s, u)) + .08;
-      const color = tint ?? cropColor(s, u).color.lerp(green, crop);
-      return { x: p.x, y: under ? Math.min(y, level - .12) : y, z: p.z - this.start, color };
+  // A stock pond, built as one piece on its own facets: the water, the bank
+  // dug up round it, and what stands on the bank. The ground beneath is cut
+  // away under all of it, so nothing shows through the water, and the bank
+  // runs out from the waterline to where it lies down on the field's facets.
+  pond(pond, random, shrubs, stone) {
+    const steps = 30, { level } = pond, { shores, shoreTints } = this.scenery;
+    const inside = s => s >= this.start + 2 && s < this.start + CHUNK_LENGTH - 2;
+    // The steps round the pond are set off their even spacing, so neither the
+    // water's facets nor the bank's come out as a fan drawn with a compass.
+    const angles = Array.from({ length: steps }, (_, i) => (i + (randomAt(i, pond.index + 2877) - .5) * .5) / steps * Math.PI * 2);
+    const turn = a => Math.atan2(Math.sin(a), Math.cos(a));
+    const toDrink = a => Math.abs(turn(a - pond.drink));
+    // A point on the bank at a share of the pond's reach, on the ground's own
+    // profile or on the facets that follow it, whichever stands higher, and
+    // level with the water at the waterline, which the water shares.
+    const bank = (a, d) => {
+      const r = pondEdge(pond, a) * d, s = pond.s + Math.cos(a) * r, u = pond.u + Math.sin(a) * r, p = this.ground(s, u);
+      return { x: p.x, y: d <= 1 ? level : Math.max(p.y, plainsGroundHeight(s, u)) + .06, z: p.z - this.start, s, u };
     };
-    let inner = Array.from({ length: steps }, (_, i) => at(i, 0));
-    for (let k = 1; k < rings.length; k++) {
-      const outer = Array.from({ length: steps }, (_, i) => at(i, k));
-      for (let i = 0; i < steps; i++) {
-        const j = (i + 1) % steps;
-        triangle(shores, shoreTints, inner[i], inner[j], outer[i], mud, this.start);
-        triangle(shores, shoreTints, inner[j], outer[j], outer[i], mud, this.start);
-      }
-      inner = outer;
+    const place = (p, lift = 0) => [p.x, p.y + lift, p.z + this.start];
+    // The bank, in flat facets: wet mud at the waterline, trodden earth up the
+    // inner slope and over the crest, grass creeping back over the outer
+    // slope, and the crop's own colour where it lies down on the field. Where
+    // the cattle come down to drink the earth is worn right out to the field.
+    const earth = new THREE.Color('#997d58'), wetMud = mud.clone().multiplyScalar(.7), meadow = lush.clone().lerp(mud, .15);
+    const rings = [1, 1.05, 1.16, 1.24, 1.31, 1.38].map((d, k) => angles.map((a, i) => {
+      const wobble = k < 2 ? 1 : 1 + .03 * Math.sin(a * 2.3 + pond.index + k) + .02 * Math.sin(a * 4.1 - pond.index * 1.7 + k * 2);
+      return bank(a, d * wobble);
+    }));
+    const worn = angles.map((a, i) => toDrink(a) < .3 + randomAt(i, pond.index + 2878) * .3);
+    const tint = (band, i) => {
+      const drink = worn[i];
+      const base = band === 0 ? wetMud : band === 1 ? earth : band === 2 ? (drink ? earth : meadow.clone().lerp(earth, .35))
+        : band === 3 ? (drink ? earth.clone().lerp(meadow, .5) : meadow.clone().lerp(cropColor(rings[4][i].s, rings[4][i].u).color, .55))
+        : cropColor(rings[5][i].s, rings[5][i].u).color;
+      return base.clone().multiplyScalar(.95 + randomAt(i * 8 + band, pond.index + 2879) * .1);
+    };
+    for (let k = 0; k < rings.length - 1; k++) for (let i = 0; i < steps; i++) {
+      const j = (i + 1) % steps, inner = rings[k], outer = rings[k + 1];
+      triangle(shores, shoreTints, inner[i], inner[j], outer[i], tint(k, i), this.start);
+      triangle(shores, shoreTints, inner[j], outer[j], outer[i], tint(k, j), this.start);
+    }
+    // The water: one still surface, level with the bank at the waterline it
+    // shares with it, paler over the shallows along the edge and deeper toward
+    // the middle in two bands whose lines wander with the outline. Facets of a
+    // colour on one plane are invisible, so the surface has no pattern.
+    const vertices = [], colors = [], shallow = new THREE.Color('#7aa9ab'), deep = new THREE.Color('#4a86a0');
+    const surface = angles.map((a, i) => [.74, .42].map((d, k) => {
+      const r = pondEdge(pond, a) * d * (1 + (randomAt(i * 2 + k, pond.index + 2881) - .5) * .16);
+      const p = plainsPosition(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r, level);
+      return { x: p.x, y: p.y, z: p.z };
+    }));
+    const middle = plainsPosition(pond.s, pond.u, level);
+    const water = band => shallow.clone().lerp(deep, [.3, .62, .82][band]);
+    for (let i = 0; i < steps; i++) {
+      const j = (i + 1) % steps;
+      triangle(vertices, colors, rings[0][i], rings[0][j], surface[i][0], water(0), this.start);
+      triangle(vertices, colors, rings[0][j], surface[j][0], surface[i][0], water(0), this.start);
+      triangle(vertices, colors, surface[i][0], surface[j][0], surface[i][1], water(1), this.start);
+      triangle(vertices, colors, surface[j][0], surface[j][1], surface[i][1], water(1), this.start);
+      triangle(vertices, colors, surface[i][1], surface[j][1], middle, water(2), this.start);
+    }
+    this.addMesh(geometry(vertices, colors), waterMaterial, 'stock-pond').geometry.boundingSphere.radius += .5;
+    // Reeds grow in beds, two of them, standing in the shallows and up onto
+    // the wet mud, well away from where the cattle tread everything down; a
+    // few odd clumps stand elsewhere along the edge.
+    const reeds = ['#8aa040', '#9aa84a', '#a39c45'];
+    const beds = [pond.drink + Math.PI + (random() - .5) * 1.4, pond.drink + (random() < .5 ? 1 : -1) * (1.5 + random() * .6)];
+    const rush = (a, d) => {
+      const r = pondEdge(pond, a) * d, s = pond.s + Math.cos(a) * r, u = pond.u + Math.sin(a) * r;
+      const p = d < 1 ? plainsPosition(s, u, level - .04) : bank(a, d), size = 1.1 + random() * .8;
+      this.scenery.rushes.push({ p: place(p, d < 1 ? 0 : -.06), scale: [size, size, size], r: [0, random() * 6.28, 0], color: reeds[Math.floor(random() * reeds.length)] });
+    };
+    for (const bed of beds) for (let i = 0, n = 8 + Math.floor(random() * 6); i < n; i++) rush(bed + (random() - .5) * .85, .93 + random() * .14);
+    for (let i = 0; i < 4; i++) { const a = random() * Math.PI * 2; if (toDrink(a) > .8) rush(a, .98 + random() * .07); }
+    // The cattle stand at the water on the trodden side, one of them in it.
+    for (let i = 0; i < 3; i++) {
+      const a = pond.drink + (random() - .5) * .8, d = i ? 1.06 + random() * .14 : .97;
+      const p = bank(a, d), [x, y, z] = place(p, d < 1 ? -.14 : 0);
+      this.cowAt({ x, y, z }, a + Math.PI + (random() - .5) * .7, random);
+    }
+    // A willow and a tree or two stand over the water on the far bank.
+    const trees = [['willow', 7.5 + random() * 2.5, '#7f9c4a'], ['oak', 8 + random() * 3, '#587f3a'], ['hedge', 6 + random() * 2, '#5d8a39']];
+    for (let i = 0, n = 2 + Math.floor(random() * 2); i < n; i++) {
+      const a = pond.drink + Math.PI + (random() - .5) * 2.6, r = pondEdge(pond, a) * (1.42 + random() * .2);
+      const t = pond.s + Math.cos(a) * r, v = pond.u + Math.sin(a) * r, [kind, height, color] = trees[i];
+      if (inside(t) && this.clearAt(t, v, 2, false, true)) this.tree(kind, t, v, height, color, random() * 6.28);
+    }
+    // A stone or two on the bank, a log left lying on it now and then, and a
+    // bush or two behind the reeds.
+    for (let i = 0; i < 2; i++) {
+      const a = random() * Math.PI * 2, p = bank(a, 1.08 + random() * .14), size = .7 + random() * .7;
+      this.scenery.painted.push({ p: place(p, size * .18), scale: [size * .8, size * .45, size * .65], r: [0, random() * 6.28, .15], color: stone[i % stone.length] });
+    }
+    if (random() < .5) {
+      const a = pond.drink + Math.PI / 2 * (random() < .5 ? 1 : -1) + (random() - .5), d = 1.14 + random() * .1, span = .12 + random() * .05;
+      const [x0, y0, z0] = place(bank(a - span, d), .2), [x1, y1, z1] = place(bank(a + span, d + (random() - .5) * .06), .2);
+      this.beam(this.scenery.painted, { x: x0, y: y0, z: z0 }, { x: x1, y: y1, z: z1 }, .42, '#7b6749');
+    }
+    for (const bed of beds) for (let i = 0; i < 2; i++) {
+      const a = bed + (random() - .5) * .9, p = bank(a, 1.24 + random() * .1), size = .8 + random() * .7;
+      shrubs.push({ p: place(p, size * .25), scale: [size, size * .6, size], r: [0, random() * 6.28, 0], color: '#7d9a3e' });
     }
   }
   // A tuft at a field's edge: long grass in the green fields and the verge,
@@ -972,8 +1059,9 @@ export class PlainsChunk {
     const p = this.ground(s, u), size = wheat ? .85 + random() * .45 : .8 + random() * .6;
     (wheat ? this.scenery.wheat : this.scenery.grass).push({ p: [p.x, p.y - .03, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: tints[Math.floor(random() * tints.length)] });
   }
-  cow(s, u, heading, random) {
-    const p = this.ground(s, u), coats = ['#f0ece2', '#e8e2d4', '#9b7551', '#8a6340', '#f2eee6', '#7d5a3c'];
+  cow(s, u, heading, random) { this.cowAt(this.ground(s, u), heading, random); }
+  cowAt(p, heading, random) {
+    const coats = ['#f0ece2', '#e8e2d4', '#9b7551', '#8a6340', '#f2eee6', '#7d5a3c'];
     this.scenery.cows.push({ p: [p.x, p.y, p.z], scale: [1, 1, 1], r: [0, heading, 0], color: coats[Math.floor(random() * coats.length)] });
   }
   // The farm country's mix of trees: mostly round crowns, with a spruce, a
@@ -1013,7 +1101,7 @@ export class PlainsChunk {
   finishScenery() {
     const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt, dirtTints, shores, shoreTints } = this.scenery;
     if (dirt.length) this.addMesh(geometry(dirt, dirtTints), dirtMaterial, 'farm-tracks');
-    if (shores.length) this.addMesh(geometry(shores, shoreTints), dirtMaterial, 'pond-shores');
+    if (shores.length) this.addMesh(geometry(shores, shoreTints), bankMaterial, 'pond-banks');
     instances(this.group, squareBaleGeometry, strawMaterial, squareBales, 'square-bales');
     instances(this.group, plainsDiscoveryAssets.shed, plainsDiscoveryMaterial, sheds, 'field-sheds');
     instances(this.group, poleGeometry, metalMaterial, tanks, 'water-tanks');

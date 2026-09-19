@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, plainsVertex, plainsRowStep, plainsHeight, plainsGroundHeight, plainsRoadHeight, plainsDrivingRoute,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_SPACING, CREEK_WATER_HALF_WIDTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands, ROAD_RESERVE,
-  stockPondAt, pondsNear, pondEdge, distantRise, farmGate, POND_SPACING } from '../src/world/plains-route.js';
+  stockPondAt, pondsNear, pondEdge, distantRise, farmGate, POND_SPACING, plainsBaseHeight } from '../src/world/plains-route.js';
 import { PlainsWorld, PlainsChunk } from '../src/world/plains.js';
 import { plainsDiscoveries, plainsDiscoveryClears } from '../src/world/plains-discoveries.js';
 import { CoastalWorld } from '../src/world/environment.js';
@@ -87,7 +87,7 @@ test('fields tile the plain as a stable patchwork whose boundaries follow the te
   assert.equal(kinds.size, 5, 'a long drive shows every crop');
 });
 
-test('stock ponds are level basins in the fields, clear of the road and the creek', () => {
+test('stock ponds are dug basins in the fields, clear of the road and the creek', () => {
   let count = 0;
   for (let index = -40; index < 40; index++) for (const side of [-1, 1]) {
     const pond = stockPondAt(index, side);
@@ -97,27 +97,90 @@ test('stock ponds are level basins in the fields, clear of the road and the cree
     // The bank, not just the water, keeps well clear of the creek: its
     // floodplain and its willows want the ground a pond's basin would take.
     assert.ok(creekDistance(pond.s, pond.u) - pond.radius * 1.7 > 35, `pond ${index} is dug into the creek's floodplain`);
+    // A pond is built by the chunk it stands in, on that chunk's facets, so
+    // the whole of it, bank included, keeps inside one chunk.
+    const chunk = Math.floor(pond.s / CHUNK_LENGTH);
+    let reach = 0;
+    for (let i = 0; i < 48; i++) reach = Math.max(reach, pondEdge(pond, i / 48 * Math.PI * 2) * 1.4);
+    assert.ok(pond.s - reach > chunk * CHUNK_LENGTH && pond.s + reach < (chunk + 1) * CHUNK_LENGTH, `pond ${index} straddles a chunk seam`);
+    // Longer than it is wide: the reach along the long axis, taken over a
+    // spread of angles so the lobes on the outline do not decide it, is
+    // more than the reach across it.
+    const span = axis => [-.5, -.25, 0, .25, .5].reduce((sum, off) => sum + pondEdge(pond, axis + off) + pondEdge(pond, axis + Math.PI + off), 0);
+    assert.ok(span(pond.tilt) / span(pond.tilt + Math.PI / 2) > 1.08, `pond ${index} is a disc`);
     const { level } = pond;
     const groundAt = (angle, d) => {
       const reach = pondEdge(pond, angle) * d;
       return plainsGroundHeight(pond.s + Math.cos(angle) * reach, pond.u + Math.sin(angle) * reach);
     };
+    let crest = -Infinity;
     for (let i = 0; i < 12; i++) {
       const angle = i / 12 * Math.PI * 2;
-      // Water over the whole of the floor, ground that comes up to meet it at
-      // the pond's own edge, and a bank that closes round it further out.
-      for (const d of [.3, .75]) assert.ok(groundAt(angle, d) < level - .25, `pond ${index} has no depth at ${d} of its edge`);
-      assert.ok(Math.abs(groundAt(angle, 1) - level) < .05, `pond ${index} does not meet the ground at its edge`);
+      // A flat floor well under the water, a steep bank up to just under the
+      // waterline, a crest of spoil round the rim, and the field's own ground
+      // again where the bank runs out.
+      for (const d of [.3, .7]) assert.ok(groundAt(angle, d) < level - 1, `pond ${index} has no depth at ${d} of its edge`);
+      assert.ok(groundAt(angle, .96) < level - .3, `pond ${index} shelves up to the water at ${angle.toFixed(2)}`);
+      assert.ok(Math.abs(groundAt(angle, 1) - (level - .45)) < .03, `pond ${index} does not meet its waterline`);
       let bank = -Infinity;
-      for (let d = 1.05; d <= 1.9; d += .05) bank = Math.max(bank, groundAt(angle, d));
-      assert.ok(bank > level + .15, `pond ${index} leaks over its bank`);
+      for (let d = 1.05; d <= 1.2; d += .01) bank = Math.max(bank, groundAt(angle, d));
+      crest = Math.max(crest, bank - level);
+      assert.ok(bank > level + .1, `pond ${index} has no bank at ${angle.toFixed(2)}`);
+      const reach = pondEdge(pond, angle) * 1.4, s = pond.s + Math.cos(angle) * reach, u = pond.u + Math.sin(angle) * reach;
+      assert.ok(Math.abs(plainsGroundHeight(s, u) - plainsBaseHeight(s, u, true)) < .01, `pond ${index} disturbs the field past its bank`);
     }
+    assert.ok(crest > .35, `pond ${index} has no crest of spoil`);
     assert.ok(pondsNear(pond.s).some(other => other.s === pond.s && other.u === pond.u));
   }
   // Common enough to come upon on a drive, and not so common that the
   // pastures read as a chain of waterholes.
   const every = 80 * POND_SPACING / count;
   assert.ok(every > 380 && every < 720, `a stock pond every ${Math.round(every)} m`);
+});
+
+test('a pond stands on facets of its own, and the field never comes up through the water', () => {
+  let built = 0;
+  for (let index = 0; index < 60 && built < 6; index++) for (const side of [-1, 1]) {
+    const pond = stockPondAt(index, side);
+    if (!pond) continue;
+    built++;
+    const chunk = new PlainsChunk(Math.floor(pond.s / CHUNK_LENGTH));
+    // The field facets under the water, as rendered, lie under it everywhere:
+    // a facet twenty metres wide laid across the basin cut the corner and
+    // came up through the water as a beach, so the cells a pond falls in are
+    // cut finer, and the finer facets follow the bank.
+    let top = -Infinity;
+    for (let i = 0; i < 48; i++) for (const d of [.2, .5, .8, .95, .98]) {
+      const angle = i / 48 * Math.PI * 2, reach = pondEdge(pond, angle) * d;
+      top = Math.max(top, chunk.ground(pond.s + Math.cos(angle) * reach, pond.u + Math.sin(angle) * reach).y - pond.level);
+    }
+    assert.ok(top < -.05, `pond ${index}: the field comes up to ${top.toFixed(2)} m of the water`);
+    // The water is one level surface, and the bank rises above it to a crest.
+    // The bank's toe can lie below the water on the low side, where the crest
+    // is the dam that holds it, but never so far below as to be off the field.
+    // A chunk can hold a pond on each side of the road; this pond's water is
+    // the surface lying at its level.
+    const waters = chunk.group.children.filter(mesh => mesh.name === 'stock-pond').map(mesh => mesh.geometry.attributes.position);
+    const water = waters.find(w => Math.abs(w.getY(0) - pond.level) < 1e-3);
+    assert.ok(water, `pond ${index} has no water at its level`);
+    for (let i = 0; i < water.count; i++) assert.ok(Math.abs(water.getY(i) - pond.level) < 1e-3, 'the water lies level');
+    const bank = chunk.group.getObjectByName('pond-banks').geometry.attributes.position;
+    let high = -Infinity, low = Infinity;
+    for (let i = 0; i < bank.count; i++) { high = Math.max(high, bank.getY(i)); low = Math.min(low, bank.getY(i)); }
+    assert.ok(high > pond.level + .3, `pond ${index}: the bank has no crest`);
+    assert.ok(low > pond.level - 4, `pond ${index}: the bank falls off the field`);
+    // The waterline is one line: the water's edge vertices are the bank's
+    // innermost ring. The water is drawn in five triangles a step, three of
+    // whose fifteen vertices lie on the edge, so a fifth of them are shared.
+    const edge = new Set();
+    for (let i = 0; i < bank.count; i++) edge.add(`${bank.getX(i).toFixed(3)},${bank.getZ(i).toFixed(3)}`);
+    let shared = 0;
+    for (let i = 0; i < water.count; i++) if (edge.has(`${water.getX(i).toFixed(3)},${water.getZ(i).toFixed(3)}`)) shared++;
+    assert.equal(shared, water.count / 5, `pond ${index}: the waterline is not the bank's edge`);
+    // The finer facets cost little: the terrain stays within its budget.
+    assert.ok(chunk.group.getObjectByName('plains-fields').geometry.attributes.position.count / 3 < 4000, 'terrain stays within the shared budget');
+  }
+  assert.ok(built >= 4, 'several ponds were built');
 });
 
 test('plains driving stays grounded and a route swap restores the saved place', () => {

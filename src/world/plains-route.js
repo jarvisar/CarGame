@@ -30,31 +30,88 @@ export function creekDistance(s, u) {
 // The waterline sits where the carved bank crosses the creek level.
 export const CREEK_WATER_HALF_WIDTH = 4.6;
 
-// Stock ponds: a shallow basin dug in a pasture, one to a stretch of road on
-// either side, kept away from the creek and the road reserve.
+// Stock ponds: a basin dug in a pasture, one to a stretch of road on either
+// side, kept away from the creek and the road reserve.
 export const POND_SPACING = 512;
+const ponds = new Map();
 export function stockPondAt(index, side) {
+  const key = `${index},${side}`;
+  if (ponds.has(key)) return ponds.get(key);
+  const pond = digPond(index, side);
+  if (ponds.size > 512) ponds.clear();
+  ponds.set(key, pond);
+  return pond;
+}
+function digPond(index, side) {
   const salt = side > 0 ? 2861 : 2862;
   if (randomAt(index, salt) > .54) return null;
-  // Dug in the near fields rather than out in the far ones. The terrain's
-  // columns are eight to eleven metres apart in close and better than twenty
-  // out where the ponds used to lie, where a whole pond covered one column
-  // and the basin had nothing to be cut into: the water sat on flat ground
-  // and the shore read as a stain on it.
-  const s = index * POND_SPACING + 60 + randomAt(index, salt + 1) * 390, cross = 46 + randomAt(index, salt + 2) * 54;
-  const radius = 11 + randomAt(index, salt + 3) * 4.5, u = side * cross;
-  // Well clear of the creek: a pond's basin reaches better than half as far
-  // again as its water, and the creek carries a floodplain and a line of
-  // willows of its own, so the two must not be digging into one another.
-  if (Math.abs(s - creekCenterS(plainsCreekAt(s), u)) < radius * 1.7 + 42) return null;
-  const rim = plainsBaseHeight(s, u, true);
-  return { index, side, s, u, radius, rim, level: rim - .25 };
+  // Dug in the near fields rather than out in the far ones, on the flattest
+  // ground of a handful of spots along the stretch: a pond dug on a slope
+  // has a dam the height of a house on one side and a cut as deep on the
+  // other. The terrain's columns are eight to eleven metres apart in close
+  // and better than twenty out where the ponds used to lie.
+  let best = null;
+  for (let k = 0; k < 6; k++) {
+    const rough = index * POND_SPACING + 60 + randomAt(index * 8 + k, salt + 1) * 390, cross = 46 + randomAt(index * 8 + k, salt + 2) * 54;
+    // Kept whole inside one chunk, bank and all: a pond is built by the chunk
+    // it stands in, on that chunk's own facets, and past the seam it would be
+    // standing on the neighbour's, which it cannot see.
+    const chunk = Math.floor(rough / 128), s = chunk * 128 + 32 + (rough - chunk * 128) / 128 * 64;
+    const radius = 11 + randomAt(index, salt + 3) * 4.5, u = side * cross;
+    // Well clear of the creek: a pond's bank reaches better than a third as far
+    // again as its water, and the creek carries a floodplain and a line of
+    // willows of its own, so the two must not be digging into one another.
+    if (Math.abs(s - creekCenterS(plainsCreekAt(s), u)) < radius * 1.7 + 42) continue;
+    const rim = plainsBaseHeight(s, u, true), pick = j => randomAt(index, (side > 0 ? 2891 : 2892) + j);
+    // A dug pond is longer than it is wide, lying whichever way the digger
+    // worked, and pushed in and out on the way round.
+    const pond = { index, side, s, u, radius, rim, level: rim - .25,
+      stretch: 1.18 + pick(0) * .34, tilt: pick(1) * Math.PI, lobes: [pick(2), pick(3)].map(r => r * Math.PI * 2) };
+    // The spoil is banked highest on the side the ground falls away, which is
+    // the side the water would otherwise spill over, and the cattle come down
+    // to drink on the gentle side opposite it.
+    let low = 0, lowest = Infinity, highest = -Infinity;
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2, r = pondEdge(pond, a) * 1.4;
+      const h = plainsBaseHeight(s + Math.cos(a) * r, u + Math.sin(a) * r, true);
+      if (h < lowest) { lowest = h; low = a; }
+      highest = Math.max(highest, h);
+    }
+    pond.dam = low;
+    pond.drink = low + Math.PI + (pick(4) - .5) * 1.8;
+    pond.spread = highest - lowest;
+    if (!best || pond.spread < best.spread) best = pond;
+  }
+  return best;
 }
-// How far a pond reaches in a given direction. A dug pond is not a disc, and
-// the basin wanders with its outline rather than sitting in a round hole a
-// little smaller than the water, which left a submerged shelf round the edge.
+// How far a pond reaches in a given direction: an oval, held to the area of
+// the round pond it stands for, bent into a bean by a three-fold lobe and
+// roughened by a five-fold one. Both are odd, so neither can flatten the
+// oval back into a disc the way a two-fold lobe could. One outline carries
+// the water, the bank and everything standing on it.
 export function pondEdge(pond, angle) {
-  return pond.radius * (1 + .085 * Math.sin(angle * 3 + pond.index) + .055 * Math.sin(angle * 5 + pond.index * 2));
+  const a = angle - pond.tilt, [p, q] = pond.lobes;
+  const oval = 1 / Math.sqrt(Math.cos(a) ** 2 / pond.stretch + Math.sin(a) ** 2 * pond.stretch);
+  return pond.radius * oval * (1 + .09 * Math.sin(angle * 3 + p) + .05 * Math.sin(angle * 5 + q));
+}
+// The ground a pond makes of the field, at a share of the pond's reach in a
+// given direction: a flat floor under the water with a steep bank up to a hand
+// under the waterline, a shelf of trodden mud just above it, the spoil dug
+// out of the basin heaped in a crest round the rim, and the outer slope let
+// down onto the field. The crest stands highest on the low side, where it
+// holds the water in; on the high side the field stands over it and the pond
+// is cut into the ground. The terrain is refined to a few metres under a pond
+// so its facets can follow this, and the pond's own cover then lies on them.
+export function pondCrest(pond, angle) { return .3 + .4 * (.5 + .5 * Math.cos(angle - pond.dam)); }
+export function pondProfile(pond, angle, d, ground) {
+  const L = pond.level;
+  if (d < 1) return L - .45 - 1.1 * (1 - smoothstep(.86, 1, d));
+  const shelf = L - .45 + .58 * smoothstep(1, 1.07, d);
+  const top = shelf + pondCrest(pond, angle) * smoothstep(1.06, 1.16, d);
+  // Where the field stands above the crest the bank climbs to it from the
+  // shelf, as one cut face, instead of stepping up over a heap and then again.
+  const cut = smoothstep(-.3, .4, ground - (L + .13 + pondCrest(pond, angle)));
+  return lerp(top, ground, lerp(smoothstep(1.16, 1.36, d), smoothstep(1.05, 1.36, d), cut));
 }
 export function pondsNear(s) {
   const index = Math.floor(s / POND_SPACING), result = [];
@@ -111,17 +168,8 @@ export function plainsBaseHeight(s, u, beforePonds = false) {
   const rise = u > 0 ? 6 * smoothstep(60, 300, u) : 0;
   let height = h - ditch + swell - fall + rise + distantRise(s, u);
   if (beforePonds || cross < 14 || cross > 160) return height;
-  // A dug pond: the floor comes up to meet the water exactly at the pond's
-  // own edge, so there is nothing for the water to stop short on; past it a
-  // low berm is held right round before the ground is let back down to the
-  // lie of the land, so a pond dug where the field falls away cannot spill
-  // over the low side. Shallow, because a deep pond needs a long bank to come
-  // up out of, and a long bank is a wide green ring round a small pond.
   const { pond, d } = pondDistance(s, u);
-  if (pond && d < 1.5) {
-    const basin = d < 1 ? pond.level - 1.5 * (1 - smoothstep(.5, 1, d)) : pond.level + .55 * smoothstep(1, 1.22, d);
-    height = lerp(basin, height, smoothstep(1.22, 1.5, d));
-  }
+  if (pond && d < 1.36) height = pondProfile(pond, Math.atan2(u - pond.u, s - pond.s), d, height);
   return height;
 }
 export function plainsGroundHeight(s, u) {
