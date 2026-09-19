@@ -198,7 +198,12 @@ export function roadsideFence(row, side) { return randomAt(row, side > 0 ? 2785 
 export function farmGate(row, side) {
   if (randomAt(row, side > 0 ? 2787 : 2788) > .16) return null;
   const start = fieldBoundary(row), end = fieldBoundary(row + 1);
-  return { s: Math.round(start + 18 + randomAt(row, side > 0 ? 2789 : 2790) * (end - start - 36)), side };
+  // Most field gates are only gates: a farmer takes a tractor through one a
+  // few times a year and the crop closes over behind it. Only the few that
+  // are used week in and week out wear a track across the field behind them,
+  // and a track that runs out into a field and stops is worth coming upon.
+  const worn = randomAt(row, side > 0 ? 2857 : 2858) < .34;
+  return { s: Math.round(start + 18 + randomAt(row, side > 0 ? 2789 : 2790) * (end - start - 36)), side, worn };
 }
 
 // Terrain columns are fixed offsets from the road. Fine rows and columns keep

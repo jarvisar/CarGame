@@ -565,7 +565,11 @@ export class PlainsChunk {
           }
         }
         if (gate && inChunk(gate.s)) {
-          this.track(gate.s, side, bands[1] - 6);
+          // Only the gates that are used week in and week out have worn a
+          // track through; the rest open straight onto standing crop. The
+          // mailbox stands at every one of them, since what it marks is the
+          // way in to the farm rather than how often a tractor takes it.
+          if (gate.worn) this.track(gate.s, side, bands[1] - 6);
           // The mailbox stays inside this chunk, on whichever side of the gate that is.
           const boxS = inChunk(gate.s - 4.5) ? gate.s - 4.5 : gate.s + 4.5;
           const p = this.ground(boxS, side * 7.4), angle = -roadFrame(gate.s).angle;

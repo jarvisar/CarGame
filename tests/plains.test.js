@@ -4,8 +4,9 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, plainsVertex, plainsRowStep, plainsHeight, plainsGroundHeight, plainsRoadHeight, plainsDrivingRoute,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_SPACING, CREEK_WATER_HALF_WIDTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands, ROAD_RESERVE,
-  stockPondAt, pondsNear, distantRise } from '../src/world/plains-route.js';
+  stockPondAt, pondsNear, distantRise, farmGate } from '../src/world/plains-route.js';
 import { PlainsWorld, PlainsChunk } from '../src/world/plains.js';
+import { plainsDiscoveries, plainsDiscoveryClears } from '../src/world/plains-discoveries.js';
 import { CoastalWorld } from '../src/world/environment.js';
 import { DrivingController } from '../src/vehicle.js';
 
@@ -372,4 +373,36 @@ test('a farmyard wears an outline with no straight run in it, and fades into the
   const tones = new Set(yard.points.map(p => p.color.map(value => value.toFixed(2)).join()));
   assert.ok(tones.size > 20, `the yard is laid in ${tones.size} tones`);
   yard.chunk.dispose();
+});
+
+test('most field gates are only gates, so a track worn out into a field and stopping is something to come upon', () => {
+  const span = 200000, rows = [];
+  for (let row = fieldRowAt(0); fieldBoundary(row) < span; row++) for (const side of [-1, 1]) {
+    const gate = farmGate(row, side);
+    if (gate) rows.push({ row, side, gate });
+  }
+  const worn = rows.filter(({ gate }) => gate.worn);
+  // The roadside keeps its gates and its mailboxes; what became rare is the
+  // bare earth running away from them into a field and petering out.
+  assert.ok(span / rows.length < 700, `a field gate only every ${Math.round(span / rows.length)} m`);
+  assert.ok(span / worn.length > 1100, `a track off the road every ${Math.round(span / worn.length)} m`);
+  // And the chunk draws what the route decided: bare earth behind the gates
+  // that are used, and none at all behind the gates that are not.
+  const behind = ({ row, side, gate }) => {
+    const chunk = new PlainsChunk(Math.floor(gate.s / CHUNK_LENGTH));
+    const mesh = chunk.group.getObjectByName('farm-tracks'), found = [];
+    const p = chunk.ground(gate.s, side * (ROAD_RESERVE + 8));
+    for (let i = 0; mesh && i < mesh.geometry.attributes.position.count; i++) {
+      const dirt = mesh.geometry.attributes.position;
+      found.push(Math.hypot(dirt.getX(i) - p.x, dirt.getZ(i) - p.z));
+    }
+    chunk.dispose();
+    return Math.min(...found, Infinity);
+  };
+  // Gates well clear of any compound, so nothing else can lay earth near them.
+  const lone = list => list.filter(({ gate }) => Math.abs(gate.s) > 2000 && Math.abs(gate.s) < 60000
+    && plainsDiscoveryClears(gate.s, gate.side * 30, plainsDiscoveries(gate.s - 400, gate.s + 400), 60)).slice(0, 6);
+  for (const gate of lone(worn)) assert.ok(behind(gate) < 6, `no track behind a worn gate at ${gate.gate.s}`);
+  for (const gate of lone(rows.filter(({ gate }) => !gate.worn))) assert.ok(behind(gate) > 12, `a track behind a gate that has none at ${gate.gate.s}`);
+  assert.ok(worn.length > rows.length * .2, 'some gates must still be driven through');
 });
