@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { CHUNK_LENGTH } from '../src/world/route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, plainsVertex, plainsRowStep, plainsHeight, plainsGroundHeight, plainsRoadHeight, plainsDrivingRoute,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_SPACING, CREEK_WATER_HALF_WIDTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands, ROAD_RESERVE,
-  stockPondAt, pondsNear, distantRise, farmGate, POND_SPACING } from '../src/world/plains-route.js';
+  stockPondAt, pondsNear, pondEdge, distantRise, farmGate, POND_SPACING } from '../src/world/plains-route.js';
 import { PlainsWorld, PlainsChunk } from '../src/world/plains.js';
 import { plainsDiscoveries, plainsDiscoveryClears } from '../src/world/plains-discoveries.js';
 import { CoastalWorld } from '../src/world/environment.js';
@@ -94,14 +94,23 @@ test('stock ponds are level basins in the fields, clear of the road and the cree
     if (!pond) continue;
     count++;
     assert.ok(Math.abs(pond.u) > 24 && Math.abs(pond.u) < 120, 'a pond lies in the near fields, clear of the ditch');
-    assert.ok(creekDistance(pond.s, pond.u) > pond.radius + 20);
-    const level = pond.rim - .55;
+    // The bank, not just the water, keeps well clear of the creek: its
+    // floodplain and its willows want the ground a pond's basin would take.
+    assert.ok(creekDistance(pond.s, pond.u) - pond.radius * 1.7 > 35, `pond ${index} is dug into the creek's floodplain`);
+    const { level } = pond;
+    const groundAt = (angle, d) => {
+      const reach = pondEdge(pond, angle) * d;
+      return plainsGroundHeight(pond.s + Math.cos(angle) * reach, pond.u + Math.sin(angle) * reach);
+    };
     for (let i = 0; i < 12; i++) {
       const angle = i / 12 * Math.PI * 2;
-      const inside = plainsGroundHeight(pond.s + Math.cos(angle) * pond.radius * .75, pond.u + Math.sin(angle) * pond.radius * .75);
-      const shore = plainsGroundHeight(pond.s + Math.cos(angle) * pond.radius * 1.1, pond.u + Math.sin(angle) * pond.radius * 1.1);
-      assert.ok(inside < level - .1, `pond ${index} water floats at its edge`);
-      assert.ok(shore > level + .15, `pond ${index} leaks over its bank`);
+      // Water over the whole of the floor, ground that comes up to meet it at
+      // the pond's own edge, and a bank that closes round it further out.
+      for (const d of [.3, .75]) assert.ok(groundAt(angle, d) < level - .25, `pond ${index} has no depth at ${d} of its edge`);
+      assert.ok(Math.abs(groundAt(angle, 1) - level) < .05, `pond ${index} does not meet the ground at its edge`);
+      let bank = -Infinity;
+      for (let d = 1.05; d <= 1.9; d += .05) bank = Math.max(bank, groundAt(angle, d));
+      assert.ok(bank > level + .15, `pond ${index} leaks over its bank`);
     }
     assert.ok(pondsNear(pond.s).some(other => other.s === pond.s && other.u === pond.u));
   }

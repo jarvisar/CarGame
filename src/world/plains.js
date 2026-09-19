@@ -6,7 +6,7 @@ import { updateResidentChunks } from './resident.js';
 import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
-  rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, headlandDistance } from './plains-route.js';
+  rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, pondEdge, headlandDistance } from './plains-route.js';
 import { createWaterMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
@@ -225,15 +225,6 @@ export class PlainsChunk {
     }
     // Wet meadow along the creek and around the ponds, and bare mud under the water.
     if (d < 9.5) color.lerp(lush, (1 - smoothstep(6, 9.5, d)) * .85);
-    // Out here the facets are twenty metres and more across, so a shore drawn
-    // by shading them alone came out as a green star with spikes as long as
-    // the pond was wide. The shore is its own ground cover now, and all the
-    // terrain keeps is a wash of damp green broad enough that no one facet
-    // turning green shows up as an edge.
-    if (cross > 16 && cross < 180) {
-      const pond = pondDistance(s, u);
-      if (pond.d < 2.6) color.lerp(lush, (1 - smoothstep(1.4, 2.6, pond.d)) * .4);
-    }
     if (d < 5.4) color.lerp(mud, 1 - smoothstep(4.6, 5.4, d));
     return { color: color.multiplyScalar(inReserve ? 1 : .985 + facet * .03), furrow };
   }
@@ -727,16 +718,15 @@ export class PlainsChunk {
     // Stock ponds: a level disc of water in each basin, its rim under the bank.
     for (const pond of pondsNear(this.start + CHUNK_LENGTH / 2)) {
       if (!inChunk(pond.s)) continue;
-      const steps = 28, vertices = [], colors = [], level = pond.rim - .55;
+      const steps = 28, vertices = [], colors = [], level = pond.level;
       const tint = new THREE.Color('#5d93ad'), deep = new THREE.Color('#3f7492');
       const center = plainsPosition(pond.s, pond.u, level);
-      // An irregular outline, so a dug pond is not a perfect disc. The water
-      // and the shore round it are cut from the one waterline, so the mud
-      // meets the water on its own line rather than on a circle near it.
+      // The water fills the basin to the pond's own edge, which the ground
+      // rises to meet: one irregular line carries the floor, the waterline
+      // and every ring of the shore round it.
       const angleAt = i => i / steps * Math.PI * 2;
-      const waterline = a => pond.radius * (.68 + .12 * Math.sin(a * 3 + pond.index) + .07 * Math.sin(a * 5 + pond.index * 2));
       const edge = i => {
-        const a = angleAt(i), r = waterline(a);
+        const a = angleAt(i), r = pondEdge(pond, a);
         return plainsPosition(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r, level);
       };
       // One still surface: a fan of visibly different wedges reads as a pinwheel.
@@ -744,28 +734,28 @@ export class PlainsChunk {
       for (let i = 0; i < steps; i++) {
         triangle(vertices, colors, center, edge(i), edge(i + 1), surface.clone().multiplyScalar(.99 + randomAt(i, pond.index + 2857) * .02), this.start);
       }
-      this.pondShore(pond, steps, angleAt, waterline, level);
+      this.pondShore(pond, steps, angleAt, level);
       const water = this.addMesh(geometry(vertices, colors), waterMaterial, 'stock-pond');
       water.geometry.boundingSphere.radius += .5;
       // Rushes ring the water, and a few head of cattle stand at the edge.
       for (let i = 0; i < 14; i++) {
-        const a = random() * Math.PI * 2, r = pond.radius * (.86 + random() * .12), p = this.ground(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r), size = .8 + random() * .5;
+        const a = random() * Math.PI * 2, r = pondEdge(pond, a) * (1 + random() * .07), p = this.ground(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r), size = .8 + random() * .5;
         this.scenery.rushes.push({ p: [p.x, p.y - .05, p.z], scale: [size, size, size], r: [0, random() * 6.28, 0], color: i % 2 ? '#8aa040' : '#9aa84a' });
       }
       const herdAngle = random() * Math.PI * 2;
       for (let i = 0; i < 3; i++) {
-        const a = herdAngle + (random() - .5) * 1.2, r = pond.radius * (1.25 + random() * .25);
+        const a = herdAngle + (random() - .5) * 1.2, r = pondEdge(pond, a) * (1.35 + random() * .25);
         this.cow(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r, a + Math.PI + (random() - .5) * .8, random);
       }
       // A few trees stand over the water on the bank away from the cattle.
       for (let i = 0; i < 3; i++) {
-        const a = herdAngle + Math.PI + (random() - .5) * 2, r = pond.radius * (1.85 + random() * .3);
+        const a = herdAngle + Math.PI + (random() - .5) * 2, r = pondEdge(pond, a) * (1.7 + random() * .3);
         const t = pond.s + Math.cos(a) * r, v = pond.u + Math.sin(a) * r;
         if (inside(t) && clear(t, v, 3)) this.mixedTree(t, v, 8 + random() * 3.5, random, { conifer: 0, cypress: .3, oak: .4 });
       }
       // A stone or two lies on the bank.
       for (let i = 0; i < 9; i++) {
-        const a = random() * Math.PI * 2, r = pond.radius * (1.02 + random() * .2);
+        const a = random() * Math.PI * 2, r = pondEdge(pond, a) * (1.06 + random() * .18);
         const p = this.ground(pond.s + Math.cos(a) * r, pond.u + Math.sin(a) * r), size = .8 + random() * .8;
         if (i % 3) shrubs.push({ p: [p.x, p.y + size * .25, p.z], scale: [size, size * .6, size], r: [0, random() * 6.28, 0], color: '#7d9a3e' });
         else this.scenery.painted.push({ p: [p.x, p.y + size * .2, p.z], scale: [size * .8, size * .5, size * .7], r: [0, random() * 6.28, .2], color: stone[i % stone.length] });
@@ -923,7 +913,7 @@ export class PlainsChunk {
   // trodden mud at the waterline where the cattle come down to drink, wet
   // meadow beyond it, and the field's own colour where the damp gives out, so
   // a pond sits in its bank instead of being laid on the field like a coin.
-  pondShore(pond, steps, angleAt, waterline, level) {
+  pondShore(pond, steps, angleAt, level) {
     const { shores, shoreTints } = this.scenery;
     const wet = mud.clone().lerp(lush, .55), green = lush.clone().lerp(mud, .12);
     // Out from the waterline: a narrow band of mud trodden by the cattle that
@@ -935,16 +925,9 @@ export class PlainsChunk {
     // the lie of the land by one and a half, and a ring that steps over
     // either of those folds bridges it and lets the bank through the shore.
     const rings = [
-      { at: a => waterline(a) * .82, tint: mud, under: true },
-      { at: a => waterline(a), tint: mud, under: true },
-      { at: a => waterline(a) + .9, tint: mud },
-      { at: () => pond.radius, tint: mud.clone().lerp(wet, .55) },
-      { at: () => pond.radius * 1.12, tint: wet },
-      { at: () => pond.radius * 1.28, tint: wet.clone().lerp(green, .55) },
-      { at: () => pond.radius * 1.42, tint: green },
-      { at: () => pond.radius * 1.56, tint: green },
-      { at: () => pond.radius * 1.82, crop: .5 },
-      { at: () => pond.radius * 2.2, crop: .12 },
+      { d: .86, tint: mud, under: true }, { d: .98, tint: mud, under: true },
+      { d: 1.03, tint: mud.clone().lerp(wet, .4) }, { d: 1.1, tint: wet },
+      { d: 1.18, tint: green }, { d: 1.3, crop: .3 },
     ];
     // The bands wander in and out as they go round, so the bank does not read
     // as a set of rings drawn with a compass, and each keeps outside the one
@@ -953,8 +936,8 @@ export class PlainsChunk {
     for (const [k, ring] of rings.entries()) {
       for (let i = 0; i < steps; i++) {
         const a = angleAt(i);
-        const wobble = k < 2 ? 1 : 1 + .09 * Math.sin(a * 2.7 + pond.index + k) + .06 * Math.sin(a * 4.3 - pond.index * 1.7 + k * 2);
-        spans[k][i] = Math.max(ring.at(a) * wobble, k ? spans[k - 1][i] + .5 : 0);
+        const wobble = k < 2 ? 1 : 1 + .05 * Math.sin(a * 2.7 + pond.index + k) + .035 * Math.sin(a * 4.3 - pond.index * 1.7 + k * 2);
+        spans[k][i] = Math.max(pondEdge(pond, a) * ring.d * wobble, k ? spans[k - 1][i] + .4 : 0);
       }
     }
     const at = (i, k) => {
@@ -964,7 +947,7 @@ export class PlainsChunk {
       // a facet laid across one cuts the corner and runs above it, so a shore
       // laid on the facets this chunk has and on the bare heights where it has
       // none would step down at its own seam.
-      const y = Math.max(p.y, plainsGroundHeight(s, u)) + .18;
+      const y = Math.max(p.y, plainsGroundHeight(s, u)) + .08;
       const color = tint ?? cropColor(s, u).color.lerp(green, crop);
       return { x: p.x, y: under ? Math.min(y, level - .12) : y, z: p.z - this.start, color };
     };
