@@ -41,7 +41,11 @@ test('the creek crosses under a bridge with a level channel, banks that hold the
     const creek = plainsCreekAt(420 + index * CREEK_SPACING);
     assert.equal(creek.index, index); assert.equal(creek.center, 420 + index * CREEK_SPACING);
     assert.ok(creek.level < plainsRoadHeight(creek.center) - 1.5);
-    for (const u of [-380, -160, -40, -9, 0, 9, 40, 160, 380, 540]) {
+    // Sampled the whole way along the creek, not at a handful of places: the
+    // road runs over swells, and a bed cut to a fixed depth below the local
+    // ground rose through the flat water wherever the channel wandered onto
+    // a rising part of one, which a few spot checks stepped straight over.
+    for (let u = -400; u <= 568; u += 4) {
       const center = creekCenterS(creek, u);
       assert.ok(Math.abs(center - creek.center) < 130, `the creek wanders too far at ${u}`);
       // Channel floor under the water, waterline inside the water ribbon, banks above it.
@@ -149,7 +153,8 @@ test('a pond stands on facets of its own, and the field never comes up through t
     // a facet twenty metres wide laid across the basin cut the corner and
     // came up through the water as a beach, so the cells a pond falls in are
     // cut finer, and the finer facets follow the bank.
-    let top = -Infinity;
+    let top = -Infinity, reach = 0;
+    for (let i = 0; i < 48; i++) reach = Math.max(reach, pondEdge(pond, i / 48 * Math.PI * 2) * 1.45);
     for (let i = 0; i < 48; i++) for (const d of [.2, .5, .8, .95, .98]) {
       const angle = i / 48 * Math.PI * 2, reach = pondEdge(pond, angle) * d;
       top = Math.max(top, chunk.ground(pond.s + Math.cos(angle) * reach, pond.u + Math.sin(angle) * reach).y - pond.level);
@@ -164,9 +169,16 @@ test('a pond stands on facets of its own, and the field never comes up through t
     const water = waters.find(w => Math.abs(w.getY(0) - pond.level) < 1e-3);
     assert.ok(water, `pond ${index} has no water at its level`);
     for (let i = 0; i < water.count; i++) assert.ok(Math.abs(water.getY(i) - pond.level) < 1e-3, 'the water lies level');
+    // One chunk can hold a pond on each side of the road, and the far side of
+    // the plain lies well below the near one, so only the bank round this
+    // pond is measured against this pond's water.
     const bank = chunk.group.getObjectByName('pond-banks').geometry.attributes.position;
+    const middle = chunk.ground(pond.s, pond.u);
     let high = -Infinity, low = Infinity;
-    for (let i = 0; i < bank.count; i++) { high = Math.max(high, bank.getY(i)); low = Math.min(low, bank.getY(i)); }
+    for (let i = 0; i < bank.count; i++) {
+      if (Math.hypot(bank.getX(i) - middle.x, bank.getZ(i) - middle.z) > reach * 1.2) continue;
+      high = Math.max(high, bank.getY(i)); low = Math.min(low, bank.getY(i));
+    }
     assert.ok(high > pond.level + .3, `pond ${index}: the bank has no crest`);
     assert.ok(low > pond.level - 4, `pond ${index}: the bank falls off the field`);
     // The waterline is one line: the water's edge vertices are the bank's

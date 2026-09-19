@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadFrame, randomAt } from './route.js';
+import { farmTrackClears } from './plains-route.js';
 import { plainsDiscoveryAssets as assets, plainsDiscoveryMaterial as material, plainsFoundationMaterial, plainsWindmillMaterial, plainsTurbineMaterial } from './plains-discovery-assets.js';
 
 const transform = new THREE.Object3D();
@@ -138,7 +139,12 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       const railU = u + side * (site.halfU + 1.5), { painted } = chunk.scenery;
       for (let t = s - 96; t < s + 96; t += 8) {
         if (!inChunk(t + 4)) continue;
+        // The ballast is bare earth and so is a worn track, so the two cross
+        // without a seam; the rails and their sleepers stop either side of the
+        // track, as a boundary fence does at a gateway, which reads as a farm
+        // crossing instead of sleepers standing up in the ruts.
         chunk.dirtQuad([[t, railU - 1.9], [t + 8, railU - 1.9], [t, railU + 1.9], [t + 8, railU + 1.9]]);
+        if (!farmTrackClears(t, railU) || !farmTrackClears(t + 8, railU)) continue;
         const a = chunk.ground(t, railU), b = chunk.ground(t + 8, railU);
         for (const offset of [-.75, .75]) {
           const from = chunk.ground(t, railU + offset), to = chunk.ground(t + 8, railU + offset);

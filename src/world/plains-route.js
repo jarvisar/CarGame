@@ -180,7 +180,12 @@ export function plainsGroundHeight(s, u) {
   // road keeps its embankment, so under the bridge the banks are steeper.
   const bankNoise = .35 * Math.sin(s * .7 + u * .4) + .25 * Math.sin(u * 1.3);
   const plain = lerp(base, creek.level + 1.6 + bankNoise, (1 - smoothstep(8, 24, d)) * smoothstep(7, 12, Math.abs(u)));
-  return plain - 3.4 * (1 - smoothstep(3, 8, d));
+  // The bed lies at the creek's own level, the same depth under the water all
+  // the way across, rather than a fixed depth under whatever stands above it.
+  // Cut from the local ground it followed the road's swell, and where the
+  // channel wandered onto a rising part of one the floor came up through the
+  // flat water as a bar across the creek.
+  return lerp(plain, Math.min(plain, creek.level - 1.8), 1 - smoothstep(3, 8, d));
 }
 // Driving queries see the bridge deck; the terrain sees the channel beneath it.
 export function plainsHeight(s, u) {
@@ -267,14 +272,16 @@ export function headlandDistance(s, u, field) {
 }
 // Stone piles cleared off the fields, and a stock pond in some pastures.
 export function fieldCorner(row, side, band) {
-  return randomAt(row * 4 + band, side > 0 ? 2791 : 2792) < .3;
+  return randomAt(row * 4 + band, side > 0 ? 2791 : 2792) < .232;
 }
 export function roadsideFence(row, side) { return randomAt(row, side > 0 ? 2785 : 2786) > .35; }
 // A farm track leaves the road through a gate in some rows, with a mailbox.
 // Sparingly: a track every few hundred metres reads as farm country, and one
 // every other field reads as a road that cannot decide where it is going.
 export function farmGate(row, side) {
-  if (randomAt(row, side > 0 ? 2787 : 2788) > .16) return null;
+  // The chance is per row, and a row is now 136 metres rather than 176, so it
+  // is cut to match: a shorter field is no reason for more gates in a mile.
+  if (randomAt(row, side > 0 ? 2787 : 2788) > .124) return null;
   const start = fieldBoundary(row), end = fieldBoundary(row + 1);
   const s = Math.round(start + 18 + randomAt(row, side > 0 ? 2789 : 2790) * (end - start - 36));
   // Most field gates are only gates: a farmer takes a tractor through one a
