@@ -10,6 +10,33 @@ import { plainsDiscoveries, plainsDiscoveryClears } from '../src/world/plains-di
 import { CoastalWorld } from '../src/world/environment.js';
 import { DrivingController } from '../src/vehicle.js';
 
+test('concrete bridge decks stay below the paved road through slopes and chunk seams', () => {
+  const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+  let checked = 0;
+  for (let index = -4; index <= 4; index++) {
+    const bridge = plainsCreekAt(420 + index * CREEK_SPACING);
+    for (let ci = Math.floor(bridge.start / 128); ci <= Math.floor(bridge.end / 128); ci++) {
+      const chunk = new PlainsChunk(ci);
+      try {
+        chunk.group.updateMatrixWorld(true);
+        const road = chunk.group.getObjectByName('plains-road');
+        const concrete = chunk.group.children.filter(mesh => ['creek-bridge', 'creek-bridge-deck'].includes(mesh.name));
+        for (let s = Math.max(chunk.start, bridge.start) + .3; s < Math.min(chunk.start + 128, bridge.end); s += .7) {
+          for (const u of [-5, 0, 5]) {
+            const point = chunk.ground(s, u);
+            ray.ray.origin.set(point.x, 100, point.z);
+            const pavement = ray.intersectObject(road, false)[0], support = ray.intersectObjects(concrete, false)[0];
+            assert.ok(pavement && support, 'the bridge needs a continuous road and deck');
+            assert.ok(pavement.point.y - support.point.y > .03, `concrete stripes through road at ${s}, ${u}`);
+            checked++;
+          }
+        }
+      } finally { chunk.dispose(); }
+    }
+  }
+  assert.ok(checked > 800);
+});
+
 test('plains terrain stays ordered, continuous, flat under the road and below the camera line of sight', () => {
   for (let col = 1; col < PLAINS_COLUMN_COUNT; col++) assert.ok(PLAINS_COLUMNS[col] > PLAINS_COLUMNS[col - 1]);
   for (let s = -10000; s < 10000; s += 13) {

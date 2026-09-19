@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { birdFlightGLSL } from './bird-flight.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { registerChunkResources } from './chunk-resources.js';
 import { waterClock } from './water.js';
@@ -65,26 +66,27 @@ export const parrotGeometry=macaw();
 export const parrotMaterial=new THREE.MeshStandardMaterial({vertexColors:true,flatShading:true,roughness:1,side:THREE.DoubleSide});
 parrotMaterial.onBeforeCompile=shader=>{
   shader.uniforms.jungleTime=waterClock.time;
-  shader.vertexShader='uniform float jungleTime; attribute float birdWing;\n'+shader.vertexShader;
+  shader.vertexShader='uniform float jungleTime; attribute float birdWing;\n'+birdFlightGLSL+shader.vertexShader;
   const motion=`
-    float phase = instanceMatrix[3].x * 0.41 + instanceMatrix[3].z * 0.29;
-    float beat = sin(jungleTime * 6.7 + phase) * smoothstep(-0.65, 0.3, sin(jungleTime * 0.8 + phase));
+    float seed = dot(instanceMatrix[3].xz, vec2(0.41, 0.29)) + float(gl_InstanceID) * 17.0;
+    float phase = birdHash(seed + 5.0) * 6.2831853;
+    float beat = birdBeat(jungleTime, seed, 6.7);
     float wingAngle = birdWing * (0.1 + beat * 0.48);
     mat2 wingTurn = mat2(cos(wingAngle), sin(wingAngle), -sin(wingAngle), cos(wingAngle));
-    float orbit = jungleTime * 0.16;
-    float yaw = atan(8.0 * sin(orbit), -14.0 * cos(orbit));
-    mat2 heading = mat2(cos(yaw), -sin(yaw), sin(yaw), cos(yaw));
+    float orbit = jungleTime * mix(0.13, 0.19, birdHash(seed + 6.0)) + phase;
+    vec2 radius = vec2(8.0, 14.0) * mix(0.85, 1.05, birdHash(seed + 7.0));
+    mat3 heading = birdFrame(orbit, radius, phase);
   `;
   shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>\n${motion}
     objectNormal.xy = wingTurn * objectNormal.xy;
-    objectNormal.xz = heading * objectNormal.xz;`);
+    objectNormal = heading * objectNormal;`);
   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
     transformed.xy = wingTurn * (transformed.xy - vec2(birdWing * 0.17, 0.0)) + vec2(birdWing * 0.17, 0.0);
-    transformed.xz = heading * transformed.xz;
-    transformed += vec3(cos(orbit) * 8.0, sin(jungleTime * 0.9 + phase) * 0.55, sin(orbit) * 14.0);
+    transformed = heading * transformed;
+    transformed += birdOrbit(orbit, radius, phase);
   `);
 };
-parrotMaterial.customProgramCacheKey=()=> 'jungle-macaw-flight-v1';
+parrotMaterial.customProgramCacheKey=()=> 'jungle-macaw-flight-v3';
 
 export const rainbowGeometry=new THREE.PlaneGeometry(2.4,1.25);
 rainbowGeometry.translate(0,.625,0);

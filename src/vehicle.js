@@ -226,7 +226,10 @@ export class DrivingController {
     // that full throttle balances at the off-road figure, plus a little more
     // the further above it the car arrives, so leaving the road at speed bleeds
     // off over a second or so instead of at the white line.
-    const surface = looseness * (stats.loose + .35 * Math.max(0, Math.abs(this.speed) - stats.offRoad));
+    // Tire resistance builds with motion. Applying the full high-speed drag
+    // at a standstill can exceed reverse torque and trap the car in the grass.
+    const surface = looseness * (stats.loose * Math.min(1, Math.abs(this.speed) / stats.offRoad)
+      + .35 * Math.max(0, Math.abs(this.speed) - stats.offRoad));
     // Grip goes with it. Losing top speed is a number in the corner of the
     // screen; losing turn-in is the thing that says "this is grass". A quarter
     // of it keeps the car recoverable, and the alignment assist still works out

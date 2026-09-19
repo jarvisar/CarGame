@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { registerChunkResources } from './chunk-resources.js';
 import { positionAt, shorelineOffset, randomAt } from './route.js';
 import { waterClock } from './water.js';
+import { birdFlightGLSL } from './bird-flight.js';
 
 const geometry = new THREE.BufferGeometry();
 geometry.setAttribute('position', new THREE.Float32BufferAttribute([
@@ -15,17 +16,24 @@ geometry.computeVertexNormals();
 const material = new THREE.MeshBasicMaterial({ color: '#fffaf0', side: THREE.DoubleSide, toneMapped: false });
 material.onBeforeCompile = shader => {
   shader.uniforms.birdTime = waterClock.time;
-  shader.vertexShader = 'uniform float birdTime;\n' + shader.vertexShader;
+  shader.uniforms.birdOrigin = waterClock.origin;
+  shader.vertexShader = 'uniform float birdTime; uniform float birdOrigin;\n' + birdFlightGLSL + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
     #include <begin_vertex>
-    float phase = instanceMatrix[3].x * 0.31;
-    float flap = sin(birdTime * 5.0 + phase) * smoothstep(0.25, 0.8, sin(birdTime * 0.55 + phase));
+    // A bird's identity stays fixed while its instance moves. Chunk position
+    // is wrapped like the water clock so origin rebases cannot reset its beat.
+    float flock = floor(mod(modelMatrix[3].z - birdOrigin, 4096.0) / 128.0 + 0.5);
+    float seed = flock * 7.0 + float(gl_InstanceID);
+    float flap = birdBeat(birdTime, seed, 5.0);
     transformed.y += abs(position.x) * (0.12 + flap * 0.25);
   `);
 };
-material.customProgramCacheKey = () => 'coastal-gull-v1';
+material.customProgramCacheKey = () => 'coastal-gull-v2';
 registerChunkResources('birds', { geometry, material });
 const transform = new THREE.Object3D();
+const flightUp = new THREE.Vector3(0, 1, 0), forward = new THREE.Vector3();
+const previousForward = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
+const basis = new THREE.Matrix4();
 
 export class CoastalBirds {
   constructor(chunk) {
@@ -43,13 +51,27 @@ export class CoastalBirds {
     this.mesh.computeBoundingSphere(); this.mesh.boundingSphere.radius += 85;
   }
   update(time) {
-    const phase = this.phase + time * .105;
     for (let i = 0; i < 4; i++) {
-      const s = this.start + 64 + Math.cos(phase) * 24 - i * 2.4;
-      const u = shorelineOffset(s) - 30 + Math.sin(phase) * 10 + (i % 2 ? 2 : -2);
-      const p = positionAt(s, u, this.flightHeight + Math.sin(phase * .7) * 2 + i * .35);
+      const seed = this.start / 128 * 7 + i;
+      const rate = .13 + randomAt(seed, 1771) * .065, delay = randomAt(seed, 1772) * 2.2;
+      const along = 21 + randomAt(seed, 1773) * 7, across = 8 + randomAt(seed, 1774) * 4;
+      const flightPoint = t => {
+        const phase = this.phase + t * rate + delay + .1 * Math.sin(t * .31 + delay);
+        const s = this.start + 64 + Math.cos(phase) * along - i * 2.4;
+        const u = shorelineOffset(s) - 30 + Math.sin(phase) * across + (i % 2 ? 2 : -2);
+        return positionAt(s, u, this.flightHeight + Math.sin(phase * 2 + delay) * 1.2 + i * .35);
+      };
+      const p = flightPoint(time), before = flightPoint(time - .02), after = flightPoint(time + .02);
+      // The shoreline bends the actual world-space path; an orbit angle alone
+      // cannot tell which way the bird is travelling along that path.
+      forward.set(after.x - before.x, after.y - before.y, after.z - before.z).normalize();
+      previousForward.set(p.x - before.x, p.y - before.y, p.z - before.z).normalize();
+      const turn = previousForward.z * forward.x - previousForward.x * forward.z;
+      const bank = THREE.MathUtils.clamp(turn * 90, -.32, .32);
+      right.crossVectors(forward, flightUp).normalize(); up.crossVectors(right, forward);
+      basis.makeBasis(right, up, forward.clone().negate());
       transform.position.set(p.x, p.y, p.z + this.start);
-      transform.rotation.set(0, -phase + Math.PI / 2, Math.sin(phase) * .16);
+      transform.quaternion.setFromRotationMatrix(basis); transform.rotateZ(bank);
       transform.scale.setScalar(.78); transform.updateMatrix(); this.mesh.setMatrixAt(i, transform.matrix);
     }
     this.mesh.instanceMatrix.needsUpdate = true;

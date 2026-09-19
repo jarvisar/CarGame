@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { birdFlightGLSL } from './bird-flight.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { randomAt } from './route.js';
 import { waterClock } from './water.js';
@@ -337,17 +338,17 @@ crowGeometry.computeVertexNormals(); crowGeometry.computeBoundingSphere();
 export const crowMaterial = new THREE.MeshBasicMaterial({ color: '#2b2622', side: THREE.DoubleSide, toneMapped: false });
 crowMaterial.onBeforeCompile = shader => {
   shader.uniforms.plainsTime = waterClock.time;
-  shader.vertexShader = 'uniform float plainsTime;\n' + shader.vertexShader;
+  shader.vertexShader = 'uniform float plainsTime;\n' + birdFlightGLSL + shader.vertexShader;
   shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
     #include <begin_vertex>
-    float phase = instanceMatrix[3].x * 0.37 + instanceMatrix[3].z * 0.23;
-    float flap = sin(plainsTime * 6.2 + phase) * smoothstep(-0.4, 0.5, sin(plainsTime * 0.7 + phase));
+    float seed = dot(instanceMatrix[3].xz, vec2(0.37, 0.23)) + float(gl_InstanceID) * 17.0;
+    float phase = birdHash(seed + 5.0) * 6.2831853;
+    float flap = birdBeat(plainsTime, seed, 6.2);
     transformed.y += abs(position.x) * (0.1 + flap * 0.3);
-    float orbit = plainsTime * 0.21 + phase;
-    float yaw = orbit + 1.5708;
-    mat2 heading = mat2(cos(yaw), -sin(yaw), sin(yaw), cos(yaw));
-    transformed.xz = heading * transformed.xz;
-    transformed += vec3(cos(orbit) * 11.0, sin(plainsTime * 1.1 + phase) * 0.6, sin(orbit) * 11.0);
+    float orbit = plainsTime * mix(0.17, 0.24, birdHash(seed + 6.0)) + phase;
+    vec2 radius = vec2(11.0, 13.0) * mix(0.85, 1.05, birdHash(seed + 7.0));
+    transformed = birdFrame(orbit, radius, phase) * transformed;
+    transformed += birdOrbit(orbit, radius, phase);
   `);
 };
-crowMaterial.customProgramCacheKey = () => 'plains-crows-v1';
+crowMaterial.customProgramCacheKey = () => 'plains-crows-v3';

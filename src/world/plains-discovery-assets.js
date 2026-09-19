@@ -87,7 +87,7 @@ class Parts {
 }
 const barnRed = '#a6412f', trim = '#e8e0cc', shingle = '#5e4d45', tin = '#8f9594', galvanised = '#c3c7c2', iron = '#5a5e5a';
 
-// A gable barn with a sliding door, a hayloft door and a ridge vent. Local
+// A gambrel barn with a sliding door, a hayloft door and a ridge vent. Local
 // z runs along the ridge; the door faces -x, toward the yard.
 function barn() {
   const p = new Parts();
@@ -96,10 +96,20 @@ function barn() {
   // White corner boards and a sill band, as the reference barns carry.
   for (const z of [-6, 6]) for (const x of [-3.72, 3.72]) p.box([x, 2.2, z], [.2, 4.4, .2], trim);
   for (const x of [-3.74, 3.74]) p.box([x, .18, 0], [.16, .36, 12], trim);
+  // Board-and-batten siding catches the light on the long walls.
+  for (const x of [-3.73, 3.73]) for (let z = -5.5; z < 6; z += .75) {
+    if (x < 0 && z > -.6 && z < 3.4) continue;
+    p.box([x, 2.3, z], [.08, 4.1, .07], '#bd5940');
+  }
   // A big sliding door on the yard side, with its track and a hayloft door.
   p.box([-3.76, 1.75, 1.4], [.14, 3.5, 3.6], '#38291f');
   for (const z of [-.45, 3.25]) p.box([-3.84, 1.75, z], [.07, 3.5, .2], trim);
   p.box([-3.84, 3.55, 1.4], [.07, .22, 3.9], trim);
+  p.box([-3.85, 1.75, 1.4], [.08, 3.4, .12], trim);
+  for (const z of [.5, 2.3]) {
+    p.beam([-3.88, .16, z - .8], [-3.88, 3.3, z + .8], .045, trim);
+    p.beam([-3.88, .16, z + .8], [-3.88, 3.3, z - .8], .045, trim);
+  }
   // The hayloft door belongs high on the gable end, under the ridge. On the
   // side wall it stood above the eaves, hanging in the air outside the roof.
   p.box([0, 5.6, -6.05], [1.5, 1.6, .07], '#38291f');
@@ -150,11 +160,22 @@ function farmhouse() {
   p.box([-4.05, 1.36, 0], [2, .2, 8], '#cdc2a8'); p.box([-4.05, .78, 0], [2, .92, 8], '#b9ad92');
   p.box([-4.25, 2.84, 0], [2.54, .14, 8.2], roofShade, [0, 0, .166]);
   for (const z of [-3.6, -1.2, 1.2, 3.6]) p.box([-4.9, 2.1, z], [.14, 1.28, .14], wall);
-  p.box([-4.9, 1.95, 0], [.1, .1, 8], wall);
+  // Leave a real opening in the porch rail above the front steps.
+  for (const [z, length] of [[-3.65, .7], [.65, 5.5]]) {
+    p.box([-4.9, 1.95, z], [.1, .1, length], wall);
+    for (let at = z - length / 2; at <= z + length / 2; at += .45) p.box([-4.9, 1.7, at], [.065, .5, .065], wall);
+  }
+  for (let k = 0; k < 4; k++) p.box([-5.2 - k * .32, .16 + (3 - k) * .17, -2.3], [.36, .32 + (3 - k) * .34, 1.7], '#b9ad92');
   p.box([-3.15, 1.6, -2.3], [.06, 2.1, .95], '#6b4f3f');
   for (const z of [.7, 2.8]) p.box([-3.15, 1.95, z], [.06, 1.1, .85], '#3f5260');
   for (const z of [-2.5, 0, 2.5]) p.box([3.15, 1.95, z], [.06, 1.1, .85], '#3f5260');
   for (const x of [-1.9, 1.9]) p.box([x, 1.95, 4.03], [.85, 1.1, .06], '#3f5260');
+  for (const x of [-3.18, 3.18]) for (const z of (x < 0 ? [.7, 2.8] : [-2.5, 0, 2.5])) {
+    for (const dz of [-.62, .62]) p.box([x, 1.95, z + dz], [.09, 1.25, .26], '#587166');
+    p.box([x, 1.35, z], [.13, .13, 1.03], trim);
+    p.box([x, 1.95, z], [.1, 1.1, .05], trim);
+  }
+  for (const z of [-4.02, 4.02]) for (const x of [-3.08, 3.08]) p.box([x, 1.7, z], [.16, 3.4, .14], trim);
   return p.finish();
 }
 // A farm windmill: a braced tower with a platform and tail vane. The rotor

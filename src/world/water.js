@@ -25,8 +25,12 @@ const declarations = /* glsl */`
   }
 `;
 
+export function createPondMaterial() {
+  return new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .72, metalness: .03 });
+}
+
 export function createWaterMaterial(lake = false) {
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: .72, metalness: .03 });
+  const material = createPondMaterial();
   material.onBeforeCompile = shader => {
     shader.uniforms.coastTime = waterClock.time; shader.uniforms.coastOrigin = waterClock.origin;
     shader.vertexShader = declarations + shader.vertexShader;

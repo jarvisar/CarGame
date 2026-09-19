@@ -2,15 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { plainsDiscoveries, plainsDiscoveryClears, PLAINS_DISCOVERY_SPACING, TURBINE_SPACING } from '../src/world/plains-discoveries.js';
-import { creekDistance, plainsGroundHeight, plainsRoadHeight } from '../src/world/plains-route.js';
+import { creekDistance, plainsGroundHeight, plainsRoadHeight, pondsNear, pondEdge } from '../src/world/plains-route.js';
 import { PlainsChunk } from '../src/world/plains.js';
 import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
+import { randomAt } from '../src/world/route.js';
+import { PLAINS_RAIL_REACH, PLAINS_RAIL_SPAN, plainsRailPath } from '../src/world/plains-railway.js';
 
 test('plains discoveries are sparse, varied, level, and stable across reversed chunk queries', () => {
   const sites = plainsDiscoveries(-100000, 100000);
   assert.deepEqual(plainsDiscoveries(-100000, 0).concat(plainsDiscoveries(0, 100000)), sites);
   assert.ok(sites.length > 35 && sites.length < 65);
-  assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['farmstead', 'grain-elevator', 'wind-turbines']);
+  assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['barn-silo', 'farmhouse', 'farmstead', 'grain-elevator', 'wind-turbines']);
   for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 1600, 'leave a kilometre and more between any two discoveries');
   for (const site of [...sites].reverse()) {
     assert.ok(Math.abs(site.s - (site.index + .5) * PLAINS_DISCOVERY_SPACING) < PLAINS_DISCOVERY_SPACING / 4);
@@ -18,7 +20,7 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
     assert.deepEqual(plainsDiscoveries(start, start + 128), sites.filter(other => other.s >= start && other.s < start + 128));
     const spots = site.towers ?? [{ s: site.s, u: site.u }];
     for (const spot of spots) {
-      assert.ok(Math.abs(spot.u) >= 30, 'structures stay well off the road');
+      assert.ok(Math.abs(spot.u) >= 26, 'structures stay well off the road');
       assert.ok(creekDistance(spot.s, spot.u) > 30, 'structures keep clear of the creek');
       // Level under the buildings, which is the ground each site declares it
       // needs; a compound keeps more ground clear than it builds on.
@@ -46,7 +48,7 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
 
 test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
   const sites = plainsDiscoveries(0, 200000);
-  for (const kind of ['farmstead', 'grain-elevator']) {
+  for (const kind of ['farmstead', 'farmhouse', 'barn-silo', 'grain-elevator']) {
     const site = sites.find(other => other.kind === kind);
     const chunk = new PlainsChunk(Math.floor(site.s / 128));
     const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position;
@@ -86,7 +88,7 @@ test('a farm wears its yard bare over most of the ground it takes in, and only s
     return !((ab < 0 || bc < 0 || ca < 0) && (ab > 0 || bc > 0 || ca > 0));
   });
   let farms = 0, fenced = 0, worn = 0;
-  for (const site of plainsDiscoveries(0, 100000).filter(other => other.kind === 'farmstead')) {
+  for (const site of plainsDiscoveries(0, 300000).filter(other => other.kind === 'farmstead')) {
     const chunk = new PlainsChunk(Math.floor(site.s / 128));
     const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position.array, triangles = [];
     for (let i = 0; i < dirt.length; i += 9) {
@@ -120,7 +122,7 @@ test('a farm wears its yard bare over most of the ground it takes in, and only s
 
 test('plains discovery meshes and the spinning rotor materials survive worker transfer', () => {
   const sites = plainsDiscoveries(-100000, 100000);
-  for (const [kind, name] of [['farmstead', 'plains-barns'], ['farmstead', 'plains-windmill-rotors'], ['grain-elevator', 'plains-grain-elevators'], ['wind-turbines', 'plains-turbine-rotors']]) {
+  for (const [kind, name] of [['farmhouse', 'plains-farmhouses'], ['barn-silo', 'plains-silos'], ['farmstead', 'plains-barns'], ['farmstead', 'plains-windmill-rotors'], ['grain-elevator', 'plains-grain-elevators'], ['grain-elevator', 'plains-railway-rails'], ['wind-turbines', 'plains-turbine-rotors']]) {
     const site = sites.find(site => site.kind === kind), original = new PlainsChunk(Math.floor(site.s / 128));
     const before = original.group.getObjectByName(name);
     assert.ok(before, `${name} missing from the chunk`);
@@ -148,5 +150,119 @@ test('plains discovery meshes and the spinning rotor materials survive worker tr
         }
       }
     } finally { original.dispose(); restored.dispose(); }
+  }
+});
+
+test('all farm variants vary their setback without exceeding the previous placement', () => {
+  const sites = plainsDiscoveries(-500000, 500000);
+  for (const kind of ['farmstead', 'farmhouse', 'barn-silo']) {
+    const farms = sites.filter(site => site.kind === kind);
+    assert.ok(farms.length >= 5);
+    assert.deepEqual([...new Set(farms.map(site => site.side))].sort(), [-1, 1]);
+    assert.ok(Math.min(...farms.map(site => Math.abs(site.u))) < 44, `${kind} should sometimes stand closer than the old minimum`);
+    assert.ok(Math.max(...farms.map(site => Math.abs(site.u))) - Math.min(...farms.map(site => Math.abs(site.u))) > 15);
+    for (const site of farms) {
+      assert.ok(Math.abs(site.u) <= 44 + randomAt(site.index, 2905) * 22, 'never farther than the old seeded distance');
+      assert.ok(Math.abs(site.u) - site.halfU >= 12, 'the yard leaves room for the verge and dirt entrance');
+    }
+  }
+});
+
+test('pond water and banks remain clear of turbines, farmyards, drives and rail spurs', () => {
+  for (const site of plainsDiscoveries(-500000, 500000)) {
+    const rectangles = site.towers ? site.towers.map(tower => [tower.s, tower.u, 9, 9]) : [
+      [site.s, site.u, site.halfS + 4, site.halfU + 6],
+      [site.s + site.drive, (site.u + site.side * 6) / 2, 5, (Math.abs(site.u) - 6) / 2],
+    ];
+    if (site.kind === 'grain-elevator') {
+      for (let ds = -PLAINS_RAIL_REACH; ds <= PLAINS_RAIL_REACH; ds += 4) {
+        const rail = plainsRailPath(site, site.s + ds);
+        rectangles.push([rail.s, rail.u, 2, 3]);
+        assert.ok(creekDistance(rail.s, rail.u) > 10, 'railway must stay clear of the creek');
+      }
+    }
+    for (const [s, u, halfS, halfU] of rectangles) for (const pond of pondsNear(s)) {
+      for (let i = 0; i < 64; i++) {
+        const angle = i / 64 * Math.PI * 2, radius = pondEdge(pond, angle) * 1.65;
+        const ds = Math.abs(pond.s + Math.cos(angle) * radius - s);
+        const du = Math.abs(pond.u + Math.sin(angle) * radius - u);
+        assert.ok(ds > halfS + 2 || du > halfU + 2, `${site.kind} overlaps a pond bank at ${site.s}`);
+      }
+    }
+  }
+});
+
+test('railways bend out of view on both sides and join across every streamed chunk', () => {
+  const sites = plainsDiscoveries(-100000, 100000).filter(site => site.kind === 'grain-elevator').slice(0, 3);
+  assert.equal(sites.length, 3);
+  for (const site of sites) {
+    const endpoints = [], matrix = new THREE.Matrix4();
+    let chunksWithRails = 0;
+    for (let index = Math.floor((site.s - PLAINS_RAIL_SPAN) / 128); index <= Math.floor((site.s + PLAINS_RAIL_SPAN) / 128); index++) {
+      const chunk = new PlainsChunk(index);
+      try {
+        let segments = 0;
+        chunk.group.traverse(mesh => {
+          if (mesh.name !== 'plains-railway-rails') return;
+          for (let i = 0; i < mesh.count; i++) {
+            mesh.getMatrixAt(i, matrix); segments++;
+            for (const end of [-.5, .5]) {
+              const p = new THREE.Vector3(0, end, 0).applyMatrix4(matrix); p.z -= chunk.start;
+              // Instance matrices are float32; merge within a millimetre
+              // rather than separating near-identical points at rounding bins.
+              const shared = endpoints.find(endpoint => endpoint.point.distanceToSquared(p) < 1e-6);
+              if (shared) shared.count++; else endpoints.push({ point: p, count: 1 });
+            }
+          }
+        });
+        assert.ok(segments > 0, 'neighboring chunks must build the continuing rails');
+        chunksWithRails++;
+      } finally { chunk.dispose(); }
+    }
+    assert.ok(chunksWithRails >= 4);
+    assert.equal(endpoints.filter(endpoint => endpoint.count === 1).length, 4, 'only the two distant ends of each rail may be open');
+    assert.ok(endpoints.every(endpoint => endpoint.count <= 2), 'no duplicate track segments at chunk boundaries');
+    for (const direction of [-1, 1]) {
+      let previous = 0;
+      let previousPoint = null;
+      for (let ds = 0; ds <= PLAINS_RAIL_REACH; ds += 4) {
+        const p = plainsRailPath(site, site.s + direction * ds);
+        assert.ok(Math.abs(p.u) >= previous, 'each approach must head away from the highway');
+        assert.ok(!plainsDiscoveryClears(p.s, p.u, [site], 2), 'keep planting and fences off the entire railway');
+        if (previousPoint) {
+          const turn = Math.acos(Math.max(-1, Math.min(1, p.ds * previousPoint.ds + p.du * previousPoint.du)));
+          const distance = Math.hypot(p.s - previousPoint.s, p.u - previousPoint.u);
+          assert.ok(turn <= distance / 180 + 1e-5, 'railway bends must have a broad radius, including both joins');
+        }
+        previousPoint = p;
+        previous = Math.abs(p.u);
+      }
+      assert.ok(previous >= 500, 'the track end must lie beyond the roadside camera views');
+    }
+  }
+});
+
+test('standalone farms contain their intended buildings and keep fenced entrances open', () => {
+  for (const site of plainsDiscoveries(-100000, 100000).filter(site => ['farmhouse', 'barn-silo', 'farmstead'].includes(site.kind))) {
+    const chunk = new PlainsChunk(Math.floor(site.s / 128));
+    try {
+      assert.equal(!!chunk.group.getObjectByName('plains-farmhouses'), site.kind !== 'barn-silo');
+      assert.equal(!!chunk.group.getObjectByName('plains-barns'), site.kind !== 'farmhouse');
+      assert.equal(!!chunk.group.getObjectByName('plains-silos'), site.kind !== 'farmhouse');
+      assert.equal(!!chunk.group.getObjectByName('plains-windmill-towers'), site.kind === 'farmstead');
+      const gate = chunk.ground(site.s + site.drive, site.u - site.side * (site.halfU - 3));
+      const matrix = new THREE.Matrix4(), a = new THREE.Vector3(), b = new THREE.Vector3();
+      chunk.group.traverse(rails => {
+        if (rails.name !== 'fence-rails') return;
+        for (let i = 0; i < rails.count; i++) {
+          rails.getMatrixAt(i, matrix);
+          matrix.premultiply(rails.matrix);
+          a.set(0, -.5, 0).applyMatrix4(matrix); b.set(0, .5, 0).applyMatrix4(matrix);
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const t = Math.max(0, Math.min(1, ((gate.x - a.x) * dx + (gate.z - a.z) * dz) / (dx * dx + dz * dz || 1)));
+          assert.ok(Math.hypot(a.x + dx * t - gate.x, a.z + dz * t - gate.z) > 2.5, 'fence rail blocks the dirt entrance');
+        }
+      });
+    } finally { chunk.dispose(); }
   }
 });

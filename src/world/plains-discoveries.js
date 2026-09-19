@@ -1,5 +1,6 @@
 import { randomAt } from './route.js';
-import { plainsGroundHeight, plainsCreekAt } from './plains-route.js';
+import { plainsGroundHeight, plainsCreekAt, pondsNear, creekDistance } from './plains-route.js';
+import { PLAINS_RAIL_REACH, plainsRailPath, plainsRailClears } from './plains-railway.js';
 
 // Close enough that a drive turns up a farmstead, an elevator or a row of
 // turbines every few kilometres rather than once in a long while.
@@ -16,7 +17,12 @@ function districtSite(index) {
     // Shuffle a three-district set so a long drive offers different discoveries.
     const orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2902) * orders.length)];
-    const kind = ['farmstead', 'grain-elevator', 'wind-turbines'][order[((index % 3) + 3) % 3]];
+    let kind = ['farmstead', 'grain-elevator', 'wind-turbines'][order[((index % 3) + 3) % 3]];
+    const farm = kind === 'farmstead';
+    if (farm) {
+      const variant = randomAt(index, 2910);
+      kind = variant < .5 ? 'farmstead' : variant < .75 ? 'farmhouse' : 'barn-silo';
+    }
     const desired = (index + .5) * PLAINS_DISCOVERY_SPACING + (randomAt(index, 2903) - .5) * PLAINS_DISCOVERY_SPACING / 4;
     // The creek wanders a good hundred metres from its crossing out in the
     // fields, and a row of turbines is nearly two hundred metres long.
@@ -26,16 +32,48 @@ function districtSite(index) {
     // and takes them in turn rather than on a coin: a coin left one side of
     // the road with every farm on a drive for a good while at a time. Each
     // set of three districts carries one farm, so the set decides its side.
-    const side = kind === 'farmstead' ? (Math.floor(index / 3) % 2 ? 1 : -1) : 1;
-    const cross = kind === 'farmstead' ? 44 + randomAt(index, 2905) * 22 : kind === 'grain-elevator' ? 36 + randomAt(index, 2905) * 12 : 60 + randomAt(index, 2905) * 18;
-    const halfS = kind === 'farmstead' ? 30 : kind === 'grain-elevator' ? 19 : TURBINE_SPACING + 20;
-    const halfU = kind === 'farmstead' ? 21 : kind === 'grain-elevator' ? 13 : 26;
-    for (const offset of [0, 80, -80, 160, -160, 240, -240, 320, -320]) {
+    const side = farm ? (Math.floor(index / 3) % 2 ? 1 : -1) : 1;
+    // Keep the old 66 m maximum, and never move an existing farm farther
+    // away for the same random draw. Smaller yards can fit nearer the road.
+    const nearest = kind === 'farmstead' ? 34 : kind === 'farmhouse' ? 26 : 29;
+    const cross = farm ? nearest + randomAt(index, 2905) * (66 - nearest) : kind === 'grain-elevator' ? 36 + randomAt(index, 2905) * 12 : 60 + randomAt(index, 2905) * 18;
+    const halfS = kind === 'farmstead' ? 30 : kind === 'farmhouse' ? 19 : kind === 'barn-silo' ? 23 : kind === 'grain-elevator' ? 19 : TURBINE_SPACING + 20;
+    const halfU = kind === 'farmstead' ? 21 : kind === 'farmhouse' ? 14 : kind === 'barn-silo' ? 16 : kind === 'grain-elevator' ? 13 : 26;
+    const offsets = [0, 80, -80, 160, -160, 240, -240, 320, -320];
+    // A railway needs a longer dry corridor; try the gaps between the usual
+    // sites before giving up its district, without widening the search area.
+    if (kind === 'grain-elevator') offsets.push(40, -40, 120, -120, 200, -200, 280, -280);
+    for (const offset of offsets) {
       const s = desired + offset, u = side * cross;
       if (Math.abs(s - plainsCreekAt(s).center) < creekRoom) continue;
       const towers = kind === 'wind-turbines'
         ? [-1, 0, 1].map(k => ({ s: s + k * TURBINE_SPACING, u: u + (randomAt(index, 2906 + k) - .5) * 24 })) : null;
       const spots = towers ?? [{ s, u }];
+      const drive = (randomAt(index, 2907) > .5 ? 1 : -1) * (halfS - 12);
+      // Reserve dry ground before committing to a site. Terrain flatness
+      // alone can accept a pond's flat floor or a footing on its bank.
+      // Include banks and planting, each tower, yards, drives, and rail spurs.
+      const dryRectangle = (centerS, centerU, reachS, reachU) => pondsNear(centerS).every(pond => {
+        const ds = Math.max(0, Math.abs(pond.s - centerS) - reachS);
+        const du = Math.max(0, Math.abs(pond.u - centerU) - reachU);
+        const bank = pond.radius * Math.sqrt(pond.stretch) * 1.14 * 1.65 + 5;
+        return Math.hypot(ds, du) > bank;
+      });
+      if (towers ? !towers.every(tower => dryRectangle(tower.s, tower.u, 9, 9))
+        : !dryRectangle(s, u, halfS + 4, halfU + 6)
+          || !dryRectangle(s + drive, side * (cross + 6) / 2, 5, (cross - 6) / 2)) continue;
+      if (kind === 'grain-elevator') {
+        const candidate = { s, u, side, halfU };
+        let clear = true;
+        for (let ds = -PLAINS_RAIL_REACH; ds < PLAINS_RAIL_REACH; ds += 4) {
+          const rail = plainsRailPath(candidate, s + ds), end = plainsRailPath(candidate, s + ds + 4);
+          if (!dryRectangle((rail.s + end.s) / 2, (rail.u + end.u) / 2, Math.abs(end.s - rail.s) / 2 + 5, Math.abs(end.u - rail.u) / 2 + 5)
+            || creekDistance(rail.s, rail.u) < 20) {
+            clear = false; break;
+          }
+        }
+        if (!clear) continue;
+      }
       // The ground a site needs level is the ground its buildings stand on,
       // which is not the whole of what it keeps clear: a farm's yard reaches
       // well past its own buildings, and a swell out at the edge of it is
@@ -51,7 +89,7 @@ function districtSite(index) {
       if (towers) site.towers = towers;
       // The drive comes in toward one end of the yard, but not so near the
       // end that the gap it needs in the fence takes the corner post with it.
-      else site.drive = (randomAt(index, 2907) > .5 ? 1 : -1) * (halfS - 12);
+      else site.drive = drive;
       break;
     }
   }
@@ -74,6 +112,7 @@ export function plainsDiscoveries(first, last) {
 export function plainsDiscoveryClears(s, u, discoveries, radius = 0) {
   return discoveries.every(site => {
     if (site.towers) return site.towers.every(tower => Math.hypot(s - tower.s, u - tower.u) > 9 + radius);
+    if (site.kind === 'grain-elevator' && !plainsRailClears(s, u, site, radius)) return false;
     if (Math.abs(s - site.s) < site.halfS + radius + 2 && Math.abs(u - site.u) < site.halfU + radius + 2) return false;
     const onDrive = Math.abs(s - site.s - site.drive) < 3 + radius && u * site.side > 6 - radius && u * site.side < Math.abs(site.u);
     return !onDrive;

@@ -7,12 +7,13 @@ import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roa
 import { PLAINS_STEP, PLAINS_COLUMNS, PLAINS_COLUMN_COUNT, ROAD_RESERVE, plainsVertex, plainsRowStep, plainsPosition, plainsRoadHeight, plainsGroundHeight,
   plainsCreekAt, creekCenterS, creekDistance, CREEK_WATER_HALF_WIDTH, BRIDGE_HALF_LENGTH, fieldAt, fieldRowAt, fieldBoundary, fieldBands,
   rowBoundaryKind, bandBoundaryKind, roadsideFence, farmGate, farmTrackClears, fieldCorner, pondsNear, pondDistance, pondEdge, headlandDistance } from './plains-route.js';
-import { createWaterMaterial, animateWater } from './water.js';
+import { createWaterMaterial, createPondMaterial, animateWater } from './water.js';
 import { terrainSampler } from './coastal-assets.js';
 import { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry, crowMaterial } from './plains-assets.js';
 import { plainsDiscoveries, plainsDiscoveryClears } from './plains-discoveries.js';
 import { plainsDiscoveryAssets, plainsDiscoveryMaterial } from './plains-discovery-assets.js';
 import { buildPlainsDiscoveries } from './plains-discovery-scenery.js';
+import { PLAINS_RAIL_REACH } from './plains-railway.js';
 
 const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true, ...extra });
 const terrainMaterial = material('#ffffff', { vertexColors: true });
@@ -42,6 +43,7 @@ const dirtMaterial = material('#ffffff', { vertexColors: true, flatShading: fals
 // worn yard: it is relief, and flat facets are what let the light show it.
 const bankMaterial = material('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
 const waterMaterial = createWaterMaterial(true);
+const pondMaterial = createPondMaterial();
 const leavesMaterial = material('#ffffff', { vertexColors: true });
 const barkMaterial = material('#6a563f');
 const shrubMaterial = material('#ffffff');
@@ -66,7 +68,7 @@ const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const poleGeometry = new THREE.CylinderGeometry(.85, 1, 1, 6);
 const shrubGeometry = new THREE.IcosahedronGeometry(1, 0);
 const dummy = new THREE.Object3D(), up = new THREE.Vector3(0, 1, 0);
-registerChunkResources('plains', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, dirtMaterial, bankMaterial, waterMaterial, leavesMaterial,
+registerChunkResources('plains', { terrainMaterial, roadMaterial, shoulderMaterial, edgeMaterial, centerMaterial, dirtMaterial, bankMaterial, waterMaterial, pondMaterial, leavesMaterial,
   barkMaterial, shrubMaterial, strawMaterial, timberMaterial, poleMaterial, wireMaterial, railMaterial, metalMaterial, concreteMaterial, paintedMaterial, hideMaterial, rushMaterial, boxGeometry, poleGeometry, shrubGeometry, plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, fringeMaterial, crowGeometry, crowMaterial });
 
 function geometry(vertices, colors, furrows) {
@@ -153,9 +155,9 @@ export class PlainsChunk {
   constructor(index) {
     this.index = index; this.start = index * CHUNK_LENGTH; this.group = new THREE.Group(); this.group.name = `plains-chunk-${index}`; this.owned = [];
     this.features = { discoveries: [] };
-    // A row of turbines reaches well past its own district anchor.
-    this.discoveries = plainsDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
-    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], dirtTints: [], shores: [], shoreTints: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
+    // Rail approaches and turbine rows continue through neighboring chunks.
+    this.discoveries = plainsDiscoveries(this.start - PLAINS_RAIL_REACH - 12, this.start + CHUNK_LENGTH + PLAINS_RAIL_REACH + 12);
+    this.scenery = { posts: [], wires: [], rails: [], railwayRails: [], railwaySleepers: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], dirtTints: [], shores: [], shoreTints: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
     this.buildTerrain(); this.buildRoad(); this.buildCreek(); this.buildScenery();
     buildPlainsDiscoveries(this, this.discoveries);
     this.finishScenery();
@@ -470,15 +472,31 @@ export class PlainsChunk {
       const water = this.addMesh(geometry(vertices, colors), waterMaterial, 'creek-water');
       water.geometry.boundingSphere.radius += .5;
     }
-    // A short concrete bridge: a deck slab in road-following segments with
-    // parapets, wing walls at the abutments, and a pier on each bank.
+    // The deck follows the same two-metre samples as the road. Horizontal
+    // boxes used to cut through uphill sections and leave transverse stripes.
     const { concrete } = this.scenery, inChunk = s => s >= this.start && s < this.start + CHUNK_LENGTH;
     const road = plainsRoadHeight, across = s => -roadFrame(s).angle;
     const point = (s, u, y) => { const p = plainsPosition(s, u, y); return [p.x, p.y, p.z + this.start]; };
+    const deck = [];
+    const deckPoint = (s, u, lift) => plainsPosition(s, u, road(s) + lift);
+    const face = (a, b, c, d) => {
+      for (const p of [a, b, c, b, d, c]) deck.push(p.x, p.y, p.z + this.start);
+    };
+    for (let s = Math.max(this.start, creek.start); s < Math.min(this.start + CHUNK_LENGTH, creek.end); s += 2) {
+      const end = Math.min(s + 2, creek.end, this.start + CHUNK_LENGTH);
+      const a = deckPoint(s, -7.3, -.15), b = deckPoint(end, -7.3, -.15);
+      const c = deckPoint(s, 7.3, -.15), d = deckPoint(end, 7.3, -.15);
+      const e = deckPoint(s, -7.3, -1.05), f = deckPoint(end, -7.3, -1.05);
+      const g = deckPoint(s, 7.3, -1.05), h = deckPoint(end, 7.3, -1.05);
+      face(a, c, b, d); face(e, f, g, h);
+      face(a, b, e, f); face(c, g, d, h);
+      if (s === creek.start) face(a, e, c, g);
+      if (end === creek.end) face(b, d, f, h);
+    }
+    if (deck.length) this.addMesh(geometry(deck), concreteMaterial, 'creek-bridge-deck', true);
     for (let k = 0; k < 4; k++) {
       const s = creek.center - BRIDGE_HALF_LENGTH + 3.5 + k * 7;
       if (!inChunk(s)) continue;
-      concrete.push({ p: point(s, 0, road(s) - .48), scale: [14.6, .9, 7.05], r: [0, across(s), 0] });
       for (const side of [-1, 1]) {
         concrete.push({ p: point(s, side * 6.55, road(s) + .55), scale: [.36, 1.02, 7.05], r: [0, across(s), 0], color: '#cbc6b7' });
       }
@@ -650,10 +668,14 @@ export class PlainsChunk {
           // track that opens at its far end and then has nothing to open onto
           // is worse than one that simply runs out into the crop.
           const shedU = side * gate.reach;
-          const standing = gate.worn && gate.shed && inside(gate.s) && this.clearAt(gate.s, shedU, 10, true)
+          let trackClear = true;
+          for (let cross = 10; cross <= gate.reach; cross += 2) {
+            if (!this.clearAt(gate.s, side * cross, 3, true)) { trackClear = false; break; }
+          }
+          const standing = gate.worn && trackClear && gate.shed && inside(gate.s) && this.clearAt(gate.s, shedU, 10, true)
             && this.levelGround(gate.s, shedU, 5, 2.4);
           if (standing) this.outbuilding(gate.s, shedU, random, this.track(gate.s, side, gate.reach - 8.5, 5.8, true));
-          else if (gate.worn) this.track(gate.s, side, gate.reach);
+          else if (gate.worn && trackClear) this.track(gate.s, side, gate.reach);
           // The mailbox stays inside this chunk, on whichever side of the gate that is.
           const boxS = inChunk(gate.s - 4.5) ? gate.s - 4.5 : gate.s + 4.5;
           const p = this.ground(boxS, side * 7.4), angle = -roadFrame(gate.s).angle;
@@ -1007,7 +1029,7 @@ export class PlainsChunk {
       triangle(vertices, colors, surface[j][0], surface[j][1], surface[i][1], water(1), this.start);
       triangle(vertices, colors, surface[i][1], surface[j][1], middle, water(2), this.start);
     }
-    this.addMesh(geometry(vertices, colors), waterMaterial, 'stock-pond').geometry.boundingSphere.radius += .5;
+    this.addMesh(geometry(vertices, colors), pondMaterial, 'stock-pond');
     // Reeds grow in beds, two of them, standing in the shallows and up onto
     // the wet mud, well away from where the cattle tread everything down; a
     // few odd clumps stand elsewhere along the edge.
@@ -1123,6 +1145,8 @@ export class PlainsChunk {
     instances(this.group, boxGeometry, metalMaterial, boxes, 'mailboxes');
     instances(this.group, boxGeometry, concreteMaterial, concrete, 'creek-bridge');
     instances(this.group, boxGeometry, paintedMaterial, painted, 'signs-and-stones');
+    instances(this.group, boxGeometry, paintedMaterial, this.scenery.railwayRails, 'plains-railway-rails');
+    instances(this.group, boxGeometry, paintedMaterial, this.scenery.railwaySleepers, 'plains-railway-sleepers');
     instances(this.group, cowGeometry, hideMaterial, cows, 'cattle');
     instances(this.group, rushGeometry, rushMaterial, rushes, 'rushes', false);
     // The fringe throws no shadow and stays out of the occlusion prepass:

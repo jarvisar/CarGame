@@ -44,6 +44,19 @@ test('every car builds a solid, steerable model', () => {
 // The two chooser-only cars are the ones allowed to break the tourer's mould.
 const RACERS = ['sports', 'formula'];
 
+test('every car can reverse from rest and after braking off road', () => {
+  for (const id of CAR_IDS) for (const fps of [30, 60, 144]) for (const startingSpeed of [0, 12]) {
+    const car = new DrivingController(straightRoute, {}, id);
+    car.u = 8; car.speed = startingSpeed;
+    for (let i = 0; i < fps * 8; i++) {
+      car.u = 8; // Keep the whole trial off road, even with lane assistance.
+      car.update(1 / fps, { brake: 1 });
+    }
+    assert.ok(car.speed < -3, `${id} could not reverse off road at ${fps} fps after starting at ${startingSpeed}`);
+    car.disposeModel();
+  }
+});
+
 test('the coastal wagon keeps the original handling and every car stays close to it', () => {
   const base = carStats(DEFAULT_CAR);
   assert.equal(base.topSpeed, 28); assert.equal(base.acceleration, 11.3); assert.equal(base.braking, 20);
@@ -62,11 +75,12 @@ test('the coastal wagon keeps the original handling and every car stays close to
   assert.ok(formula.topSpeed > sports.topSpeed * 1.15, 'the racer should clear the coupe by a wide margin');
   assert.ok(formula.acceleration > sports.acceleration * 1.25 && formula.braking > sports.braking);
   assert.ok(formula.grip > sports.grip, 'slicks should turn in harder than the coupe');
+  assert.ok(Math.abs(flatOut('formula', 30).speed / .44704 - 100) < .1, 'the Formula car must actually reach 100 mph under throttle');
   // Leaving the tarmac costs every car a third of its top end, give or take,
   // and the order is the character: off-roaders keep most, racers least.
   for (const id of CAR_IDS) {
     const ratio = carStats(id).offRoad / carStats(id).topSpeed;
-    assert.ok(ratio >= .6 && ratio <= .7, `${id} keeps ${(ratio * 100).toFixed(0)}% off the tarmac`);
+    assert.ok(ratio >= (id === 'formula' ? .53 : .6) && ratio <= .7, `${id} keeps ${(ratio * 100).toFixed(0)}% off the tarmac`);
   }
   const share = id => carStats(id).offRoad / carStats(id).topSpeed;
   assert.ok(share('pickup') > share('van') && share('jungle') > share('hatchback'));

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadFrame, randomAt } from './route.js';
-import { farmTrackClears } from './plains-route.js';
+import { buildPlainsRailway } from './plains-railway.js';
 import { plainsDiscoveryAssets as assets, plainsDiscoveryMaterial as material, plainsFoundationMaterial, plainsWindmillMaterial, plainsTurbineMaterial } from './plains-discovery-assets.js';
 
 const transform = new THREE.Object3D();
@@ -12,10 +12,12 @@ const transform = new THREE.Object3D();
 // building takes, and whether the barn stands across the yard from the house
 // or square in the middle of it with the silo beside it.
 const FARM_LAYOUTS = [
-  { barn: [-11, 5], silo: [-21, 3], house: [13, -8], mill: [20, 12], shed: [1, 16], tractor: [4, 9] },
-  { barn: [12, 5], silo: [21, 3], house: [-13, -8], mill: [-20, 12], shed: [-2, 16], tractor: [-5, 9] },
-  { barn: [-3, 7], silo: [-13, 9], house: [15, -8], mill: [-21, -7], shed: [14, 14], tractor: [3, -4] },
+  { barn: [-9, 5], silo: [-23, 5], house: [13, -8], mill: [20, 12], shed: [1, 16], tractor: [4, 5] },
+  { barn: [9, 5], silo: [23, 5], house: [-13, -8], mill: [-20, 12], shed: [-2, 16], tractor: [-5, 5] },
+  { barn: [-3, 7], silo: [-17, 9], house: [15, -8], mill: [-21, -7], shed: [14, 14], tractor: [3, -4] },
 ];
+const HOUSE_LAYOUT = { house: [0, 1] };
+const BARN_LAYOUT = { barn: [-5, 3], silo: [10, 5], tractor: [10, -6] };
 // The yard's trees stand outside its fence, so no arrangement of the
 // buildings puts a crown through a roof: a conifer windbreak along the back
 // and the two ends, where a farm plants its shelter, and oaks out on the
@@ -51,6 +53,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
   };
   for (const site of discoveries) {
     const { s, u, side, kind } = site;
+    if (kind === 'grain-elevator') buildPlainsRailway(chunk, site);
     if (kind === 'wind-turbines') {
       for (const [k, tower] of site.towers.entries()) {
         if (!inChunk(tower.s)) continue;
@@ -72,16 +75,18 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     // The drive runs from the highway to the gate, and the yard's own earth
     // opens out to meet it there, so a farm is reached over one piece of
     // ground rather than over a track that stops short of a fence.
-    const drive = chunk.track(s + site.drive, side, Math.abs(u) - site.halfU + (kind === 'farmstead' ? 4 : 2), 5.8, true);
+    const farm = ['farmstead', 'farmhouse', 'barn-silo'].includes(kind);
+    const drive = chunk.track(s + site.drive, side, Math.abs(u) - site.halfU + (farm ? 4 : 2), 5.8, true);
     let ground;
-    if (kind === 'farmstead') {
-      chunk.dirtPatch(s, u, 25, 17, drive);
-      const layout = FARM_LAYOUTS[Math.floor(randomAt(site.index, 2938) * FARM_LAYOUTS.length)];
+    if (farm) {
+      chunk.dirtPatch(s, u, site.halfS - 5, site.halfU - 4, drive);
+      const layout = kind === 'farmhouse' ? HOUSE_LAYOUT : kind === 'barn-silo' ? BARN_LAYOUT
+        : FARM_LAYOUTS[Math.floor(randomAt(site.index, 2938) * FARM_LAYOUTS.length)];
       // No farm sets its buildings out on a drawing board. Each stands a pace
       // off where the plan puts it and a few degrees off square with the rest,
       // which is most of what keeps a yard from reading as a stamped copy.
       const stand = (name, k) => {
-        const [ds, du] = layout[name], shift = salt => (randomAt(site.index, salt + k) - .5) * 2.4;
+        const [ds, du] = layout[name], shift = salt => (randomAt(site.index, salt + k) - .5) * 1.2;
         const [standS, standU] = local(ds + shift(2940), du + shift(2950));
         return { s: standS, u: standU, yaw: angle + (randomAt(site.index, 2960 + k) - .5) * .22 };
       };
@@ -89,25 +94,50 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       // with the cabins and the lighthouse, so a barn holds its own against
       // the trees round it and reads from the road.
       const big = [1.4, 1.4, 1.4];
-      const barn = stand('barn', 0);
-      ground = foundation(barn.s, barn.u, 4.5, 7, barn.yaw);
-      add('plains-barns', assets.barn, material, point(barn.s, barn.u, ground), [0, barn.yaw + Math.PI / 2, 0], big);
-      const silo = stand('silo', 1);
-      const siloGround = foundation(silo.s, silo.u, 3.1, 3.1, silo.yaw);
-      add('plains-silos', assets.silo, material, point(silo.s, silo.u, siloGround), [0, silo.yaw, 0], big);
-      const house = stand('house', 2);
-      const houseGround = foundation(house.s, house.u, 4, 5, house.yaw);
-      add('plains-farmhouses', assets.farmhouse, material, point(house.s, house.u, houseGround), [0, house.yaw + Math.PI / 2, 0], big);
-      const mill = stand('mill', 3);
-      const millGround = foundation(mill.s, mill.u, 1.4, 1.4, mill.yaw);
-      const millRoot = point(mill.s, mill.u, millGround), millYaw = angle + (randomAt(site.index, 2932) - .5) * 1.2;
-      add('plains-windmill-towers', assets.windmillTower, material, millRoot, [0, millYaw, 0]);
-      add('plains-windmill-rotors', assets.windmillRotor, plainsWindmillMaterial, offset(millRoot, millYaw, 0, 8.65, -.55), [0, millYaw, 0]);
-      const tractor = stand('tractor', 4);
-      add('plains-tractors', assets.tractor, material, point(tractor.s, tractor.u), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
+      if (layout.barn) {
+        const barn = stand('barn', 0);
+        ground = foundation(barn.s, barn.u, 5.8, 9.2, barn.yaw);
+        add('plains-barns', assets.barn, material, point(barn.s, barn.u, ground), [0, barn.yaw + Math.PI, 0], big);
+        const silo = stand('silo', 1);
+        const siloGround = foundation(silo.s, silo.u, 3.5, 3.5, silo.yaw);
+        add('plains-silos', assets.silo, material, point(silo.s, silo.u, siloGround), [0, silo.yaw, 0], big);
+        // Feed and tools sit beside the silo, away from the working doorway.
+        for (let k = 0; k < 3; k++) {
+          const [bs, bu] = local(layout.silo[0] - 2 + k * 2, layout.silo[1] + 5);
+          chunk.scenery.painted.push({ p: point(bs, bu, chunk.ground(bs, bu).y + .65), scale: [1.7, 1.3, 2.2], r: [0, angle, 0], color: '#c1a25b' });
+        }
+      }
+      if (layout.house) {
+        const house = stand('house', 2);
+        const houseGround = foundation(house.s, house.u - side * 1.6, 6.6, 6.2, house.yaw);
+        ground ??= houseGround;
+        add('plains-farmhouses', assets.farmhouse, material, point(house.s, house.u, houseGround), [0, house.yaw + Math.PI, 0], big);
+        // A small kitchen garden beside the house, with timber-edged beds.
+        for (let k = 0; k < 3; k++) {
+          const [gs, gu] = local(layout.house[0] + (layout.house[0] < 0 ? -1 : 1) * 9, layout.house[1] - 3 + k * 2.5);
+          const bed = chunk.ground(gs, gu);
+          chunk.scenery.painted.push({ p: [bed.x, bed.y + .18, bed.z], scale: [1.8, .36, 3.8], r: [0, angle, 0], color: '#786044' });
+          chunk.scenery.painted.push({ p: [bed.x, bed.y + .42, bed.z], scale: [1.35, .35, 3.3], r: [0, angle, 0], color: k % 2 ? '#6e8545' : '#56733c' });
+        }
+      }
+      if (layout.mill) {
+        const mill = stand('mill', 3);
+        const millGround = foundation(mill.s, mill.u, 1.4, 1.4, mill.yaw);
+        const millRoot = point(mill.s, mill.u, millGround), millYaw = angle + (randomAt(site.index, 2932) - .5) * 1.2;
+        add('plains-windmill-towers', assets.windmillTower, material, millRoot, [0, millYaw, 0]);
+        add('plains-windmill-rotors', assets.windmillRotor, plainsWindmillMaterial, offset(millRoot, millYaw, 0, 8.65, -.55), [0, millYaw, 0]);
+      }
+      if (layout.tractor) {
+        const tractor = stand('tractor', 4);
+        add('plains-tractors', assets.tractor, material, point(tractor.s, tractor.u), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
+      }
       // Oaks on the road frontage, and conifers to shelter the yard the way a
       // farm's windbreak does.
-      for (const [species, ds, du, height] of FARM_TREES) {
+      const trees = kind === 'farmstead' ? FARM_TREES : [
+        ['oak', -site.halfS + 2, -7, 8], ['oak', site.halfS - 2, -8, 7.5],
+        ['conifer', -10, site.halfU + 1, 8], ['conifer', 2, site.halfU + 2, 9], ['conifer', 13, site.halfU + 1, 8],
+      ];
+      for (const [species, ds, du, height] of trees) {
         const drift = salt => (randomAt(site.index, salt + ds) - .5) * 3;
         const [treeS, treeU] = local(ds + drift(2970), du + drift(2990));
         const greens = species === 'oak' ? ['#4d7434', '#587f3a', '#43682e'] : ['#4c7c3e', '#427037', '#558544'];
@@ -115,53 +145,36 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       }
       // A machine shed at the back, and a fence round the yard with its gate
       // where the drive comes in.
-      const shed = stand('shed', 5);
-      const shedGround = foundation(shed.s, shed.u, 2.2, 3.4, shed.yaw);
-      chunk.scenery.painted.push({ p: point(shed.s, shed.u, shedGround + 1.3), scale: [4.2, 2.6, 6.6], r: [0, shed.yaw, 0], color: '#9c9585' });
-      chunk.scenery.painted.push({ p: point(shed.s, shed.u, shedGround + 2.72), scale: [4.8, .22, 7.2], r: [0, shed.yaw, 0], color: '#6d655c' });
+      if (layout.shed) {
+        const shed = stand('shed', 5);
+        const shedGround = foundation(shed.s, shed.u, 3, 4.2, shed.yaw);
+        add('plains-farm-sheds', assets.shed, material, point(shed.s, shed.u, shedGround), [0, shed.yaw, 0]);
+      }
+      // A mailbox marks the entrance without narrowing the access road.
+      const [mailS, mailU] = [s + site.drive + 4.5, side * 9];
+      const mail = chunk.ground(mailS, mailU);
+      chunk.scenery.painted.push({ p: [mail.x, mail.y + .7, mail.z], scale: [.18, 1.4, .18], r: [0, angle, 0], color: '#897258' });
+      chunk.scenery.painted.push({ p: [mail.x, mail.y + 1.45, mail.z], scale: [.5, .4, .8], r: [0, angle, 0], color: '#535e60' });
       // Half the farms fence their yard and half leave it open, with the worn
       // earth the only boundary it has. Both are common enough in the country,
       // and a fence round every last one of them read as one design repeated.
       if (randomAt(site.index, 2939) > .5) {
-        const yardS = site.halfS - 4, yardU = site.halfU - 3, ring = [];
+        const yardS = site.halfS - 2, yardU = site.halfU - 3, ring = [];
         for (let ds = -yardS; ds <= yardS; ds += 4) ring.push([ds, -yardU]);
         for (let du = -yardU + 4; du < yardU; du += 4) ring.push([yardS, du]);
         for (let ds = yardS; ds >= -yardS; ds -= 4) ring.push([ds, yardU]);
         for (let du = yardU - 4; du > -yardU; du -= 4) ring.push([-yardS, du]);
-        chunk.fence(ring.filter(([ds, du]) => !(du === -yardU && Math.abs(ds - site.drive) < 4.5)).map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
+        // Start just after the gate and walk around to just before it. Simply
+        // filtering posts out of a closed ring joins rails across the opening.
+        const gap = ([ds, du]) => du === -yardU && Math.abs(ds - site.drive) < 4.5;
+        const firstGap = ring.findIndex(gap);
+        const open = [...ring.slice(firstGap), ...ring.slice(0, firstGap)].filter(p => !gap(p));
+        chunk.fence(open.map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
       }
     } else {
       chunk.dirtPatch(s + 1, u, 15, 11, drive);
       ground = foundation(s, u, 5, 8, angle);
       add('plains-grain-elevators', assets.grainElevator, material, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
-      // A rail spur runs past the elevator on a ballast strip, with a hopper
-      // car waiting under the loading side.
-      const railU = u + side * (site.halfU + 1.5), { painted } = chunk.scenery;
-      for (let t = s - 96; t < s + 96; t += 8) {
-        if (!inChunk(t + 4)) continue;
-        // The ballast is bare earth and so is a worn track, so the two cross
-        // without a seam; the rails and their sleepers stop either side of the
-        // track, as a boundary fence does at a gateway, which reads as a farm
-        // crossing instead of sleepers standing up in the ruts.
-        chunk.dirtQuad([[t, railU - 1.9], [t + 8, railU - 1.9], [t, railU + 1.9], [t + 8, railU + 1.9]]);
-        if (!farmTrackClears(t, railU) || !farmTrackClears(t + 8, railU)) continue;
-        const a = chunk.ground(t, railU), b = chunk.ground(t + 8, railU);
-        for (const offset of [-.75, .75]) {
-          const from = chunk.ground(t, railU + offset), to = chunk.ground(t + 8, railU + offset);
-          chunk.beam(painted, { ...from, y: a.y + .21 }, { ...to, y: b.y + .21 }, .13, '#6a675f');
-        }
-        for (let k = 0; k < 8; k += 1.4) {
-          const p = chunk.ground(t + k, railU);
-          painted.push({ p: [p.x, p.y + .12, p.z], scale: [2.5, .14, .3], r: [0, -roadFrame(t + k).angle, 0], color: '#5d4d3b' });
-        }
-      }
-      const carS = s + 24;
-      if (inChunk(carS)) {
-        const p = chunk.ground(carS, railU), yaw = -roadFrame(carS).angle;
-        painted.push({ p: [p.x, p.y + 2.25, p.z], scale: [2.7, 2.7, 11.5], r: [0, yaw, 0], color: '#8a5340' });
-        painted.push({ p: [p.x, p.y + 3.75, p.z], scale: [2.9, .3, 11.8], r: [0, yaw, 0], color: '#6f4434' });
-        for (const dz of [-3.9, 3.9]) { const q = chunk.ground(carS + dz, railU); painted.push({ p: [q.x, q.y + .55, q.z], scale: [2.2, .7, 1.8], r: [0, yaw, 0], color: '#3c3a36' }); }
-      }
     }
     chunk.features.discoveries.push({ ...site, ground });
   }
