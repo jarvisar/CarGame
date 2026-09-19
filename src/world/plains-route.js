@@ -192,17 +192,20 @@ export const plainsPosition = (s, u, y = plainsHeight(s, u)) => positionAt(s, u,
 // bands away from it at its own offsets, so boundaries stagger from one row
 // to the next instead of forming a grid. Every boundary is a line in (s, u),
 // which is where the fences, hedges and shelterbelts stand.
-export const FIELD_SPAN = 176;
+// Rows short enough, and the near band wide enough, that a field is a
+// squarish block rather than a strip: a row a quarter of a kilometre long
+// against a band forty metres deep was a ribbon six times as long as it was wide.
+export const FIELD_SPAN = 136;
 export const ROAD_RESERVE = 13;
 // Boundaries land on terrain rows and columns, so the colour change between
 // two fields follows one line of facets instead of sawing across them.
-export function fieldBoundary(index) { return Math.round((index * FIELD_SPAN + 40 + randomAt(index, 2721) * 88) / PLAINS_STEP) * PLAINS_STEP; }
+export function fieldBoundary(index) { return Math.round((index * FIELD_SPAN + 40 + randomAt(index, 2721) * 56) / PLAINS_STEP) * PLAINS_STEP; }
 export function fieldRowAt(s) {
   let index = Math.floor((s - 40) / FIELD_SPAN);
   if (s < fieldBoundary(index)) index--;
   return index;
 }
-const BAND_EDGES = [ROAD_RESERVE, 64, 150, 268, 400];
+const BAND_EDGES = [ROAD_RESERVE, 84, 164, 268, 400];
 // A row's band edges are read for every clearance test along it, so they are
 // worked out once and kept.
 const bandRows = new Map();
@@ -211,7 +214,7 @@ export function fieldBands(row, side) {
   if (bandRows.has(key)) return bandRows.get(key);
   const bands = BAND_EDGES.map((u, k) => {
     if (k === 0) return u;
-    const target = u + (randomAt(row * 2 + (side > 0 ? 1 : 0), 2731 + k) - .5) * u * .32;
+    const target = u + (randomAt(row * 2 + (side > 0 ? 1 : 0), 2731 + k) - .5) * u * .2;
     // The near side's terrain ends sooner than the far side's.
     const columns = PLAINS_COLUMNS.filter(column => column > ROAD_RESERVE && column <= (side > 0 ? 568 : 400));
     return columns.reduce((best, column) => Math.abs(column - target) < Math.abs(best - target) ? column : best, Infinity);

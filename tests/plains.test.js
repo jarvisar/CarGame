@@ -209,6 +209,10 @@ test('plains scenery stands on the rendered facets and the world streams and rel
   const ground = [...world.chunks.values()].map(chunk => chunk.group.getObjectByName('plains-fields'));
   const ray = new THREE.Raycaster();
   for (const chunk of world.chunks.values()) {
+    // A tree or a bale on a chunk's seam stands on the neighbour's facets as
+    // often as its own; the outermost chunks loaded have no neighbour beyond
+    // them here, so only the chunks with both neighbours loaded are sampled.
+    if (!world.chunks.has(chunk.index - 1) || !world.chunks.has(chunk.index + 1)) continue;
     for (const name of ['fence-posts', 'hay-bales', 'plains-trunks', 'utility-poles']) {
       chunk.group.traverse(object => {
         if (object.name !== name || !object.isInstancedMesh) return;
