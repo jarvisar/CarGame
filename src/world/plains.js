@@ -255,9 +255,12 @@ export class PlainsChunk {
   // A dirt track from the road edge out across the fields: a band of bare
   // earth worn into two wheel ruts, wandering as it crosses the field, and
   // flaring into a mouth where it meets the shoulder, the way a farm
-  // entrance opens out so a tractor can swing in off the highway.
-  track(s, side, toCross, fromCross = 5.8) {
-    if (toCross <= fromCross + 4) return;
+  // entrance opens out so a tractor can swing in off the highway. A track
+  // that runs out into a field tapers away where the traffic gives out; a
+  // farm's drive instead opens at its far end too, and hands back the pair
+  // of corners it ends on so the yard can open its own mouth onto them.
+  track(s, side, toCross, fromCross = 5.8, into = false) {
+    if (toCross <= fromCross + 4) return null;
     const salt = Math.round(s * 4) + (side > 0 ? 3301 : 3302), step = 2.5;
     // Where the track's middle runs, and how wide the bare earth is there.
     // The wander eases between one waypoint and the next rather than stepping
@@ -269,12 +272,14 @@ export class PlainsChunk {
     };
     const half = cross => (1.5 + .3 * Math.sin(cross / 8 + salt))
       * (1 + 1.2 * (1 - smoothstep(fromCross, fromCross + 8, cross)))
-      * (1 - .35 * smoothstep(toCross - 9, toCross, cross));
+      * (into ? 1 + .3 * smoothstep(toCross - 8, toCross, cross) : 1 - .35 * smoothstep(toCross - 9, toCross, cross));
     // Across the band: a pale edge, a worn rut, the crown between the wheels,
     // and the same again on the other side. The ruts fade out into the mouth,
-    // where the traffic fans out rather than running in two lines.
+    // where the traffic fans out rather than running in two lines, and into
+    // the yard's own earth at the other end.
     const across = [-1, -.6, -.28, .28, .6, 1], tints = [dirtEdge, dirtRut, dirtCrown, dirtCrown, dirtRut, dirtEdge];
-    const tintAt = (tint, cross) => tint.clone().lerp(dirtApron, 1 - smoothstep(fromCross + 1, fromCross + 7, cross));
+    const tintAt = (tint, cross) => tint.clone().lerp(dirtApron, 1 - smoothstep(fromCross + 1, fromCross + 7, cross))
+      .lerp(yardDust, into ? smoothstep(toCross - 7, toCross, cross) : 0);
     for (let cross = fromCross; cross < toCross - .01; cross += step) {
       const next = Math.min(cross + step, toCross);
       const w0 = half(cross), w1 = half(next), c0 = drift(cross), c1 = drift(next);
@@ -284,6 +289,8 @@ export class PlainsChunk {
           [tintAt(tints[i], cross), tintAt(tints[i + 1], cross), tintAt(tints[i], next), tintAt(tints[i + 1], next)]);
       }
     }
+    const end = half(toCross), middle = s + drift(toCross);
+    return [[middle - end, side * toCross], [middle + end, side * toCross]];
   }
   // The bare earth worn round a farm's buildings. A yard is not a drawn
   // rectangle: the traffic wears the middle of it bare, the grass takes the
@@ -292,7 +299,7 @@ export class PlainsChunk {
   // in and out by a wandering radius, the middle is barer than the rest, and
   // the last ring is drawn in the colour of the field the yard stands in,
   // which leaves no edge to see at all.
-  dirtPatch(s, u, halfS, halfU, salt = Math.abs(Math.round(s * 2)) + 2861) {
+  dirtPatch(s, u, halfS, halfU, mouth = null, salt = Math.abs(Math.round(s * 2)) + 2861) {
     const steps = 26, rings = [.26, .6, .82, .93, 1];
     // A wander that meets itself where it comes round, so the outline closes.
     const wander = (k, lobes, phase) => {
@@ -310,6 +317,26 @@ export class PlainsChunk {
       const r = box * (.74 + .18 * wander(k, 6, 0) + .08 * wander(k, 13, 91));
       rim.push([c * r * halfS, n * r * halfU]);
     }
+    // A drive does not stop at a yard's edge and leave a strip of standing
+    // crop between the two. The earth runs out along it to the gate: the two
+    // steps of the rim that bracket the drive are carried out to the corners
+    // it ends on, so the yard opens into the drive on the very same line, and
+    // the ground between them fans out from the gate the way a gateway wears.
+    const opening = new Set();
+    if (mouth) {
+      const bearing = ([ms, mu]) => Math.atan2((mu - u) / halfU, (ms - s) / halfS);
+      const centre = bearing([(mouth[0][0] + mouth[1][0]) / 2, (mouth[0][1] + mouth[1][1]) / 2]);
+      const turn = point => { const d = bearing(point) - centre; return Math.atan2(Math.sin(d), Math.cos(d)); };
+      const corners = [...mouth].sort((a, b) => turn(a) - turn(b));
+      const first = Math.floor(centre / (Math.PI * 2) * steps);
+      for (const [step, corner] of corners.entries()) {
+        const k = ((first + step) % steps + steps) % steps, reach = [corner[0] - s, corner[1] - u];
+        // Only ever outward: a drive that already ends inside the yard has
+        // nothing to reach for, and must not pull a notch into the rim.
+        if (Math.hypot(...reach) <= Math.hypot(...rim[k])) continue;
+        rim[k] = reach; opening.add(k);
+      }
+    }
     // Barest in the middle, where the yard is crossed and re-crossed, dusty
     // at the rim, and mottled so it is not one flat wash of brown.
     const worn = (k, t) => yardCore.clone().lerp(yardBase, smoothstep(0, .5, t)).lerp(yardDust, smoothstep(.76, 1, t))
@@ -319,8 +346,11 @@ export class PlainsChunk {
     const at = (k, t) => {
       const ds = rim[k][0] * t, du = rim[k][1] * t;
       // The last ring is all but the crop's own colour, so the yard has no
-      // drawn edge; the dust left in it keeps the shape from dissolving.
-      return this.dirtPoint(s + ds, u + du, t < 1 ? worn(k, t) : cropColor(s + ds, u + du).color.lerp(yardDust, .4));
+      // drawn edge; the dust left in it keeps the shape from dissolving. At
+      // the mouth it is the dust the drive ends in instead, so the two meet
+      // in one tone and the seam between them cannot be picked out.
+      const rimColor = () => opening.has(k) ? yardDust.clone() : cropColor(s + ds, u + du).color.lerp(yardDust, .4);
+      return this.dirtPoint(s + ds, u + du, t < 1 ? worn(k, t) : rimColor());
     };
     let inner = rim.map((_, k) => at(k, rings[0]));
     const middle = this.dirtPoint(s, u, worn(0, 0));

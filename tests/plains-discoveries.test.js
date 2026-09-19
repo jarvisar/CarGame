@@ -20,9 +20,12 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
     for (const spot of spots) {
       assert.ok(Math.abs(spot.u) >= 30, 'structures stay well off the road');
       assert.ok(creekDistance(spot.s, spot.u) > 30, 'structures keep clear of the creek');
-      const reach = site.towers ? 6 : Math.min(site.halfS, site.halfU);
-      const heights = [-reach, 0, reach].flatMap(ds => [-reach, 0, reach].map(du => plainsGroundHeight(spot.s + ds, spot.u + du)));
+      // Level under the buildings, which is the ground each site declares it
+      // needs; a compound keeps more ground clear than it builds on.
+      const { build } = site;
+      const heights = [-1, 0, 1].flatMap(ds => [-1, 0, 1].map(du => plainsGroundHeight(spot.s + ds * build.s, spot.u + du * build.u)));
       assert.ok(Math.max(...heights) - Math.min(...heights) < 3.1, `${site.kind} on uneven ground at ${site.s}`);
+      assert.ok(build.s <= site.halfS && build.u <= site.halfU, 'a site cannot build past the ground it keeps clear');
     }
     if (site.towers) {
       assert.equal(site.towers.length, 3);
@@ -38,6 +41,39 @@ test('plains discoveries are sparse, varied, level, and stable across reversed c
       assert.ok(plainsDiscoveryClears(site.s + site.halfS + 12, site.u, [site]));
       if (site.kind === 'grain-elevator') assert.equal(site.side, 1);
     }
+  }
+});
+
+test("a farm's drive and its yard are one unbroken piece of bare earth", () => {
+  const sites = plainsDiscoveries(0, 200000);
+  for (const kind of ['farmstead', 'grain-elevator']) {
+    const site = sites.find(other => other.kind === kind);
+    const chunk = new PlainsChunk(Math.floor(site.s / 128));
+    const dirt = chunk.group.getObjectByName('farm-tracks').geometry.attributes.position;
+    // Group the bare earth into the pieces a tractor could cross without
+    // leaving it: triangles that share a corner are the same piece of ground.
+    const parent = [], root = t => parent[t] === t ? t : (parent[t] = root(parent[t]));
+    const seen = new Map(), middle = [];
+    for (let t = 0; t * 3 < dirt.count; t++) {
+      parent[t] = t;
+      let x = 0, z = 0;
+      for (let k = 0; k < 3; k++) {
+        const i = t * 3 + k, key = `${Math.round(dirt.getX(i) * 100)},${Math.round(dirt.getZ(i) * 100)}`;
+        x += dirt.getX(i) / 3; z += dirt.getZ(i) / 3;
+        if (seen.has(key)) parent[root(t)] = root(seen.get(key)); else seen.set(key, t);
+      }
+      middle.push([x, z]);
+    }
+    const nearest = (s, u) => {
+      const p = chunk.ground(s, u), gap = t => Math.hypot(middle[t][0] - p.x, middle[t][1] - p.z);
+      const best = middle.reduce((found, _, t) => gap(t) < gap(found) ? t : found, 0);
+      assert.ok(gap(best) < 4, `no bare earth at ${Math.round(s)}, ${Math.round(u)}`);
+      return best;
+    };
+    // The drive's mouth at the highway, and the middle of the yard it serves.
+    assert.equal(root(nearest(site.s + site.drive, site.side * 8)), root(nearest(site.s, site.u)),
+      `a ${kind}'s drive stops short of its yard, leaving standing crop between the two`);
+    chunk.dispose();
   }
 });
 

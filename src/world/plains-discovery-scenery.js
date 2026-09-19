@@ -4,6 +4,27 @@ import { plainsDiscoveryAssets as assets, plainsDiscoveryMaterial as material, p
 
 const transform = new THREE.Object3D();
 
+// Three arrangements of the one farm, as offsets along the road and away
+// from it, so a second farmstead down the road does not read as the first one
+// stamped again. The house keeps the road frontage and the machine shed the
+// back of the yard in all of them; what moves is which end of the yard each
+// building takes, and whether the barn stands across the yard from the house
+// or square in the middle of it with the silo beside it.
+const FARM_LAYOUTS = [
+  { barn: [-11, 5], silo: [-21, 3], house: [13, -8], mill: [20, 12], shed: [1, 16], tractor: [4, 9] },
+  { barn: [12, 5], silo: [21, 3], house: [-13, -8], mill: [-20, 12], shed: [-2, 16], tractor: [-5, 9] },
+  { barn: [-3, 7], silo: [-13, 9], house: [15, -8], mill: [-21, -7], shed: [14, 14], tractor: [3, -4] },
+];
+// The yard's trees stand outside its fence, so no arrangement of the
+// buildings puts a crown through a roof: a conifer windbreak along the back
+// and the two ends, where a farm plants its shelter, and oaks out on the
+// corners of the road frontage.
+const FARM_TREES = [
+  ['conifer', -18, 22, 10], ['conifer', -7, 23, 8.5], ['conifer', 6, 22, 9], ['conifer', 17, 23, 9.5],
+  ['conifer', -30, 9, 9], ['conifer', 29, 6, 8.5],
+  ['oak', -29, -13, 10], ['oak', 28, -14, 8.5], ['oak', -9, -21, 10.5],
+];
+
 export function buildPlainsDiscoveries(chunk, discoveries) {
   const batches = new Map(), inChunk = s => s >= chunk.start && s < chunk.start + CHUNK_LENGTH;
   const point = (s, u, height) => {
@@ -47,45 +68,56 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     // Compounds face the road across their drive.
     const angle = -roadFrame(s).angle + (side < 0 ? 0 : Math.PI);
     const local = (ds, du) => [s + ds, u + du * side];
-    chunk.track(s + site.drive, side, Math.abs(u) - site.halfU + 4);
+    // The drive runs from the highway to the gate, and the yard's own earth
+    // opens out to meet it there, so a farm is reached over one piece of
+    // ground rather than over a track that stops short of a fence.
+    const drive = chunk.track(s + site.drive, side, Math.abs(u) - site.halfU + (kind === 'farmstead' ? 4 : 2), 5.8, true);
     let ground;
     if (kind === 'farmstead') {
-      chunk.dirtPatch(s + 2, u, 16, 11.5);
+      chunk.dirtPatch(s, u, 20, 14, drive);
+      const layout = FARM_LAYOUTS[Math.floor(randomAt(site.index, 2938) * FARM_LAYOUTS.length)];
+      // No farm sets its buildings out on a drawing board. Each stands a pace
+      // off where the plan puts it and a few degrees off square with the rest,
+      // which is most of what keeps a yard from reading as a stamped copy.
+      const stand = (name, k) => {
+        const [ds, du] = layout[name], shift = salt => (randomAt(site.index, salt + k) - .5) * 2.4;
+        const [standS, standU] = local(ds + shift(2940), du + shift(2950));
+        return { s: standS, u: standU, yaw: angle + (randomAt(site.index, 2960 + k) - .5) * .22 };
+      };
       // Buildings are drawn well over life size, as the miniature style does
       // with the cabins and the lighthouse, so a barn holds its own against
       // the trees round it and reads from the road.
       const big = [1.4, 1.4, 1.4];
-      const [barnS, barnU] = local(-7, 3);
-      ground = foundation(barnS, barnU, 4.5, 7, angle);
-      add('plains-barns', assets.barn, material, point(barnS, barnU, ground), [0, angle + Math.PI / 2, 0], big);
-      const [siloS, siloU] = local(-16, 1.5);
-      const siloGround = foundation(siloS, siloU, 3.1, 3.1, angle);
-      add('plains-silos', assets.silo, material, point(siloS, siloU, siloGround), [0, angle, 0], big);
-      const [houseS, houseU] = local(10.5, -4.5);
-      const houseGround = foundation(houseS, houseU, 4, 5, angle);
-      add('plains-farmhouses', assets.farmhouse, material, point(houseS, houseU, houseGround), [0, angle + Math.PI / 2, 0], big);
-      const [millS, millU] = local(17, 9);
-      const millGround = foundation(millS, millU, 1.4, 1.4, angle);
-      const millRoot = point(millS, millU, millGround), millYaw = angle + (randomAt(site.index, 2932) - .5) * 1.2;
+      const barn = stand('barn', 0);
+      ground = foundation(barn.s, barn.u, 4.5, 7, barn.yaw);
+      add('plains-barns', assets.barn, material, point(barn.s, barn.u, ground), [0, barn.yaw + Math.PI / 2, 0], big);
+      const silo = stand('silo', 1);
+      const siloGround = foundation(silo.s, silo.u, 3.1, 3.1, silo.yaw);
+      add('plains-silos', assets.silo, material, point(silo.s, silo.u, siloGround), [0, silo.yaw, 0], big);
+      const house = stand('house', 2);
+      const houseGround = foundation(house.s, house.u, 4, 5, house.yaw);
+      add('plains-farmhouses', assets.farmhouse, material, point(house.s, house.u, houseGround), [0, house.yaw + Math.PI / 2, 0], big);
+      const mill = stand('mill', 3);
+      const millGround = foundation(mill.s, mill.u, 1.4, 1.4, mill.yaw);
+      const millRoot = point(mill.s, mill.u, millGround), millYaw = angle + (randomAt(site.index, 2932) - .5) * 1.2;
       add('plains-windmill-towers', assets.windmillTower, material, millRoot, [0, millYaw, 0]);
       add('plains-windmill-rotors', assets.windmillRotor, plainsWindmillMaterial, offset(millRoot, millYaw, 0, 8.65, -.55), [0, millYaw, 0]);
-      const [tractorS, tractorU] = local(2, 9);
-      add('plains-tractors', assets.tractor, material, point(tractorS, tractorU), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
-      for (const [ds, du, height] of [[-19, -9, 10], [12, 11, 8.5], [-4, -14, 10.5]]) {
-        const [treeS, treeU] = local(ds, du);
-        chunk.tree('oak', treeS, treeU, height, ['#4d7434', '#587f3a', '#43682e'][Math.abs(ds) % 3], randomAt(site.index, 2934 + ds) * 6.28);
-      }
-      // Conifers shelter the yard, the way a farm's windbreak does.
-      for (const [ds, du, height] of [[-24, 3, 10], [-21, 8, 8.5], [7, 16, 9], [21, -3, 9.5]]) {
-        const [treeS, treeU] = local(ds, du);
-        chunk.tree('conifer', treeS, treeU, height, ['#4c7c3e', '#427037', '#558544'][Math.abs(ds) % 3], randomAt(site.index, 2936 + ds) * 6.28);
+      const tractor = stand('tractor', 4);
+      add('plains-tractors', assets.tractor, material, point(tractor.s, tractor.u), [0, angle + .5 + randomAt(site.index, 2933) * .6, 0]);
+      // Oaks on the road frontage, and conifers to shelter the yard the way a
+      // farm's windbreak does.
+      for (const [species, ds, du, height] of FARM_TREES) {
+        const drift = salt => (randomAt(site.index, salt + ds) - .5) * 3;
+        const [treeS, treeU] = local(ds + drift(2970), du + drift(2990));
+        const greens = species === 'oak' ? ['#4d7434', '#587f3a', '#43682e'] : ['#4c7c3e', '#427037', '#558544'];
+        chunk.tree(species, treeS, treeU, height, greens[Math.abs(ds) % 3], randomAt(site.index, 3010 + ds) * 6.28);
       }
       // A machine shed at the back, and a fence round the yard with its gate
       // where the drive comes in.
-      const [shedS, shedU] = local(1, 14);
-      const shedGround = foundation(shedS, shedU, 2.2, 3.4, angle);
-      chunk.scenery.painted.push({ p: point(shedS, shedU, shedGround + 1.3), scale: [4.2, 2.6, 6.6], r: [0, angle, 0], color: '#9c9585' });
-      chunk.scenery.painted.push({ p: point(shedS, shedU, shedGround + 2.72), scale: [4.8, .22, 7.2], r: [0, angle, 0], color: '#6d655c' });
+      const shed = stand('shed', 5);
+      const shedGround = foundation(shed.s, shed.u, 2.2, 3.4, shed.yaw);
+      chunk.scenery.painted.push({ p: point(shed.s, shed.u, shedGround + 1.3), scale: [4.2, 2.6, 6.6], r: [0, shed.yaw, 0], color: '#9c9585' });
+      chunk.scenery.painted.push({ p: point(shed.s, shed.u, shedGround + 2.72), scale: [4.8, .22, 7.2], r: [0, shed.yaw, 0], color: '#6d655c' });
       const yardS = site.halfS - 4, yardU = site.halfU - 3, ring = [];
       for (let ds = -yardS; ds <= yardS; ds += 4) ring.push([ds, -yardU]);
       for (let du = -yardU + 4; du < yardU; du += 4) ring.push([yardS, du]);
@@ -93,7 +125,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       for (let du = yardU - 4; du > -yardU; du -= 4) ring.push([-yardS, du]);
       chunk.fence(ring.filter(([ds, du]) => !(du === -yardU && Math.abs(ds - site.drive) < 4.5)).map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
     } else {
-      chunk.dirtPatch(s + 1, u, 12, 9.5);
+      chunk.dirtPatch(s + 1, u, 12, 9.5, drive);
       ground = foundation(s, u, 5, 8, angle);
       add('plains-grain-elevators', assets.grainElevator, material, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
       // A rail spur runs past the elevator on a ballast strip, with a hopper

@@ -22,27 +22,36 @@ function districtSite(index) {
     // fields, and a row of turbines is nearly two hundred metres long.
     const creekRoom = kind === 'wind-turbines' ? 270 : 170;
     // The elevator and the turbines stand on the far side, where their height
-    // cannot come between the camera and the road; a farm can be on either.
-    const side = kind === 'farmstead' ? (randomAt(index, 2904) > .5 ? 1 : -1) : 1;
-    const cross = kind === 'farmstead' ? 42 + randomAt(index, 2905) * 20 : kind === 'grain-elevator' ? 36 + randomAt(index, 2905) * 12 : 60 + randomAt(index, 2905) * 18;
-    const halfS = kind === 'farmstead' ? 24 : kind === 'grain-elevator' ? 19 : TURBINE_SPACING + 20;
-    const halfU = kind === 'farmstead' ? 18 : kind === 'grain-elevator' ? 13 : 26;
+    // cannot come between the camera and the road. A farm takes either side,
+    // and takes them in turn rather than on a coin: a coin left one side of
+    // the road with every farm on a drive for a good while at a time. Each
+    // set of three districts carries one farm, so the set decides its side.
+    const side = kind === 'farmstead' ? (Math.floor(index / 3) % 2 ? 1 : -1) : 1;
+    const cross = kind === 'farmstead' ? 44 + randomAt(index, 2905) * 22 : kind === 'grain-elevator' ? 36 + randomAt(index, 2905) * 12 : 60 + randomAt(index, 2905) * 18;
+    const halfS = kind === 'farmstead' ? 30 : kind === 'grain-elevator' ? 19 : TURBINE_SPACING + 20;
+    const halfU = kind === 'farmstead' ? 21 : kind === 'grain-elevator' ? 13 : 26;
     for (const offset of [0, 80, -80, 160, -160, 240, -240, 320, -320]) {
       const s = desired + offset, u = side * cross;
       if (Math.abs(s - plainsCreekAt(s).center) < creekRoom) continue;
       const towers = kind === 'wind-turbines'
         ? [-1, 0, 1].map(k => ({ s: s + k * TURBINE_SPACING, u: u + (randomAt(index, 2906 + k) - .5) * 24 })) : null;
       const spots = towers ?? [{ s, u }];
-      const reach = towers ? 6 : { s: halfS, u: halfU };
+      // The ground a site needs level is the ground its buildings stand on,
+      // which is not the whole of what it keeps clear: a farm's yard reaches
+      // well past its own buildings, and a swell out at the edge of it is
+      // nothing to a farm.
+      const build = towers ? { s: 6, u: 6 } : { s: Math.min(halfS, 23), u: Math.min(halfU, 18) };
       const level = spots.every(spot => {
         const heights = [-1, 0, 1].flatMap(ds => [-1, 0, 1].map(du =>
-          plainsGroundHeight(spot.s + ds * (towers ? reach : reach.s), spot.u + du * (towers ? reach : reach.u))));
+          plainsGroundHeight(spot.s + ds * build.s, spot.u + du * build.u)));
         return Math.max(...heights) - Math.min(...heights) < (towers ? 3 : 2.6);
       });
       if (!level) continue;
-      site = { kind, index, s, u, side, halfS, halfU };
+      site = { kind, index, s, u, side, halfS, halfU, build };
       if (towers) site.towers = towers;
-      else site.drive = (randomAt(index, 2907) > .5 ? 1 : -1) * (halfS - 8);
+      // The drive comes in toward one end of the yard, but not so near the
+      // end that the gap it needs in the fence takes the corner post with it.
+      else site.drive = (randomAt(index, 2907) > .5 ? 1 : -1) * (halfS - 12);
       break;
     }
   }
