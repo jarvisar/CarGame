@@ -301,3 +301,75 @@ test('every plains asset is built from real geometry, so no part is silently mis
   const shades = new Set(); for (let i = 0; i < grain.count; i++) shades.add(grain.getX(i).toFixed(3));
   assert.ok(shades.size >= 2, 'the ear must be a different tone from the straw');
 });
+
+test('a farmyard wears an outline with no straight run in it, and fades into the field it stands in', () => {
+  // The first chunk whose bare earth is one compact patch: a farm's yard
+  // rather than a track running across the fields.
+  let yard = null;
+  for (let index = 0; index < 120 && !yard; index++) {
+    const chunk = new PlainsChunk(index), mesh = chunk.group.getObjectByName('farm-tracks');
+    const dirt = mesh && mesh.geometry.attributes, points = [];
+    for (let i = 0; dirt && i < dirt.position.count; i++) {
+      points.push({ x: dirt.position.getX(i), z: dirt.position.getZ(i), color: [dirt.color.getX(i), dirt.color.getY(i), dirt.color.getZ(i)] });
+    }
+    const centre = k => points.reduce((sum, p) => sum + p[k], 0) / points.length;
+    if (points.length) {
+      const x = centre('x'), z = centre('z');
+      if (points.every(p => Math.hypot(p.x - x, p.z - z) < 22)) yard = { chunk, points, x, z };
+    }
+    if (!yard) chunk.dispose();
+  }
+  assert.ok(yard, 'no farmyard in the first fifteen kilometres');
+  // Walk the patch's boundary: the edges that belong to one triangle only.
+  const key = p => `${Math.round(p.x * 100)},${Math.round(p.z * 100)}`, spot = new Map(), edges = new Map(), neighbours = new Map();
+  for (const p of yard.points) if (!spot.has(key(p))) spot.set(key(p), p);
+  for (let i = 0; i < yard.points.length; i += 3) for (let k = 0; k < 3; k++) {
+    const a = key(yard.points[i + k]), b = key(yard.points[i + (k + 1) % 3]), id = a < b ? `${a}|${b}` : `${b}|${a}`;
+    edges.set(id, (edges.get(id) ?? 0) + 1);
+  }
+  for (const [id, count] of edges) {
+    if (count !== 1) continue;
+    for (const [a, b] of [id.split('|'), id.split('|').reverse()]) neighbours.set(a, [...(neighbours.get(a) ?? []), b]);
+  }
+  assert.ok(neighbours.size > 12, 'the yard needs an outline to test');
+  for (const [, ends] of neighbours) assert.equal(ends.length, 2, 'the outline must be one closed loop');
+  const loop = [[...neighbours.keys()][0]];
+  for (let previous = null, at = loop[0]; ;) {
+    const step = neighbours.get(at).find(other => other !== previous);
+    if (step === loop[0]) break;
+    loop.push(step); previous = at; at = step;
+  }
+  assert.equal(loop.length, neighbours.size, 'the outline must close on itself');
+  const ring = loop.map(id => spot.get(id));
+  // A yard worn by the traffic round it turns at nearly every step. The
+  // bare rectangle this replaced ran straight down four long sides.
+  const straight = ring.filter((p, i) => {
+    const a = ring[(i + ring.length - 1) % ring.length], c = ring[(i + 1) % ring.length];
+    const turn = Math.atan2(c.z - p.z, c.x - p.x) - Math.atan2(p.z - a.z, p.x - a.x);
+    return Math.abs(Math.atan2(Math.sin(turn), Math.cos(turn))) < .035;
+  }).length;
+  assert.ok(straight * 3 < ring.length, `${straight} of ${ring.length} steps round the yard run straight on`);
+  // The rim is drawn in the crop's own colour, so the yard has no edge to
+  // see; the middle of it is a different earth altogether.
+  const field = yard.chunk.group.getObjectByName('plains-fields').geometry.attributes;
+  const beside = p => {
+    let best = Infinity, color = null;
+    for (let i = 0; i < field.position.count; i++) {
+      const d = (field.position.getX(i) - p.x) ** 2 + (field.position.getZ(i) - p.z) ** 2;
+      if (d < best) { best = d; color = [field.color.getX(i), field.color.getY(i), field.color.getZ(i)]; }
+    }
+    return color;
+  };
+  const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const middle = yard.points.reduce((best, p) =>
+    Math.hypot(p.x - yard.x, p.z - yard.z) < Math.hypot(best.x - yard.x, best.z - yard.z) ? p : best);
+  const mean = list => list.reduce((sum, value) => sum + value, 0) / list.length;
+  const crops = ring.map(beside);
+  const rim = mean(crops.map((crop, i) => gap(ring[i].color, crop))), core = mean(crops.map(crop => gap(middle.color, crop)));
+  assert.ok(rim * 2 < core, `the rim stands ${rim.toFixed(2)} from the crop's colour and the middle of the yard only ${core.toFixed(2)}`);
+  // And the ground between the two is neither: a yard laid in one flat tone
+  // has an edge wherever it stops, however its outline runs.
+  const tones = new Set(yard.points.map(p => p.color.map(value => value.toFixed(2)).join()));
+  assert.ok(tones.size > 20, `the yard is laid in ${tones.size} tones`);
+  yard.chunk.dispose();
+});

@@ -117,10 +117,24 @@ const dirtBase = new THREE.Color('#c0a778'), dirtRut = new THREE.Color('#a3885e'
 // Where a track meets the highway it runs out onto the gravel, so its mouth
 // takes the shoulder's own colour and the join has no line across it.
 const dirtApron = new THREE.Color('#c9b88f');
+// A farmyard is not the dusty pale of a track across a field. It is ground
+// driven and walked over until nothing grows on it: browner and darker than
+// any crop round it, barest in the middle, and dusty at the rim where the
+// traffic thins out and the field takes over again.
+const yardCore = new THREE.Color('#967650'), yardBase = new THREE.Color('#ad8a60'), yardDust = new THREE.Color('#c1a679');
 // The spruces and cypresses are the dark trees of the country, but only by
 // a step: a green much deeper than this took no light on its shaded side
 // and stood among the crowns as a black shape, worst on a phone's screen.
 const CONIFER_GREENS = ['#4c7c3e', '#427037', '#558544'], CYPRESS_GREENS = ['#457a3c', '#4c8042', '#3f7137'];
+// The crop's own colour where a field stands, before the haze, the furrows
+// and the wet ground near the water. The terrain reads it to shade a facet,
+// and the yards read it to fade their bare earth into whatever they stand in.
+function cropColor(s, u) {
+  const field = fieldAt(s, u) ?? fieldAt(s, Math.sign(u) * (ROAD_RESERVE + 1)), palette = CROP_PALETTES[field.kind];
+  const color = new THREE.Color(palette[Math.floor(randomAt(field.seed, field.salt + 5) * palette.length)]);
+  if (field.kind === 'pasture') color.lerp(pastureLight, smoothstep(.3, .8, .5 + .3 * Math.sin(s / 37 + u / 29) + .2 * Math.sin(s / 13 - u / 17)) * .5);
+  return { field, color };
+}
 // Only two kinds of ground grow a fringe, and each grows its own: long
 // grass in the green fields and the verge, standing wheat at the edge of a
 // grain field. A mown or ploughed field is bare to its boundary.
@@ -198,9 +212,8 @@ export class PlainsChunk {
       color.multiplyScalar(.98 + .04 * (.5 + .5 * Math.sin(s / 23 + col)));
     }
     else {
-      const field = fieldAt(s, u) ?? fieldAt(s, Math.sign(u) * (ROAD_RESERVE + 1)), palette = CROP_PALETTES[field.kind];
-      color = new THREE.Color(palette[Math.floor(randomAt(field.seed, field.salt + 5) * palette.length)]);
-      if (field.kind === 'pasture') color.lerp(pastureLight, smoothstep(.3, .8, .5 + .3 * Math.sin(s / 37 + u / 29) + .2 * Math.sin(s / 13 - u / 17)) * .5);
+      const crop = cropColor(s, u), field = crop.field;
+      color = crop.color;
       color.lerp(haze, smoothstep(280, 430, cross) * .7);
       // Rows run along the road or across it, from the field's own edge, and
       // give way to the wet meadow at the creek and the ponds and to the haze.
@@ -272,18 +285,61 @@ export class PlainsChunk {
       }
     }
   }
-  // Yards for the farm compounds: the same earth, laid flat.
-  dirtPatch(s, u, halfS, halfU) {
-    for (let ds = -halfS; ds < halfS; ds += 3) for (let du = -halfU; du < halfU; du += 3) {
-      const es = Math.min(ds + 3, halfS), eu = Math.min(du + 3, halfU);
-      this.dirtQuad([[s + ds, u + du], [s + es, u + du], [s + ds, u + eu], [s + es, u + eu]]);
+  // The bare earth worn round a farm's buildings. A yard is not a drawn
+  // rectangle: the traffic wears the middle of it bare, the grass takes the
+  // corners back, and where the wear gives out the earth thins into the crop
+  // rather than stopping on a line. So the outline is a rounded oblong pushed
+  // in and out by a wandering radius, the middle is barer than the rest, and
+  // the last ring is drawn in the colour of the field the yard stands in,
+  // which leaves no edge to see at all.
+  dirtPatch(s, u, halfS, halfU, salt = Math.abs(Math.round(s * 2)) + 2861) {
+    const steps = 26, rings = [.26, .6, .82, .93, 1];
+    // A wander that meets itself where it comes round, so the outline closes.
+    const wander = (k, lobes, phase) => {
+      const t = k / steps * lobes, cell = Math.floor(t), f = t - cell;
+      return lerp(randomAt(cell % lobes, salt + phase), randomAt((cell + 1) % lobes, salt + phase), f * f * (3 - 2 * f));
+    };
+    const rim = [];
+    for (let k = 0; k < steps; k++) {
+      const angle = k / steps * Math.PI * 2, c = Math.cos(angle), n = Math.sin(angle);
+      // A superellipse: an oblong as long as the yard with its corners eaten
+      // away, a corner being the first ground a farm stops driving over.
+      const box = Math.pow(Math.abs(c) ** 3 + Math.abs(n) ** 3, -1 / 3);
+      // Long lobes for the bays the traffic wears out of it, and a shorter
+      // wander over them so no stretch of the edge runs straight for long.
+      const r = box * (.74 + .18 * wander(k, 6, 0) + .08 * wander(k, 13, 91));
+      rim.push([c * r * halfS, n * r * halfU]);
+    }
+    // Barest in the middle, where the yard is crossed and re-crossed, dusty
+    // at the rim, and mottled so it is not one flat wash of brown.
+    const worn = (k, t) => yardCore.clone().lerp(yardBase, smoothstep(0, .5, t)).lerp(yardDust, smoothstep(.76, 1, t))
+      .multiplyScalar(.97 + .06 * randomAt(k, salt + Math.round(t * 20)));
+    const { dirt, dirtTints } = this.scenery;
+    const face = (a, b, c) => triangle(dirt, dirtTints, a, b, c, dirtBase, this.start);
+    const at = (k, t) => {
+      const ds = rim[k][0] * t, du = rim[k][1] * t;
+      // The last ring is all but the crop's own colour, so the yard has no
+      // drawn edge; the dust left in it keeps the shape from dissolving.
+      return this.dirtPoint(s + ds, u + du, t < 1 ? worn(k, t) : cropColor(s + ds, u + du).color.lerp(yardDust, .4));
+    };
+    let inner = rim.map((_, k) => at(k, rings[0]));
+    const middle = this.dirtPoint(s, u, worn(0, 0));
+    for (let k = 0; k < steps; k++) face(middle, inner[k], inner[(k + 1) % steps]);
+    for (let i = 1; i < rings.length; i++) {
+      const outer = rim.map((_, k) => at(k, rings[i]));
+      for (let k = 0; k < steps; k++) {
+        const j = (k + 1) % steps;
+        face(inner[k], inner[j], outer[k]); face(inner[j], outer[j], outer[k]);
+      }
+      inner = outer;
     }
   }
+  dirtPoint(s, u, color) {
+    const p = this.ground(s, u);
+    return { x: p.x, y: p.y + .07, z: p.z - this.start, color };
+  }
   dirtQuad(corners, shades = null) {
-    const [a, b, c, d] = corners.map(([s, u], i) => {
-      const p = this.ground(s, u);
-      return { x: p.x, y: p.y + .07, z: p.z - this.start, color: shades ? shades[i] : dirtBase };
-    });
+    const [a, b, c, d] = corners.map(([s, u], i) => this.dirtPoint(s, u, shades ? shades[i] : dirtBase));
     const { dirt, dirtTints } = this.scenery;
     triangle(dirt, dirtTints, a, b, c, dirtBase, this.start); triangle(dirt, dirtTints, b, d, c, dirtBase, this.start);
   }
@@ -829,7 +885,7 @@ export class PlainsChunk {
     const low = Math.min(...samples), high = Math.max(...samples);
     if (high - low > 2.4) return;
     const yaw = -roadFrame(s).angle + (random() - .5) * .6, p = this.ground(s, u);
-    this.dirtPatch(s, u, 7, 6);
+    this.dirtPatch(s, u, 8.4, 7.2);
     this.scenery.painted.push({ p: [p.x, (low - .3 + high + .05) / 2, p.z], scale: [7.2, high - low + .35, 9.6], r: [0, yaw, 0], color: '#b1a892' });
     this.scenery.sheds.push({ p: [p.x, high + .05, p.z], scale: [1.2, 1.2, 1.2], r: [0, yaw, 0] });
     // A squat galvanised tank, kept dull: a pale drum under the low sun read

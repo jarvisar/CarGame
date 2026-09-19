@@ -50,7 +50,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
     chunk.track(s + site.drive, side, Math.abs(u) - site.halfU + 4);
     let ground;
     if (kind === 'farmstead') {
-      chunk.dirtPatch(s + 2, u, 12, 9);
+      chunk.dirtPatch(s + 2, u, 16, 11.5);
       // Buildings are drawn well over life size, as the miniature style does
       // with the cabins and the lighthouse, so a barn holds its own against
       // the trees round it and reads from the road.
@@ -93,7 +93,7 @@ export function buildPlainsDiscoveries(chunk, discoveries) {
       for (let du = yardU - 4; du > -yardU; du -= 4) ring.push([-yardS, du]);
       chunk.fence(ring.filter(([ds, du]) => !(du === -yardU && Math.abs(ds - site.drive) < 4.5)).map(([ds, du]) => ({ s: s + ds, u: u + du * side })), false);
     } else {
-      chunk.dirtPatch(s + 1, u, 10, 8);
+      chunk.dirtPatch(s + 1, u, 12, 9.5);
       ground = foundation(s, u, 5, 8, angle);
       add('plains-grain-elevators', assets.grainElevator, material, point(s, u, ground), [0, angle + Math.PI / 2, 0], [1.25, 1.25, 1.25]);
       // A rail spur runs past the elevator on a ballast strip, with a hopper
