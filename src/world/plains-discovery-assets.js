@@ -30,15 +30,25 @@ class Parts {
     this.add(g, from.add(to).multiplyScalar(.5).toArray(), color);
   }
   // A pitched roof over a footprint: two slabs and the two gable triangles.
-  gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35) {
+  // Turned, the ridge runs along x rather than z, which is how a dormer faces
+  // out of the roof it stands in.
+  gable(p, width, length, wallHeight, ridgeHeight, wall, roof, overhang = .35, turned = false) {
     const [x, y, z] = p, rise = ridgeHeight - wallHeight, half = width / 2;
     const slope = Math.atan2(rise, half), run = Math.hypot(half, rise) + overhang;
+    const lift = y + wallHeight + rise / 2 + .1;
     for (const side of [-1, 1]) {
-      this.box([x + side * (half + overhang) / 2, y + wallHeight + rise / 2 + .1, z], [run, .22, length + overhang * 2], roof, [0, 0, -side * slope]);
+      if (turned) this.box([x, lift, z + side * (half + overhang) / 2], [length + overhang * 2, .22, run], roof, [side * slope, 0, 0]);
+      else this.box([x + side * (half + overhang) / 2, lift, z], [run, .22, length + overhang * 2], roof, [0, 0, -side * slope]);
     }
+    // Each end is wound to face out of the building. Wound both the same way
+    // round, one of them is a back face and is culled, and the roof then
+    // stands over a gable you can see the far wall through.
     const ends = [];
-    for (const zEnd of [z - length / 2, z + length / 2]) {
-      ends.push(x - half, y + wallHeight, zEnd, x + half, y + wallHeight, zEnd, x, y + ridgeHeight, zEnd);
+    for (const end of [-1, 1]) {
+      const corner = (height, across) => turned ? [x + end * length / 2, height, z + across] : [x + across, height, z + end * length / 2];
+      const foot = [corner(y + wallHeight, -half), corner(y + wallHeight, half)], apex = corner(y + ridgeHeight, 0);
+      const swap = turned ? end > 0 : end < 0;
+      ends.push(...(swap ? foot[1] : foot[0]), ...(swap ? foot[0] : foot[1]), ...apex);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3));
     g.computeVertexNormals(); this.add(g, [0, 0, 0], wall);
@@ -51,13 +61,20 @@ class Parts {
     const upper = [[knee, kneeHeight], [0, ridgeHeight]];
     for (const side of [-1, 1]) for (const [[x0, y0], [x1, y1]] of [lower, upper]) {
       const run = Math.hypot(x0 - x1, y0 - y1), angle = Math.atan2(y1 - y0, x0 - x1);
-      this.box([x + side * (x0 + x1) / 2, y + (y0 + y1) / 2, z], [run, .24, length + overhang * 2], roof, [0, 0, side * angle]);
+      // A slab runs outward and downward, from the ridge or knee above to the
+      // eave below, the same way round as the gable's: with the sign the other
+      // way each slab was the mirror of the pitch it was meant to cover, and
+      // the barn's roof flew off its own walls.
+      this.box([x + side * (x0 + x1) / 2, y + (y0 + y1) / 2, z], [run, .24, length + overhang * 2], roof, [0, 0, -side * angle]);
     }
+    // As with the gable, each end is wound to face out of the barn.
     const ends = [];
-    for (const zEnd of [z - length / 2, z + length / 2]) {
+    for (const end of [-1, 1]) {
+      const zEnd = z + end * length / 2;
       for (const [ax, ay, bx, by] of [[-half, wallHeight, -knee, kneeHeight], [-knee, kneeHeight, 0, ridgeHeight],
         [0, ridgeHeight, knee, kneeHeight], [knee, kneeHeight, half, wallHeight]]) {
-        ends.push(x + ax, y + ay, zEnd, x + bx, y + by, zEnd, x, y + wallHeight, zEnd);
+        const a = [x + ax, y + ay, zEnd], b = [x + bx, y + by, zEnd];
+        ends.push(...(end < 0 ? a : b), ...(end < 0 ? b : a), x, y + wallHeight, zEnd);
       }
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(ends, 3));
@@ -83,8 +100,10 @@ function barn() {
   p.box([-3.76, 1.75, 1.4], [.14, 3.5, 3.6], '#38291f');
   for (const z of [-.45, 3.25]) p.box([-3.84, 1.75, z], [.07, 3.5, .2], trim);
   p.box([-3.84, 3.55, 1.4], [.07, .22, 3.9], trim);
-  p.box([-3.84, 5.6, -4.4], [.07, 1.6, 1.5], '#38291f');
-  p.box([-3.9, 6.5, -4.4], [.3, .18, 1.8], '#6b5a4a');
+  // The hayloft door belongs high on the gable end, under the ridge. On the
+  // side wall it stood above the eaves, hanging in the air outside the roof.
+  p.box([0, 5.6, -6.05], [1.5, 1.6, .07], '#38291f');
+  p.box([0, 6.52, -6.18], [1.8, .18, .32], '#6b5a4a');
   // Ridge cupola with a little vent roof.
   p.box([0, 8.45, -1], [1.3, .9, 1.7], barnRed);
   p.box([0, 8.98, -1], [1.7, .2, 2.1], shingle);
@@ -109,19 +128,29 @@ function farmhouse() {
   p.box([0, 1.7, 0], [6.2, 3.4, 8], wall);
   p.gable([0, 0, 0], 6.2, 8, 3.4, 6.1, wall, roofShade);
   // Two dormers face the yard, which is what makes it read as a farmhouse
-  // rather than another shed.
-  for (const z of [-2.1, 2.1]) {
-    p.box([-1.1, 4.5, z], [1.5, 1.3, 1.6], wall);
-    p.gable([-1.1, 0, z], 1.5, 1.6, 4.5 + .65, 5.5, wall, roofShade, .12);
-    p.box([-1.72, 4.55, z], [.06, .8, .7], '#3f5260');
+  // rather than another shed. A dormer has to clear the roof over its whole
+  // footprint: set too far up the pitch, the roof closes over its inner half
+  // and what is left reads as a hole punched in the slates.
+  // The roof it stands in is a slab a quarter of a unit thick, lifted clear
+  // of the rafter line it follows, so a dormer has to clear that surface and
+  // not merely the pitch beneath it.
+  // Its ridge runs out of the roof rather than along it, and it reaches far
+  // enough back that the ridge dies into the pitch instead of standing a
+  // second gable up out of the slates behind the window.
+  for (const z of [-2.2, 2.2]) {
+    p.box([-1.7, 4.45, z], [2.26, 1.6, 1.5], wall);
+    p.gable([-1.7, 0, z], 1.5, 2.26, 5.25, 5.85, wall, roofShade, .12, true);
+    p.box([-2.865, 4.6, z], [.06, .85, .75], '#3f5260');
   }
   p.box([1.7, 5.9, -2.4], [.72, 2.4, .72], '#96604a');
   p.box([1.7, 7.15, -2.4], [.86, .22, .86], '#7d5040');
-  // A deep porch along the front, with posts and a rail.
+  // A deep porch along the front, with posts and a rail. Its roof reaches
+  // back to the wall and falls away from it: cut short it hung in the air
+  // beside the house, and pitched the other way it climbed as it went out.
   p.box([-4.05, 1.36, 0], [2, .2, 8], '#cdc2a8'); p.box([-4.05, .78, 0], [2, .92, 8], '#b9ad92');
-  p.box([-4.9, 2.98, 0], [2.1, .14, 8.2], roofShade, [0, 0, -.17]);
-  for (const z of [-3.6, -1.2, 1.2, 3.6]) p.box([-4.85, 2.2, z], [.14, 1.7, .14], wall);
-  p.box([-4.85, 1.72, 0], [.1, .1, 8], wall);
+  p.box([-4.25, 2.84, 0], [2.54, .14, 8.2], roofShade, [0, 0, .166]);
+  for (const z of [-3.6, -1.2, 1.2, 3.6]) p.box([-4.9, 2.1, z], [.14, 1.28, .14], wall);
+  p.box([-4.9, 1.95, 0], [.1, .1, 8], wall);
   p.box([-3.15, 1.6, -2.3], [.06, 2.1, .95], '#6b4f3f');
   for (const z of [.7, 2.8]) p.box([-3.15, 1.95, z], [.06, 1.1, .85], '#3f5260');
   for (const z of [-2.5, 0, 2.5]) p.box([3.15, 1.95, z], [.06, 1.1, .85], '#3f5260');

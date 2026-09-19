@@ -244,6 +244,22 @@ test('no two fence posts stand in the same spot, where their faces would flicker
   assert.ok(checked > 400, 'the drive must actually carry fences to check');
 });
 
+test('a gabled building is closed from both ends, not open from one of them', async () => {
+  const { plainsDiscoveryAssets, plainsDiscoveryMaterial } = await import('../src/world/plains-discovery-assets.js');
+  // The two ends of a roof have to be wound to face out of the building.
+  // Wound the same way round, one of them is a back face, the renderer culls
+  // it, and the roof stands over a gable you see the far wall through.
+  const ends = { barn: 6, farmhouse: 4.8, shed: 3.9, grainElevator: 6.4 };
+  for (const [name, height] of Object.entries(ends)) {
+    const mesh = new THREE.Mesh(plainsDiscoveryAssets[name], plainsDiscoveryMaterial);
+    mesh.updateMatrixWorld();
+    for (const from of [-60, 60]) {
+      const ray = new THREE.Raycaster(new THREE.Vector3(0, height, from), new THREE.Vector3(0, 0, from > 0 ? -1 : 1));
+      assert.ok(ray.intersectObject(mesh, false).length > 0, `${name} has no wall facing z=${from} at ${height}`);
+    }
+  }
+});
+
 test('every plains asset is built from real geometry, so no part is silently missing', async () => {
   const { plainsDiscoveryAssets } = await import('../src/world/plains-discovery-assets.js');
   const { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry } = await import('../src/world/plains-assets.js');
