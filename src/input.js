@@ -1,9 +1,11 @@
 import { GamepadInput } from './gamepad.js';
 import { TouchStick } from './touch-stick.js';
+import { KonamiCode } from './konami-code.js';
 
 export class Input {
-  constructor(onAction, onControllerConnection = () => {}) {
+  constructor(onAction, onControllerConnection = () => {}, onFreeDriving = () => {}) {
     this.keys = new Set(); this.onAction = onAction;
+    this.konami = new KonamiCode();
     this.touchStick = new TouchStick(document.querySelector('#touch-stick'), () => onAction('drive'));
     this.codes = { forward: ['KeyW', 'ArrowUp'], brake: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], handbrake: ['Space'] };
     // The driving simulation reads this up to six times per displayed frame, so
@@ -16,6 +18,11 @@ export class Input {
       onControllerConnection(connected);
     });
     window.addEventListener('keydown', e => {
+      // This hidden toggle is reachable only through the keyboard sequence.
+      if (this.konami.keydown(e)) {
+        e.preventDefault(); this.clear(); onFreeDriving();
+        return;
+      }
       if (e.code === 'F3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         if (!e.repeat) onAction('fps');
@@ -62,5 +69,5 @@ export class Input {
     else if (this.touchStick.engaged) state.touchStick = this.touchStick.vector;
     return state;
   }
-  clear() { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(); }
+  clear() { this.keys.clear(); this.touchStick.clear(); this.gamepad.clear(); this.konami.reset(); }
 }

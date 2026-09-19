@@ -330,6 +330,13 @@ async function boot() {
     const input = new Input(action, connected => {
       toast(connected ? controlHelpDismissed() ? 'Controller connected' : 'Controller connected · RT / R2 to drive' : 'Controller disconnected');
       if (!connected && started && !paused) setPaused(true);
+    }, () => {
+      if (changingJourney) return;
+      const enabled = vehicle.toggleFreeDriving();
+      vehicle.render(1, world.origin);
+      rendering.snap(); rendering.update(vehicle.car, 1, world.origin);
+      frameClock.suspend(); needsRender = true;
+      toast(`Free driving ${enabled ? 'on' : 'off'}`);
     });
     $('#change-journey').addEventListener('click', openJourneys);
     $('#change-car').addEventListener('click', openCars);
