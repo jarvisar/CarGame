@@ -1,7 +1,9 @@
 import { randomAt } from './route.js';
 import { plainsGroundHeight, plainsCreekAt } from './plains-route.js';
 
-export const PLAINS_DISCOVERY_SPACING = 6144;
+// Close enough that a drive turns up a farmstead, an elevator or a row of
+// turbines every few kilometres rather than once in a long while.
+export const PLAINS_DISCOVERY_SPACING = 3072;
 export const TURBINE_SPACING = 88;
 const sites = new Map();
 
@@ -15,7 +17,7 @@ function districtSite(index) {
     const orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2902) * orders.length)];
     const kind = ['farmstead', 'grain-elevator', 'wind-turbines'][order[((index % 3) + 3) % 3]];
-    const desired = index * PLAINS_DISCOVERY_SPACING + 3072 + (randomAt(index, 2903) - .5) * 1536;
+    const desired = (index + .5) * PLAINS_DISCOVERY_SPACING + (randomAt(index, 2903) - .5) * PLAINS_DISCOVERY_SPACING / 4;
     // The creek wanders a good hundred metres from its crossing out in the
     // fields, and a row of turbines is nearly two hundred metres long.
     const creekRoom = kind === 'wind-turbines' ? 270 : 170;

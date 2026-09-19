@@ -9,11 +9,11 @@ import { packChunk, unpackChunk } from '../src/world/chunk-transfer.js';
 test('plains discoveries are sparse, varied, level, and stable across reversed chunk queries', () => {
   const sites = plainsDiscoveries(-100000, 100000);
   assert.deepEqual(plainsDiscoveries(-100000, 0).concat(plainsDiscoveries(0, 100000)), sites);
-  assert.ok(sites.length > 5 && sites.length < 30);
+  assert.ok(sites.length > 35 && sites.length < 65);
   assert.deepEqual([...new Set(sites.map(site => site.kind))].sort(), ['farmstead', 'grain-elevator', 'wind-turbines']);
-  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 4000, 'leave several kilometres between any two discoveries');
+  for (let i = 1; i < sites.length; i++) assert.ok(sites[i].s - sites[i - 1].s > 1600, 'leave a kilometre and more between any two discoveries');
   for (const site of [...sites].reverse()) {
-    assert.ok(Math.abs(site.s - (site.index + .5) * PLAINS_DISCOVERY_SPACING) < 1300);
+    assert.ok(Math.abs(site.s - (site.index + .5) * PLAINS_DISCOVERY_SPACING) < PLAINS_DISCOVERY_SPACING / 4);
     const start = Math.floor(site.s / 128) * 128;
     assert.deepEqual(plainsDiscoveries(start, start + 128), sites.filter(other => other.s >= start && other.s < start + 128));
     const spots = site.towers ?? [{ s: site.s, u: site.u }];

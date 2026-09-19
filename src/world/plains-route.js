@@ -193,8 +193,10 @@ export function fieldCorner(row, side, band) {
 }
 export function roadsideFence(row, side) { return randomAt(row, side > 0 ? 2785 : 2786) > .35; }
 // A farm track leaves the road through a gate in some rows, with a mailbox.
+// Sparingly: a track every few hundred metres reads as farm country, and one
+// every other field reads as a road that cannot decide where it is going.
 export function farmGate(row, side) {
-  if (randomAt(row, side > 0 ? 2787 : 2788) > .32) return null;
+  if (randomAt(row, side > 0 ? 2787 : 2788) > .16) return null;
   const start = fieldBoundary(row), end = fieldBoundary(row + 1);
   return { s: Math.round(start + 18 + randomAt(row, side > 0 ? 2789 : 2790) * (end - start - 36)), side };
 }

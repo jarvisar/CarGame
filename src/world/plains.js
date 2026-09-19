@@ -554,7 +554,9 @@ export class PlainsChunk {
             }
           }
         }
-        if (randomAt(row, side > 0 ? 2851 : 2852) < .34) {
+        // A field shed is an outlying corner of a farm, not a fixture of every
+        // other field, so it turns up a good deal less often than it did.
+        if (randomAt(row, side > 0 ? 2851 : 2852) < .11) {
           const t = rowStart + 24 + randomAt(row, side > 0 ? 2853 : 2854) * (rowEnd - rowStart - 48);
           const v = side * (bands[1] + 12 + randomAt(row, side > 0 ? 2855 : 2856) * Math.min(44, bands[2] - bands[1] - 24));
           if (inChunk(t) && clear(t, v, 10)) this.outbuilding(t, v, random);
