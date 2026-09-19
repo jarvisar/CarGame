@@ -8,48 +8,56 @@ const browser = await chromium.launch(process.env.CHROME_PATH
   ? { executablePath: process.env.CHROME_PATH }
   : process.platform === 'win32' ? { executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' } : {});
 try {
-  const page = await browser.newPage({ viewport: { width: 393, height: 851 }, reducedMotion: 'reduce' });
+  const page = await browser.newPage({ viewport: { width: 393, height: 851 } });
   await page.route('https://coastline.test/', route => route.fulfill({ contentType: 'text/html', body:
-    '<div id="loading"></div><div id="error" hidden></div><section id="welcome"><button id="start">Let’s drive</button></section><div id="pause-overlay" hidden></div>' }));
+    '<section id="welcome"><button id="start">Let’s drive</button></section><div id="pause-overlay" hidden></div>' }));
   async function setup() {
     await page.goto('https://coastline.test/');
-    await page.evaluate(() => localStorage.clear());
-    await page.clock.install();
     await page.addStyleTag({ content: css });
     await page.addScriptTag({ content: script });
-    await page.evaluate(() => document.querySelector('#start').addEventListener('click', () => document.querySelector('#welcome').classList.add('hidden')));
-    assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Hidden until loading finishes');
-    await page.evaluate(() => document.querySelector('#loading').classList.add('loaded'));
-    await page.locator('#pwa-install-invitation').waitFor({ state: 'visible' });
-    assert.equal(await page.locator('dialog[open]').count(), 0, 'Never blocks the menu');
+    assert.equal(await page.locator('#welcome button').count(), 1, 'The menu has one main action');
+    assert.equal(await page.locator('#pwa-install-invitation').count(), 0, 'No automatic install invitation');
+    assert.equal(await page.locator('.pwa-install-button').isVisible(), false, 'Installation stays in pause settings');
+    await page.evaluate(() => { document.querySelector('#pause-overlay').hidden = false; });
   }
   await setup();
-  await page.clock.fastForward(8100);
-  assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false, 'Automatically disappears');
-  assert.equal(await page.evaluate(() => localStorage.getItem('coastline-install-dismissed-v2')), null, 'Timeout does not suppress future visits');
-  assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true, 'Permanent menu link survives timeout');
-  await setup();
-  await page.locator('#start').click();
-  await page.locator('#pwa-install-invitation').waitFor({ state: 'hidden' });
-  assert.equal(await page.evaluate(() => localStorage.getItem('coastline-install-dismissed-v2')), null, 'Starting a drive does not suppress future visits');
-  await setup();
-  await page.locator('#pwa-install-invitation .pwa-install-button').focus();
-  await page.clock.fastForward(9000);
-  assert.equal(await page.locator('#pwa-install-invitation').isVisible(), true, 'Keyboard focus pauses dismissal');
+  const button = page.getByRole('button', { name: 'Install Coastline' });
+  const help = page.locator('#pwa-install-help');
+  await button.click();
+  assert.match(await help.textContent(), /browser menu/);
+  assert.equal(await button.getAttribute('aria-expanded'), 'true');
+  await button.focus();
+  await page.keyboard.press('Space');
+  assert.equal(await help.isVisible(), false, 'Keyboard toggles the instructions');
+  assert.equal(await button.getAttribute('aria-expanded'), 'false');
   await page.evaluate(() => {
     const event = new Event('beforeinstallprompt', { cancelable: true });
     event.prompt = async () => { window.promptCalls = (window.promptCalls || 0) + 1; };
     event.userChoice = Promise.resolve({ outcome: 'dismissed' });
     window.dispatchEvent(event);
   });
-  await page.locator('#pwa-install-invitation .pwa-install-button').click();
-  assert.equal(await page.evaluate(() => window.promptCalls), 1);
-  assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
-  await setup();
-  await page.getByRole('button', { name: 'Dismiss install invitation' }).click();
-  assert.equal(await page.locator('#pwa-install-invitation').isVisible(), false);
-  assert.ok(await page.evaluate(() => localStorage.getItem('coastline-install-dismissed-v2')), 'Explicit dismissal is remembered');
-  assert.equal(await page.locator('#welcome .pwa-install-button').isVisible(), true, 'Permanent menu link survives explicit dismissal');
+  await button.click();
+  assert.equal(await page.evaluate(() => window.promptCalls), 1, 'Native prompt is used when available');
+  await button.click();
+  assert.equal(await help.isVisible(), true, 'A consumed prompt falls back to instructions');
+  await page.evaluate(() => {
+    const event = new Event('beforeinstallprompt', { cancelable: true });
+    event.prompt = async () => { throw new Error('Unavailable'); };
+    event.userChoice = Promise.resolve({ outcome: 'dismissed' });
+    window.dispatchEvent(event);
+  });
+  await button.click();
+  assert.equal(await help.isVisible(), true, 'A failed prompt falls back to instructions');
+  assert.equal(await button.isEnabled(), true);
+  await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+  assert.equal(await button.isVisible(), false, 'Installed apps hide the option');
+
+  await page.goto('https://coastline.test/');
+  await page.evaluate(() => Object.defineProperty(navigator, 'userAgent', { value: 'iPhone' }));
+  await page.addScriptTag({ content: script });
+  await page.evaluate(() => { document.querySelector('#pause-overlay').hidden = false; });
+  await button.click();
+  assert.match(await help.textContent(), /Safari, tap Share/);
   for (const mode of ['standalone', 'fullscreen']) {
     await page.goto('https://coastline.test/');
     await page.evaluate(mode => {
@@ -57,7 +65,7 @@ try {
       window.matchMedia = query => query.includes(`(display-mode: ${mode})`) ? { matches: true } : original(query);
     }, mode);
     await page.addScriptTag({ content: script });
-    assert.equal(await page.locator('.pwa-install, #pwa-install-invitation').count(), 0, `No installation UI in ${mode} mode`);
+    assert.equal(await page.locator('.pwa-install').count(), 0, `No installation UI in ${mode} mode`);
   }
-  console.log('PASS banner: loading readiness, nonmodal menu, timed dismissal, driving dismissal, focus pause, native prompt, close button, and fullscreen/standalone suppression');
+  console.log('PASS install settings: single menu action, no banner, native prompt, fallback, keyboard, iOS and installed states');
 } finally { await browser.close(); }

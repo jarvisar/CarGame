@@ -34,8 +34,6 @@ body[data-controller=true] .controller-hint { display: block; }
 .chooser-intro { font-size: 14px; }
 .start-button { font-size: 14px; }
 .pause-overlay p { font-size: 14px; }
-.pwa-install-button, #pwa-install-invitation .pwa-install-button { min-height: 44px; }
-.pwa-install-close { width: 44px; height: 44px; }
 @media (min-width: 761px) {
   .welcome { top: 50%; transform: translateY(-45%); max-width: 450px; max-height: calc(100% - 200px); padding: 28px; border: 1px solid #ffffff70; border-radius: 16px; background: #f9f8eedb; backdrop-filter: blur(12px); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; }
   .welcome.hidden { transform: translateY(-40%); pointer-events: none; }
@@ -68,8 +66,6 @@ body[data-controller=true] .controller-hint { display: block; }
   .topbar { top: calc(20px + var(--safe-top)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); }
   .bottom-bar { bottom: calc(112px + var(--safe-bottom)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); }
   .touch-controls { display: flex; bottom: calc(24px + var(--safe-bottom)); left: calc(24px + var(--safe-left)); right: calc(24px + var(--safe-right)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-  .pwa-install-button, #pwa-install-invitation .pwa-install-button { min-height: 44px; }
-  .pwa-install-close { width: 44px; height: 44px; }
 }
 
 @media (max-width: 760px) {

@@ -7,7 +7,7 @@ const errors = [];
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
 page.on('pageerror', error => errors.push(error.message));
 page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
-await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
 await page.waitForTimeout(750);
 assert.equal(await page.evaluate(() => window.__coastline.rendering.camera.top), 82.5);
@@ -89,7 +89,7 @@ assert.equal(await page.evaluate(() => window.__coastline.input.state.forward), 
 await page.keyboard.up('KeyW');
 const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
 mobile.on('pageerror', error => errors.push(error.message));
-await mobile.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' });
+await mobile.goto(process.env.TEST_URL || 'http://127.0.0.1:5173', { waitUntil: 'networkidle' });
 await mobile.waitForFunction(() => window.__coastline && document.querySelector('#loading').classList.contains('loaded'));
 await mobile.waitForTimeout(750);
 assert.equal(await mobile.locator('.touch-controls').isVisible(), false);

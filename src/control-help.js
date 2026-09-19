@@ -7,11 +7,12 @@ export const controlHelpDismissed = () => dismissed;
 export function setupControlHelp() {
   document.body.dataset.controlHelpDismissed = String(dismissed);
   for (const help of document.querySelectorAll('.start-hint, .touch-hint, .controller-hint, #stick-help, .controls > span:first-child')) {
+    if (help.classList.contains('menu-hint')) continue;
     help.setAttribute('data-control-help', '');
     const close = document.createElement('button');
     close.type = 'button'; close.className = 'dismiss-control-help';
     close.setAttribute('aria-label', 'Dismiss control help');
-    close.innerHTML = '<span aria-hidden="true">×</span>';
+    close.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     // Keyboard activation should dismiss help without triggering driving shortcuts.
     for (const type of ['keydown', 'keyup']) close.addEventListener(type, event => event.stopPropagation());
     close.addEventListener('click', event => {

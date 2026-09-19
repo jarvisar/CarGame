@@ -3,6 +3,7 @@ import './journey.css';
 import './ui.css';
 import './layout.css';
 import './car.css';
+import './menu.css';
 import { createRendering } from './rendering.js';
 import { Graphics } from './graphics.js';
 import { JOURNEYS } from './journeys.js';
@@ -28,7 +29,7 @@ const MENU_MOVES = ['menuNext', 'menuPrevious', 'menuUp', 'menuDown'];
 // A chooser's ring holds its cards and paint chips; the pause screen's holds
 // resume, the garage and every graphics setting.
 const MENU_CARDS = '[data-journey], [data-car], [data-paint]';
-const PAUSE_CONTROLS = '#resume, #change-car, #sound, #fullscreen, [data-quality], #soft-shading';
+const PAUSE_CONTROLS = '#resume, #change-car, #sound, #fullscreen, [data-quality], #soft-shading, .pwa-install-button';
 const mileageFormat = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 let paused = false, started = false, time = 0, hudTime = 0;
 const frameClock = new FrameClock();
@@ -88,6 +89,7 @@ async function boot() {
     function start() { if (paused || changingJourney) return; if (!started) { started = true; $('#welcome').classList.add('hidden'); } }
     function setPaused(value) {
       paused = value; input.clear(); frameClock.suspend();
+      if (paused) { clearTimeout(toastTimer); $('#toast').classList.remove('show'); }
       audio.setPaused(paused);
       pauseOverlay.hidden = !paused; $('#pause').setAttribute('aria-pressed', String(paused)); $('#pause').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
       $('#pause .control-label').textContent = paused ? 'resume' : 'pause';
@@ -98,8 +100,7 @@ async function boot() {
       document.body.dataset.journey = journey;
       $('.location-title').textContent = data.label;
       $('.location svg text').textContent = data.routeNumber;
-      $('#welcome .eyebrow').lastChild.textContent = ` ${data.label}`;
-      $('#welcome p').textContent = data.introduction;
+      $('#menu-route').textContent = data.label;
       $('#scene').setAttribute('aria-label', data.canvas);
       document.querySelector('meta[name="theme-color"]').content = { coast: '#c2e7e8', desert: '#efc692', snow: '#111d30', jungle: '#22402a', plains: '#ecd29a', city: '#b3bcc4' }[journey];
       document.querySelectorAll('button[data-journey]').forEach(button => button.setAttribute('aria-current', String(button.dataset.journey === journey)));
@@ -430,9 +431,6 @@ async function boot() {
       $('.stick-help-copy').firstChild.textContent = thirdPerson ? '↑ Drive · ↔ Steer' : 'Drag to drive';
       $('.stick-help-line').textContent = thirdPerson ? '↓ Brake · Release to stop' : 'Release to stop';
       $('#touch-stick').setAttribute('aria-label', thirdPerson ? 'Virtual joystick: up to accelerate, left and right to steer, down to brake or reverse, release to stop' : 'Virtual joystick');
-      $('.touch-hint').firstChild.textContent = thirdPerson
-        ? 'Push up to accelerate, left or right to steer, and down to brake or reverse. Release to stop.'
-        : 'Drag the stick toward where you want to go on screen. Push farther to speed up; release to stop.';
     }
     const simulate = dt => {
       const state = started ? input.state : {};

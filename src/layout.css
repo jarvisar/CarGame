@@ -123,12 +123,6 @@ body[data-journey=city] .chooser-heading { background: #eef1f4; }
   .topbar { gap: 8px; }
 }
 
-/* Keep installation inline when a floating invitation would cover the menu. */
-#pwa-install-invitation { top: auto; bottom: var(--ui-bottom); left: auto; right: var(--ui-right); transform: none; animation: none; }
-@media (max-width: 1199px), (max-height: 759px) {
-  #pwa-install-invitation { display: none; }
-}
-
 /* The route and its mileage read as one card on the pause screen. */
 .bottom-bar { justify-content: flex-start; }
 .location { display: flex; align-items: center; gap: 11px; max-width: 100%; padding: 10px 12px; border: 1px solid #ffffff50; border-radius: 10px; background: #f9f8ee5e; backdrop-filter: blur(12px); }
