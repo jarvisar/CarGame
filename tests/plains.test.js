@@ -221,6 +221,29 @@ test('the cow wears its patches proud of its hide, so no two faces flicker again
   }
 });
 
+test('no two fence posts stand in the same spot, where their faces would flicker', () => {
+  const scene = new THREE.Scene(), world = new PlainsWorld(scene);
+  let checked = 0;
+  for (const s of [420, 3960, 9102, 21692]) {
+    world.update(s);
+    for (const chunk of world.chunks.values()) {
+      const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), scale = new THREE.Vector3(), seen = new Set();
+      chunk.group.traverse(object => {
+        if (object.name !== 'fence-posts' || !object.isInstancedMesh) return;
+        for (let i = 0; i < object.count; i++) {
+          object.getMatrixAt(i, matrix);
+          position.setFromMatrixPosition(matrix); scale.setFromMatrixScale(matrix);
+          const key = `${position.x.toFixed(2)},${position.y.toFixed(2)},${position.z.toFixed(2)}/${scale.y.toFixed(2)}`;
+          assert.ok(!seen.has(key), `two posts share ${key} in chunk ${chunk.index}`);
+          seen.add(key); checked++;
+        }
+      });
+    }
+  }
+  world.dispose();
+  assert.ok(checked > 400, 'the drive must actually carry fences to check');
+});
+
 test('every plains asset is built from real geometry, so no part is silently missing', async () => {
   const { plainsDiscoveryAssets } = await import('../src/world/plains-discovery-assets.js');
   const { plainsTrees, baleGeometry, squareBaleGeometry, cowGeometry, rushGeometry, stalkGeometry, wheatGeometry, crowGeometry } = await import('../src/world/plains-assets.js');

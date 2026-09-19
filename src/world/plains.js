@@ -37,7 +37,7 @@ const roadMaterial = material('#6b6a64', { roughness: .95, flatShading: false })
 const shoulderMaterial = material('#c9b88f', { flatShading: false });
 const edgeMaterial = material('#f0e9d4', { flatShading: false });
 const centerMaterial = material('#e6c04a', { flatShading: false });
-const dirtMaterial = material('#c0a778', { flatShading: false, side: THREE.DoubleSide });
+const dirtMaterial = material('#ffffff', { vertexColors: true, flatShading: false, side: THREE.DoubleSide });
 const waterMaterial = createWaterMaterial(true);
 const leavesMaterial = material('#ffffff', { vertexColors: true });
 const barkMaterial = material('#6a563f');
@@ -76,7 +76,9 @@ function triangle(vertices, colors, a, b, c, color, start, furrows, furrowAt) {
   if ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) < 0) [b, c] = [c, b];
   for (const p of [a, b, c]) {
     vertices.push(p.x, p.y, p.z + start);
-    if (colors) colors.push(color.r, color.g, color.b);
+    // A point may carry its own colour, so a gradient across a strip survives
+    // the winding swap above.
+    if (colors) { const tint = p.color ?? color; colors.push(tint.r, tint.g, tint.b); }
     if (furrows) furrows.push(...furrowAt(p));
   }
 }
@@ -108,6 +110,12 @@ const FURROWS = { wheat: [2.2, .08], stubble: [3, .09], ploughed: [1.7, .13], pa
 const NO_FURROW = () => [0, 0, 99];
 const gravel = new THREE.Color('#c1b088'), verge = new THREE.Color('#9aad4f'), ditch = new THREE.Color('#7a9a43'), lush = new THREE.Color('#7aa34d'), mud = new THREE.Color('#8a7c58');
 const haze = new THREE.Color('#cdbf7c'), pastureLight = new THREE.Color('#a3b84c');
+// A dirt track across a field: two ruts worn down to darker earth, the crown
+// the wheels miss, and edges pale with the dust thrown off them.
+const dirtBase = new THREE.Color('#c0a778'), dirtRut = new THREE.Color('#a3885e'), dirtCrown = new THREE.Color('#cdb98d'), dirtEdge = new THREE.Color('#c6b082');
+// Where a track meets the highway it runs out onto the gravel, so its mouth
+// takes the shoulder's own colour and the join has no line across it.
+const dirtApron = new THREE.Color('#c9b88f');
 // The spruces and cypresses are the dark trees of the country, but only by
 // a step: a green much deeper than this took no light on its shaded side
 // and stood among the crowns as a black shape, worst on a phone's screen.
@@ -124,7 +132,7 @@ export class PlainsChunk {
     this.features = { discoveries: [] };
     // A row of turbines reaches well past its own district anchor.
     this.discoveries = plainsDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
-    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
+    this.scenery = { posts: [], wires: [], rails: [], poles: [], shrubs: [], bales: [], squareBales: [], boxes: [], painted: [], cows: [], rushes: [], grass: [], wheat: [], dirtTints: [], farLumps: [], concrete: [], sheds: [], tanks: [], bark: new Map(), leaves: new Map(), dirt: [] };
     this.buildTerrain(); this.buildRoad(); this.buildCreek(); this.buildScenery();
     buildPlainsDiscoveries(this, this.discoveries);
     this.finishScenery();
@@ -230,23 +238,53 @@ export class PlainsChunk {
     // seam, so the pattern runs on unbroken from one chunk to the next.
     this.ribbon([[-.15, .15]], .093, centerMaterial, 'center-lines', s => Math.floor(s / 2) % 4 >= 2);
   }
-  // A dirt track from the road edge out across the fields, and yards for the
-  // farm compounds, both laid on the rendered facets.
-  track(s, side, toCross, fromCross = 6.4) {
-    for (let cross = fromCross; cross < toCross; cross += 3) {
-      const next = Math.min(cross + 3, toCross);
-      this.dirtQuad([[s - 1.6, side * cross], [s + 1.6, side * cross], [s - 1.6, side * next], [s + 1.6, side * next]]);
+  // A dirt track from the road edge out across the fields: a band of bare
+  // earth worn into two wheel ruts, wandering as it crosses the field, and
+  // flaring into a mouth where it meets the shoulder, the way a farm
+  // entrance opens out so a tractor can swing in off the highway.
+  track(s, side, toCross, fromCross = 5.8) {
+    if (toCross <= fromCross + 4) return;
+    const salt = Math.round(s * 4) + (side > 0 ? 3301 : 3302), step = 2.5;
+    // Where the track's middle runs, and how wide the bare earth is there.
+    // The wander eases between one waypoint and the next rather than stepping
+    // to it, so the track curves instead of turning a corner every few paces.
+    const drift = cross => {
+      const t = cross / 13, cell = Math.floor(t), f = t - cell;
+      const wander = lerp(randomAt(cell, salt) - .5, randomAt(cell + 1, salt) - .5, f * f * (3 - 2 * f));
+      return wander * 2.8 * smoothstep(fromCross + 4, fromCross + 30, cross);
+    };
+    const half = cross => (1.5 + .3 * Math.sin(cross / 8 + salt))
+      * (1 + 1.2 * (1 - smoothstep(fromCross, fromCross + 8, cross)))
+      * (1 - .35 * smoothstep(toCross - 9, toCross, cross));
+    // Across the band: a pale edge, a worn rut, the crown between the wheels,
+    // and the same again on the other side. The ruts fade out into the mouth,
+    // where the traffic fans out rather than running in two lines.
+    const across = [-1, -.6, -.28, .28, .6, 1], tints = [dirtEdge, dirtRut, dirtCrown, dirtCrown, dirtRut, dirtEdge];
+    const tintAt = (tint, cross) => tint.clone().lerp(dirtApron, 1 - smoothstep(fromCross + 1, fromCross + 7, cross));
+    for (let cross = fromCross; cross < toCross - .01; cross += step) {
+      const next = Math.min(cross + step, toCross);
+      const w0 = half(cross), w1 = half(next), c0 = drift(cross), c1 = drift(next);
+      for (let i = 0; i < across.length - 1; i++) {
+        this.dirtQuad([[s + c0 + across[i] * w0, side * cross], [s + c0 + across[i + 1] * w0, side * cross],
+          [s + c1 + across[i] * w1, side * next], [s + c1 + across[i + 1] * w1, side * next]],
+          [tintAt(tints[i], cross), tintAt(tints[i + 1], cross), tintAt(tints[i], next), tintAt(tints[i + 1], next)]);
+      }
     }
   }
+  // Yards for the farm compounds: the same earth, laid flat.
   dirtPatch(s, u, halfS, halfU) {
     for (let ds = -halfS; ds < halfS; ds += 3) for (let du = -halfU; du < halfU; du += 3) {
       const es = Math.min(ds + 3, halfS), eu = Math.min(du + 3, halfU);
       this.dirtQuad([[s + ds, u + du], [s + es, u + du], [s + ds, u + eu], [s + es, u + eu]]);
     }
   }
-  dirtQuad(corners) {
-    const [a, b, c, d] = corners.map(([s, u]) => { const p = this.ground(s, u); return { x: p.x, y: p.y + .07, z: p.z - this.start }; });
-    triangle(this.scenery.dirt, null, a, b, c, null, this.start); triangle(this.scenery.dirt, null, b, d, c, null, this.start);
+  dirtQuad(corners, shades = null) {
+    const [a, b, c, d] = corners.map(([s, u], i) => {
+      const p = this.ground(s, u);
+      return { x: p.x, y: p.y + .07, z: p.z - this.start, color: shades ? shades[i] : dirtBase };
+    });
+    const { dirt, dirtTints } = this.scenery;
+    triangle(dirt, dirtTints, a, b, c, dirtBase, this.start); triangle(dirt, dirtTints, b, d, c, dirtBase, this.start);
   }
   buildCreek() {
     const creek = plainsCreekAt(this.start + CHUNK_LENGTH / 2);
@@ -344,14 +382,41 @@ export class PlainsChunk {
     };
     // Posts stand on a lattice offset from the chunk seams, where the terrain's
     // edge row is jittered; one extra point past the end carries the wire over.
-    const along = (u, s0, s1, step, skip, end = Infinity) => {
-      const points = [];
+    // Anchors are places a post has to land whatever the lattice says: the
+    // corner where this line meets the one crossing it, and the posts a gate
+    // hangs from. They override a lattice post standing too close to share it.
+    const along = (u, s0, s1, step, skip, end = Infinity, anchors = []) => {
+      const stops = [];
       for (let s = Math.ceil((s0 - 2) / step) * step + 2; s <= s1 + step && s < end; s += step) {
-        if (!skip || Math.abs(s - skip) > 3.6) points.push({ s, u, own: s <= s1 });
+        if (!skip || Math.abs(s - skip) > 3.6) stops.push({ s });
+      }
+      for (const anchor of anchors) if (anchor.s >= s0 - .01 && anchor.s <= s1 + .01) stops.push(anchor);
+      stops.sort((a, b) => a.s - b.s);
+      const points = [];
+      for (const stop of stops) {
+        const last = points.at(-1);
+        if (last && stop.s - last.s < step * .5) {
+          if (!stop.anchor) continue;
+          points.pop();
+        }
+        points.push({ ...stop, u, own: stop.s <= s1 });
       }
       return points;
     };
-    const acrossPoints = (s, side, from, to, step) => Array.from({ length: Math.floor((to - from) / step) + 1 }, (_, i) => ({ s, u: side * (from + i * step) }));
+    // Points across the field, stepping out from the road reserve, landing
+    // exactly on it, on every band boundary the line crosses, and on the far
+    // end, so a cross fence meets the lines running along the road at the
+    // corners rather than passing a pace behind them.
+    const acrossPoints = (s, side, from, to, step, anchors = []) => {
+      const stops = [from, ...anchors.filter(u => u > from + step * .5 && u < to - step * .5), to];
+      const points = [];
+      for (let i = 0; i < stops.length - 1; i++) {
+        const span = stops[i + 1] - stops[i], count = Math.max(1, Math.round(span / step));
+        for (let k = 0; k < count; k++) points.push({ s, u: side * (stops[i] + span * k / count) });
+      }
+      points.push({ s, u: side * stops.at(-1) });
+      return points;
+    };
     // A bush now and then at the foot of a fence, on the field side of it.
     const bushLine = (points, axis) => {
       for (const point of points) {
@@ -383,18 +448,28 @@ export class PlainsChunk {
     // between its bands, and the bales and lone trees in the fields themselves.
     for (let row = fieldRowAt(this.start) - 1; fieldBoundary(row) < this.start + CHUNK_LENGTH; row++) {
       const rowStart = fieldBoundary(row), rowEnd = fieldBoundary(row + 1);
-      const s0 = Math.max(rowStart + 2, this.start), s1 = Math.min(rowEnd - 2, this.start + CHUNK_LENGTH - .01);
+      // A line running along the road reaches the cross line at either end of
+      // its row, so the two meet at a corner instead of stopping a few paces
+      // short of one another.
+      const s0 = Math.max(rowStart + 2.2, this.start), s1 = Math.min(rowEnd + 2.2, this.start + CHUNK_LENGTH - .01);
       for (const side of [-1, 1]) {
         const bands = fieldBands(row, side), gate = farmGate(row, side);
+        // The cross fence stands the corner post where it has one; otherwise
+        // the line along the road stands its own.
+        const corners = [[rowStart + 2.2, rowBoundaryKind(row, side)], [rowEnd + 2.2, rowBoundaryKind(row + 1, side)]]
+          .map(([s, kind]) => ({ s, anchor: true, post: kind === 'fence' ? false : undefined }));
+        // A gate hangs between two heavy posts of its own, and the fence runs
+        // its rails up to them and stops: the gate fills the opening.
+        const gateSide = gate ? [{ s: gate.s - 2.4, anchor: true, post: false, stop: true }, { s: gate.s + 2.4, anchor: true, post: false }] : [];
         if (s0 < s1) {
-          if (roadsideFence(row, side)) fence(along(side * ROAD_RESERVE, s0, s1, 4, gate?.s, rowEnd - 2));
+          if (roadsideFence(row, side)) fence(along(side * ROAD_RESERVE, s0, s1, 4, gate?.s, rowEnd + 2.3, [...corners, ...gateSide]));
           fringe(along(side * ROAD_RESERVE + side * 1.4, s0, s1, 2.6), 'u');
           for (let band = 1; band <= 3; band++) {
             const kind = bandBoundaryKind(row, side, band);
             fringe(along(side * bands[band], s0, s1, 2.6), 'u');
             if (kind === 'fence') {
-              fence(along(side * bands[band], s0, s1, 4, null, rowEnd - 2));
-              bushLine(along(side * bands[band], s0, s1, 4, null, rowEnd - 2), 'u');
+              fence(along(side * bands[band], s0, s1, 4, null, rowEnd + 2.3, corners));
+              bushLine(along(side * bands[band], s0, s1, 4), 'u');
               if (randomAt(row * 4 + band, side > 0 ? 2793 : 2794) < .5) treeLine(along(side * (bands[band] + 2.4), s0, s1, 8), side < 0);
             } else if (kind === 'hedge') hedge(along(side * bands[band], s0, s1, 1.7));
             else if (kind === 'treeline') treeLine(along(side * bands[band], s0, s1, 4.5), side < 0);
@@ -499,12 +574,13 @@ export class PlainsChunk {
       const line = rowStart + 2.2;
       for (const side of [-1, 1]) {
         const kind = rowBoundaryKind(row, side), far = Math.min(fieldBands(row, side)[4], 330);
-        fringe(acrossPoints(line, side, 15, Math.min(far, 170), 2.6), 's');
+        const crossings = fieldBands(row, side).slice(1, 4);
+        fringe(acrossPoints(line, side, ROAD_RESERVE, Math.min(far, 170), 2.6), 's');
         if (kind === 'fence') {
-          fence(acrossPoints(line, side, 15, far, 6));
-          bushLine(acrossPoints(line, side, 15, far, 6), 's');
+          fence(acrossPoints(line, side, ROAD_RESERVE, far, 6, crossings));
+          bushLine(acrossPoints(line, side, ROAD_RESERVE, far, 6), 's');
           if (randomAt(row, side > 0 ? 2795 : 2796) < .35) treeLine(acrossPoints(line + 2.6, side, 16, far, 8), side < 0);
-        } else if (kind === 'hedge') hedge(acrossPoints(line, side, 15, far, 1.7));
+        } else if (kind === 'hedge') hedge(acrossPoints(line, side, ROAD_RESERVE, far, 1.7));
         else if (kind === 'treeline') treeLine(acrossPoints(line, side, 16, far, 4.5), side < 0);
         else if (kind === 'shelterbelt') for (let cross = 18; cross < Math.min(far, 260); cross += 6.5) {
           const t = line + (random() - .5) * 1.6, v = side * (cross + (random() - .5) * 1.4);
@@ -598,15 +674,25 @@ export class PlainsChunk {
     for (let row = fieldRowAt(this.start) - 1; fieldBoundary(row) < this.start + CHUNK_LENGTH; row++) for (const side of [-1, 1]) {
       const gate = farmGate(row, side);
       if (!gate || !inChunk(gate.s)) continue;
-      const angle = -roadFrame(gate.s).angle, u = side * 15.5;
+      // The gate hangs in the roadside fence itself, on two posts heavier than
+      // the line's, so the fence reads as running into it and stopping. Its
+      // timber is paler than the weathered rails either side, and it carries
+      // four bars, two stiles and a diagonal brace, which is what tells a
+      // gate apart from the fence it hangs in.
+      const angle = -roadFrame(gate.s).angle, u = side * ROAD_RESERVE, timber = '#b39c73';
       for (const end of [-1, 1]) {
-        const p = this.ground(gate.s + end * 2.6, u);
-        posts.push({ p: [p.x, p.y + .72, p.z], scale: [.26, 1.5, .26], r: [0, angle, 0] });
+        const p = this.ground(gate.s + end * 2.4, u);
+        posts.push({ p: [p.x, p.y + .82, p.z], scale: [.32, 1.72, .32], r: [0, angle, 0] });
       }
-      const a = this.ground(gate.s - 2.6, u), b = this.ground(gate.s + 2.6, u);
-      for (const height of [.5, .88, 1.26]) {
-        this.beam(this.scenery.rails, { ...a, y: a.y + height }, { ...b, y: b.y + height }, .09);
+      const a = this.ground(gate.s - 2.4, u), b = this.ground(gate.s + 2.4, u);
+      for (const height of [.42, .72, 1.02, 1.32]) {
+        this.beam(this.scenery.rails, { ...a, y: a.y + height }, { ...b, y: b.y + height }, .085, timber);
       }
+      for (const t of [1 / 3, 2 / 3]) {
+        const stile = this.ground(gate.s - 2.4 + t * 4.8, u);
+        this.beam(this.scenery.rails, { ...stile, y: stile.y + .42 }, { ...stile, y: stile.y + 1.32 }, .075, timber);
+      }
+      this.beam(this.scenery.rails, { ...a, y: a.y + .42 }, { ...b, y: b.y + 1.32 }, .08, timber);
     }
     // Rushes along the creek's waterline, thicker where the banks are gentle.
     if (Math.abs(creekHere.center - this.start - CHUNK_LENGTH / 2) < CHUNK_LENGTH / 2 + 150) {
@@ -696,14 +782,18 @@ export class PlainsChunk {
     for (const point of points) {
       if (keepClear && !this.clearAt(point.s, point.u, .3)) { previous = null; continue; }
       const p = this.ground(point.s, point.u);
-      // A point past the chunk's end is the next chunk's post; only its wire is ours.
-      if (point.own !== false) posts.push({ p: [p.x, p.y + .62, p.z], scale: [.26, 1.32, .26], r: [0, -roadFrame(point.s).angle, 0] });
+      // A point past the chunk's end is the next chunk's post; only its wire
+      // is ours. A corner post or a gate's hanging post is placed by whichever
+      // line owns it, and the others run their rails into it rather than
+      // standing a second post in the same spot.
+      if (point.own !== false && point.post !== false) posts.push({ p: [p.x, p.y + .62, p.z], scale: [.26, 1.32, .26], r: [0, -roadFrame(point.s).angle, 0] });
       // Two rails carry the line between posts; a single hairline wire left the
       // posts reading as loose specks across the fields.
       if (previous) for (const height of [.62, 1.04]) {
         this.beam(rails, { ...previous, y: previous.y + height }, { ...p, y: p.y + height }, .13);
       }
-      previous = p;
+      // A gate fills its own opening, so the fence's rails stop at its posts.
+      previous = point.stop ? null : p;
     }
   }
   // A tuft at a field's edge: long grass in the green fields and the verge,
@@ -755,12 +845,21 @@ export class PlainsChunk {
     leaves.get(variant).push({ p: [p.x, p.y - .12, p.z], scale: [height, height, height], r: [0, yaw, 0], color });
   }
   finishScenery() {
-    const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt } = this.scenery;
-    if (dirt.length) this.addMesh(geometry(dirt), dirtMaterial, 'farm-tracks');
+    const { posts, wires, rails, poles, shrubs, bales, squareBales, boxes, painted, cows, rushes, grass, wheat, farLumps, concrete, sheds, tanks, bark, leaves, dirt, dirtTints } = this.scenery;
+    if (dirt.length) this.addMesh(geometry(dirt, dirtTints), dirtMaterial, 'farm-tracks');
     instances(this.group, squareBaleGeometry, strawMaterial, squareBales, 'square-bales');
     instances(this.group, plainsDiscoveryAssets.shed, plainsDiscoveryMaterial, sheds, 'field-sheds');
     instances(this.group, poleGeometry, metalMaterial, tanks, 'water-tanks');
-    instances(this.group, boxGeometry, timberMaterial, posts, 'fence-posts');
+    // Two lines meeting at a corner each want a post standing there, and two
+    // posts in the same spot have no stable depth order: their faces flicker
+    // against each other as the camera moves. Keep the first of each.
+    const standing = new Set();
+    const singles = posts.filter(post => {
+      const key = post.p.map(value => Math.round(value * 8)).join() + '/' + Math.round(post.scale[1] * 100);
+      if (standing.has(key)) return false;
+      standing.add(key); return true;
+    });
+    instances(this.group, boxGeometry, timberMaterial, singles, 'fence-posts');
     instances(this.group, boxGeometry, railMaterial, rails, 'fence-rails', false);
     instances(this.group, boxGeometry, wireMaterial, wires, 'overhead-wires', false);
     instances(this.group, poleGeometry, poleMaterial, poles, 'utility-poles');
