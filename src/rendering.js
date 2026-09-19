@@ -67,7 +67,7 @@ export function createRendering(canvas, graphics = new Graphics()) {
     desert: { color: '#dab49b', near: 460, far: 860, thirdNear: 210, thirdFar: 350 },
     snow: { color: '#243949', near: 340, far: 760, thirdNear: 190, thirdFar: 330 },
     jungle: { color: '#9ab89a', near: 320, far: 780, thirdNear: 110, thirdFar: 250 },
-    plains: { color: '#e6cf9f', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
+    plains: { color: '#e9b360', near: 500, far: 1000, thirdNear: 200, thirdFar: 360 },
     city: { color: '#aab4bc', near: 470, far: 900, thirdNear: 130, thirdFar: 330 },
   };
   function updateFog() {
@@ -145,12 +145,17 @@ export function createRendering(canvas, graphics = new Graphics()) {
       return;
     }
     if (id === 'plains') {
-      // Golden hour over open country: a low, warm sun throws long shadows
-      // from every bale and fence post, under a pale hazy sky.
-      scene.background.set('#ecd8ab'); updateFog();
-      sky.color.set('#e8e0cb'); sky.groundColor.set('#75683f'); sky.intensity = 1;
-      sun.color.set('#ffdba2'); sun.intensity = 2.7; sunOffset.set(-185, 150, 125);
-      renderer.toneMappingExposure = .96;
+      // Golden hour over open country: the sun sits a little over twenty
+      // degrees up, so every bale, post and tree lays a long shadow across the
+      // fields. A sun that low puts much less light on flat ground than a high
+      // one does, so it burns brighter than the noon journeys' to keep the
+      // crops lit, and the sky fill stays cool: it is the distance between a
+      // warm light and a cool shade that reads as gold, rather than everything
+      // alike behind a yellow filter.
+      scene.background.set('#eeb85e'); updateFog();
+      sky.color.set('#d5dbd0'); sky.groundColor.set('#8b7444'); sky.intensity = 1.12;
+      sun.color.set('#ffc368'); sun.intensity = 3.45; sunOffset.set(-188, 92, 127);
+      renderer.toneMappingExposure = .98;
       return;
     }
     if (id === 'city') {

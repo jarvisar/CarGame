@@ -109,7 +109,8 @@ const CROP_PALETTES = {
 const FURROWS = { wheat: [2.2, .08], stubble: [3, .09], ploughed: [1.7, .13], pasture: [4, 0], hay: [4.5, .07] };
 const NO_FURROW = () => [0, 0, 99];
 const gravel = new THREE.Color('#c1b088'), verge = new THREE.Color('#9aad4f'), ditch = new THREE.Color('#7a9a43'), lush = new THREE.Color('#7aa34d'), mud = new THREE.Color('#8a7c58');
-const haze = new THREE.Color('#cdbf7c'), pastureLight = new THREE.Color('#a3b84c');
+// The far fields fade into the same gold the horizon haze carries.
+const haze = new THREE.Color('#dcb771'), pastureLight = new THREE.Color('#a3b84c');
 // A dirt track across a field: two ruts worn down to darker earth, the crown
 // the wheels miss, and edges pale with the dust thrown off them.
 const dirtBase = new THREE.Color('#c0a778'), dirtRut = new THREE.Color('#a3885e'), dirtCrown = new THREE.Color('#cdb98d'), dirtEdge = new THREE.Color('#c6b082');
