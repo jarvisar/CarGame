@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { CHUNK_LENGTH } from '../src/world/route.js';
+import { CHUNK_LENGTH, positionAt } from '../src/world/route.js';
 import { CITY_STEP, CITY_COLUMN_COUNT, KERB, cityColumns, cityVertex, cityHeight, cityGroundHeight, cityRoadHeight, pavementHeight, cityDrivingRoute,
   quayOffset, QUAY_NEAR, QUAY_FAR, QUAY_WALL, RIVER_LEVEL, RIVER_BED, FAR_BANK, FAR_BANK_TOP, farBankHeight, blockBoundary, blockAt, crossStreetAt, onCrossStreet,
-  STREET_HALF_WIDTH, BANDS, BANK_ROADS, nearStreet, cityPosition, cityStreetHeight, bridgeSurfaceHeight } from '../src/world/city-route.js';
+  STREET_HALF_WIDTH, BANDS, BANK_ROADS, nearStreet, bankStreetRange, cityPosition, cityStreetHeight, bridgeSurfaceHeight } from '../src/world/city-route.js';
 import { crossRoadHeight } from '../src/world/city-roads.js';
 import { CityWorld, CityChunk, lightning } from '../src/world/city.js';
 import { Rainfall } from '../src/world/rainfall.js';
@@ -226,15 +226,57 @@ test('river-bound streets connect across both banks, including bridges split by 
         assert.ok(pavement && Math.abs(pavement.point.y - pavementHeight(s + side * ds) - .02) < .025, 'sidewalk meets the boulevard pavement');
       }
     }
-    for (const u of BANK_ROADS) for (const ds of [-18, -4, 0, 4, 18]) {
+    // Probe both sides of the seam: exactly on an edge, Float32 rounding
+    // can put a mathematical ray between triangles by less than 0.1 mm.
+    for (const u of BANK_ROADS) for (const ds of [-18, -4, -.01, .01, 4, 18]) {
       const point = cityPosition(s + ds, u + 2.2, 150);
       ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
-      assert.ok(ray.intersectObjects(roadMeshes).length, 'opposite-bank avenues join each bridge intersection');
+      assert.ok(ray.intersectObjects(roadMeshes).length, `opposite-bank avenues join each bridge intersection at ${s + ds}, ${u + 2.2}`);
       assert.equal(ray.intersectObjects(buildingMeshes).length, 0, 'the avenue stays clear of wharf buildings');
     }
     for (const u of [quayOffset(s) + 1.5, FAR_BANK_TOP - 2]) {
       assert.ok(Math.abs(bridgeSurfaceHeight(s, u) - cityStreetHeight(s, u)) < 1e-8, 'bridge profile meets the bank without a step');
     }
     for (const chunk of chunks) chunk.dispose();
+  }
+});
+
+test('the far-bank street plan varies independently and stays continuous without folding lots', () => {
+  let varied = 0, short = 0;
+  for (let index = -30; index < 30; index++) {
+    const range = bankStreetRange(index), boundary = blockBoundary(index);
+    if (nearStreet(index)) assert.deepEqual(range, { from: BANK_ROADS.at(-1), to: -5.5 });
+    else if (range.from === BANK_ROADS[1]) short++;
+    const s = (boundary + blockBoundary(index + 1)) / 2;
+    const direction = u => { const a = cityPosition(s - 5, u), b = cityPosition(s + 5, u); return (b.x - a.x) / (b.z - a.z); };
+    if (Math.abs(direction(BANK_ROADS[0]) - direction(BANK_ROADS.at(-1))) > .06) varied++;
+    for (const u of [-350, -245, -188, -142, -131]) {
+      const a = cityPosition(boundary - .0001, u), b = cityPosition(boundary + .0001, u);
+      assert.ok(Math.hypot(a.x - b.x, a.z - b.z) < .001, 'district axes join at block boundaries');
+      const p = cityPosition(s, u), across = cityPosition(s, u + .1), along = cityPosition(s + .1, u);
+      const area = (across.x - p.x) * (along.z - p.z) - (across.z - p.z) * (along.x - p.x);
+      assert.ok(area < -.003, 'street plan does not reverse or collapse a lot');
+    }
+    for (const u of [-130, -20, 0, 14, 160]) assert.deepEqual(cityPosition(s, u, 24), positionAt(s, u, 24), 'the driving bank and bridge spans keep their established layout');
+  }
+  assert.ok(varied > 20, 'avenues have different directions, not translated copies of the same curve');
+  assert.ok(short > 3, 'the bank contains shorter local streets as well as through streets');
+});
+
+test('far-bank T junctions close with a continuous sidewalk instead of opening into the river', () => {
+  const indices = Array.from({ length: 20 }, (_, i) => i - 10).filter(i => !nearStreet(i)).slice(0, 4);
+  const ray = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  for (const index of indices) {
+    const center = blockBoundary(index), chunk = new CityChunk(Math.floor((center + .3) / CHUNK_LENGTH));
+    chunk.group.position.z = -chunk.start; chunk.group.updateMatrixWorld(true);
+    for (const ds of [-4, .3, 4]) {
+      if (!chunk.inChunk(center + ds)) continue;
+      const point = cityPosition(center + ds, BANK_ROADS[0] + 6.7, 150);
+      ray.set(new THREE.Vector3(point.x, point.y, point.z), down);
+      const paving = ray.intersectObject(chunk.group.getObjectByName('city-promenade'))[0];
+      assert.ok(paving && Math.abs(paving.point.y - cityGroundHeight(center + ds, BANK_ROADS[0] + 6.7) - .02) < .025, 'waterfront footpath crosses the closed arm');
+      assert.equal(ray.intersectObject(chunk.group.getObjectByName('city-side-roads')).length, 0, 'asphalt does not continue past the kerb');
+    }
+    chunk.dispose();
   }
 });

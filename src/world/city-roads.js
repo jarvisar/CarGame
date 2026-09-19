@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CHUNK_LENGTH, roadFrame, randomAt } from './route.js';
-import { blockAt, blockBoundary, crossStreetAt, nearStreet, quayOffset, cityGroundHeight, cityStreetHeight, pavementHeight, bridgeSurfaceHeight,
+import { blockAt, blockBoundary, crossStreetAt, nearStreet, bankStreetRange, cityStreetYaw, quayOffset, cityGroundHeight, cityStreetHeight, pavementHeight, bridgeSurfaceHeight,
   SIDE_ROAD_HALF_WIDTH, STREET_HALF_WIDTH, BANK_ROADS, INLAND_ROADS, FAR_BANK_TOP, RIVER_BED } from './city-route.js';
 import { cityDiscoveryClears } from './city-discoveries.js';
 
@@ -47,18 +47,22 @@ export function buildCityRoads(chunk) {
     const walk = u > 0 && u < 100 ? 1 : 2.5;
     const boundaries = centers.flatMap(s => [s - ROAD_HALF, s + ROAD_HALF, s - 9, s + 9]);
     for (const [s, t] of intervals(chunk.start, end, boundaries)) {
-      const mid = (s + t) / 2, distance = Math.abs(mid - crossStreetAt(mid).center);
+      const mid = (s + t) / 2, crossStreet = crossStreetAt(mid), distance = Math.abs(mid - crossStreet.center);
+      const range = u < 0 ? bankStreetRange(crossStreet.index) : { from: 5.5, to: 160 };
       if (!cityDiscoveryClears(mid, u, landDiscoveries, w)) continue;
-      const junction = distance < ROAD_HALF;
+      const meetsStreet = u >= range.from && u <= range.to, junction = meetsStreet && distance < ROAD_HALF;
       patch(streets, s, t, u - w, u + w, ASPHALT);
-      if (junction) continue;
       for (const side of [-1, 1]) {
+        // The closed side of a T junction keeps its pavement and edge line.
+        // In particular a river-facing kerb must never open into the water.
+        const armExists = side < 0 ? u > range.from : u < range.to;
+        if (junction && armExists) continue;
         const edge = u + side * w;
         patch(details, s, t, side < 0 ? edge - walk : edge, side < 0 ? edge : edge + walk, WALK, groundHeight, WALK_LIFT);
         patch(details, s, t, edge - .1, edge + .1, KERB, groundHeight, WALK_LIFT + .004);
         if (w > 3) patch(streets, s, t, u + side * (w - .45) - .065, u + side * (w - .45) + .065, WHITE, groundHeight, .014);
       }
-      if (w > 3 && distance > 9 && Math.floor(mid / 4) % 2 === 0) patch(streets, s, Math.min(s + 3.6, t), u - .08, u + .08, YELLOW, groundHeight, .017);
+      if (w > 3 && (!meetsStreet || distance > 9) && Math.floor(mid / 4) % 2 === 0) patch(streets, s, Math.min(s + 3.6, t), u - .08, u + .08, YELLOW, groundHeight, .017);
     }
   }
 
@@ -66,7 +70,7 @@ export function buildCityRoads(chunk) {
     const s = blockBoundary(index), crossing = nearStreet(index);
     if (s + STREET_HALF_WIDTH < chunk.start || s - STREET_HALF_WIDTH > end) continue;
     const height = (t, u) => crossRoadHeight(t, u, crossing);
-    const ranges = [[5.5, 160], [BANK_ROADS.at(-1), crossing ? -5.5 : BANK_ROADS[0]]];
+    const bankRange = bankStreetRange(index), ranges = [[5.5, 160], [bankRange.from, bankRange.to]];
     const boundaries = roads.flatMap(road => [road.u - road.halfWidth, road.u + road.halfWidth, road.u - 9, road.u + 9]);
     boundaries.push(-14, -8, 8, 14, FAR_BANK_TOP - 2, quayOffset(s) + 1.5);
     for (const [from, to] of ranges) {
@@ -117,11 +121,12 @@ export function buildCityRoads(chunk) {
     // Match the boulevard's zebra crossings on the opposite bank. The
     // waterfront and outer avenue have T junctions where a street terminates;
     // paint only the arms that actually exist, including bridge approaches.
-    for (const [roadIndex, u] of BANK_ROADS.entries()) {
+    for (const u of BANK_ROADS) {
+      if (u < bankRange.from || u > bankRange.to) continue;
       for (const side of [-1, 1]) {
         const along = s + side * 6.7;
         for (let k = 0; k < 8; k++) patch(streets, along - 1, along + 1, u - 4.9 + k * 1.28, u - 4.23 + k * 1.28, WHITE, groundHeight, .024);
-        const armExists = side < 0 ? roadIndex < BANK_ROADS.length - 1 : roadIndex > 0 || crossing;
+        const armExists = side < 0 ? u > bankRange.from : u < bankRange.to;
         if (!armExists) continue;
         const across = u + side * 6.7;
         for (let k = 0; k < 8; k++) patch(streets, s - 4.9 + k * 1.28, s - 4.23 + k * 1.28, across - 1, across + 1, WHITE, height, .024);
@@ -174,8 +179,8 @@ export function buildCityRoads(chunk) {
     for (let n = Math.floor(chunk.start / 28); n * 28 + 7 < end; n++) {
       const s = n * 28 + 7;
       if (!chunk.inChunk(s) || Math.abs(s - crossStreetAt(s).center) < STREET_HALF_WIDTH + 4) continue;
-      chunk.furniture('lamp', s, u + 6.7, -roadFrame(s).angle, { lift: groundHeight(s, u + 6.7) + WALK_LIFT - chunk.ground(s, u + 6.7).y });
-      if (randomAt(n, Math.abs(u) + 3651) < .38) chunk.parkedCar(s, u - 4.15, -roadFrame(s).angle, n * 13 + Math.abs(u), .075);
+      chunk.furniture('lamp', s, u + 6.7, cityStreetYaw(s, u), { lift: groundHeight(s, u + 6.7) + WALK_LIFT - chunk.ground(s, u + 6.7).y });
+      if (randomAt(n, Math.abs(u) + 3651) < .38) chunk.parkedCar(s, u - 4.15, cityStreetYaw(s, u), n * 13 + Math.abs(u), .075);
     }
   }
 }

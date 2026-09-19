@@ -47,6 +47,12 @@ export function blockAt(s) {
 // Every inland cross street meets the boulevard. The streets continuing
 // toward the river cross it on bridges and meet the opposite bank's grid.
 export function nearStreet(index) { return randomAt(index, 3012) < .45; }
+export function bankStreetRange(index) {
+  // Some local streets stop at the middle avenue; bridges remain through
+  // routes. This gives the inland bank a mix of short and long blocks.
+  return { from: !nearStreet(index) && randomAt(index, 3661) < .38 ? BANK_ROADS[1] : BANK_ROADS.at(-1),
+    to: nearStreet(index) ? -5.5 : BANK_ROADS[0] };
+}
 export function crossStreetAt(s) {
   const index = blockAt(s), before = blockBoundary(index), after = blockBoundary(index + 1);
   return s - before < after - s ? { index, center: before } : { index: index + 1, center: after };
@@ -55,7 +61,10 @@ export function onCrossStreet(s, u) {
   const street = crossStreetAt(s);
   if (Math.abs(s - street.center) >= STREET_HALF_WIDTH) return false;
   if (u > 0) return u > KERB && u < 168;
-  if (u <= FAR_BANK_TOP) return u > BANK_ROADS.at(-1) - STREET_HALF_WIDTH;
+  if (u <= FAR_BANK_TOP) {
+    const range = bankStreetRange(street.index);
+    return u > range.from - SIDE_ROAD_HALF_WIDTH && u < range.to + SIDE_ROAD_HALF_WIDTH;
+  }
   return u < -KERB && nearStreet(street.index);
 }
 
@@ -81,8 +90,9 @@ export function cityStreetHeight(s, u) {
 }
 export function cityRoadbedHeight(s, u) {
   const street = crossStreetAt(s);
+  const bankStreet = bankStreetRange(street.index);
   const across = Math.abs(s - street.center) <= STREET_HALF_WIDTH &&
-    ((u >= KERB && u <= 168) || (u <= FAR_BANK_TOP && u >= BANK_ROADS.at(-1) - STREET_HALF_WIDTH) ||
+    ((u >= KERB && u <= 168) || (u <= bankStreet.to + SIDE_ROAD_HALF_WIDTH && u <= FAR_BANK_TOP && u >= bankStreet.from - SIDE_ROAD_HALF_WIDTH) ||
       (nearStreet(street.index) && u <= -KERB && u >= quayOffset(s)));
   const along = [...INLAND_ROADS, ...BANK_ROADS.map(u => ({ u, halfWidth: SIDE_ROAD_HALF_WIDTH }))]
     .some(road => Math.abs(u - road.u) <= road.halfWidth + .001);
@@ -133,7 +143,32 @@ export function cityGroundHeight(s, u) {
 export function cityHeight(s, u) {
   return Math.abs(u) <= KERB ? cityRoadHeight(s) : cityGroundHeight(s, u);
 }
-export const cityPosition = (s, u, y = cityHeight(s, u)) => positionAt(s, u, y);
+// Across the river the street plan has its own district axes. The waterfront
+// follows the bank, while inland avenues connect straighter, staggered blocks
+// instead of copying every bend of the driving road. Terrain, lots and road
+// markings all use this map, so changing the plan cannot separate their joins.
+const bankAxes = new Map();
+function bankAxis(index) {
+  if (!bankAxes.has(index)) {
+    const s = blockBoundary(index * 2);
+    bankAxes.set(index, { s, x: roadFrame(s).x * .6 + (randomAt(index, 3662) - .5) * 28, z: (randomAt(index, 3663) - .5) * 20 });
+    if (bankAxes.size > 128) bankAxes.delete(bankAxes.keys().next().value);
+  }
+  return bankAxes.get(index);
+}
+export function cityPosition(s, u, y = cityHeight(s, u)) {
+  const p = positionAt(s, u, y);
+  if (u >= -138) return p;
+  const index = Math.floor(blockAt(s) / 2), a = bankAxis(index), b = bankAxis(index + 1);
+  const t = (s - a.s) / (b.s - a.s), weight = smoothstep(-138, -235, u);
+  p.x = lerp(p.x, u + lerp(a.x, b.x, t), weight);
+  p.z = lerp(p.z, -s + lerp(a.z, b.z, t), weight);
+  return p;
+}
+export function cityStreetYaw(s, u) {
+  const a = cityPosition(s - .5, u), b = cityPosition(s + .5, u);
+  return Math.atan2(a.x - b.x, a.z - b.z);
+}
 
 export function cityVertex(row, column) {
   const s = row * CITY_STEP, columns = cityColumns(s), base = columns[column];

@@ -3,7 +3,7 @@ import { registerChunkResources } from './chunk-resources.js';
 import { finalizeChunkTransforms } from './chunk-transforms.js';
 import { splitBatch } from './instance-batches.js';
 import { updateResidentChunks } from './resident.js';
-import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, positionAt, roadFrame } from './route.js';
+import { CHUNK_LENGTH, randomAt, seededRandom, smoothstep, lerp, roadFrame } from './route.js';
 import { CITY_STEP, CITY_COLUMN_COUNT, KERB, PAVEMENT_LIFT, cityVertex, cityPosition, cityRoadHeight, cityGroundHeight, pavementHeight, quayOffset, RIVER_LEVEL,
   FAR_BANK, FAR_BANK_TOP, QUAY_WALL, blockBoundary, blockAt, crossStreetAt, nearStreet, onCrossStreet, STREET_HALF_WIDTH, BANDS, SKYLINE_FROM,
   BANK_BANDS, BANK_ROADS, onRiverCrossing } from './city-route.js';
@@ -13,6 +13,7 @@ import { cityAssets, cityTrees, parkedCars, PARKED_PAINTS } from './city-assets.
 import { dressBuilding, buildShopfront, rooftopTank } from './city-architecture.js';
 import { buildPromenade } from './city-promenade.js';
 import { buildCityRoads } from './city-roads.js';
+import { buildNeighborhoods } from './city-neighborhoods.js';
 import { cityDiscoveries, cityDiscoveryClears, cityLotClears } from './city-discoveries.js';
 import { buildCityDiscoveries } from './city-discovery-scenery.js';
 import { Rainfall } from './rainfall.js';
@@ -87,7 +88,7 @@ export class CityChunk {
     this.discoveries = cityDiscoveries(this.start - 160, this.start + CHUNK_LENGTH + 160);
     this.scenery = { blocks: { vertices: [], colors: [] }, details: { vertices: [], colors: [] }, streets: { vertices: [], colors: [] }, lit: { vertices: [], colors: [] }, skyline: { vertices: [], colors: [] },
       boxes: [], furniture: new Map(), parked: new Map(), bark: new Map(), leaves: new Map() };
-    this.buildTerrain(); this.buildRoad(); this.buildRiver(); this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityRoads(this);
+    this.buildTerrain(); this.buildRoad(); this.buildRiver(); this.buildBlocks(); this.buildStreets(); buildPromenade(this); buildCityRoads(this); buildNeighborhoods(this);
     buildCityDiscoveries(this, this.discoveries);
     this.finishScenery();
     finalizeChunkTransforms(this.group);
@@ -100,7 +101,7 @@ export class CityChunk {
   // Scenery stands on the rendered facets; the analytic ground covers spots
   // outside this chunk.
   ground(s, u) {
-    const p = positionAt(s, u, 0);
+    const p = cityPosition(s, u, 0);
     return { x: p.x, y: this.sampleGround(p.x, p.z + this.start) ?? cityGroundHeight(s, u), z: p.z + this.start };
   }
   // Local coordinates for a point on the road frame at a given height.
@@ -226,7 +227,7 @@ export class CityChunk {
   windows(b, y0, seed, kind) {
     const { s0, s1, u0, u1 } = b, { blocks, lit } = this.scenery;
     const storeys = Math.floor((b.height - 1.2) / 3.2), first = b.shop ? 1 : 0;
-    const detailed = u0 > 0 && u0 < 40, surround = new THREE.Color(b.wall).lerp(new THREE.Color('#c8c1b3'), .48);
+    const detailed = u0 > 0 && u0 < 40, distant = u0 >= 90 || u0 < -190, surround = new THREE.Color(b.wall).lerp(new THREE.Color('#c8c1b3'), .48);
     let n = 0;
     const pane = (points, outward, salt) => {
       const on = randomAt(seed, 3061 + salt) < b.lit;
@@ -246,7 +247,7 @@ export class CityChunk {
         }
         continue;
       }
-      for (let s = s0 + 1.3; s + 1.3 <= s1 - .9; s += detailed ? 3.15 : 2.8) {
+      for (let s = s0 + 1.3; s + 1.3 <= s1 - .9; s += detailed ? 3.15 : distant ? 3.8 : 2.8) {
         if (detailed) {
           this.quad(blocks, [this.at(s - .14, u0 - .035, yLow - .13), this.at(s + 1.44, u0 - .035, yLow - .13), this.at(s + 1.44, u0 - .035, yHigh + .14), this.at(s - .14, u0 - .035, yHigh + .14)], surround, [-1, 0, 0]);
           this.prism(blocks, s - .2, s + 1.5, u0 - .22, u0, yLow - .16, yLow - .04, surround);
@@ -254,7 +255,7 @@ export class CityChunk {
         pane([this.at(s, u0 - .05, yLow), this.at(s + 1.3, u0 - .05, yLow), this.at(s + 1.3, u0 - .05, yHigh), this.at(s, u0 - .05, yHigh)], [-1, 0, 0], ++n);
         if (detailed) this.quad(blocks, [this.at(s, u0 - .07, yLow + .92), this.at(s + 1.3, u0 - .07, yLow + .92), this.at(s + 1.3, u0 - .07, yLow + 1), this.at(s, u0 - .07, yLow + 1)], surround.clone().multiplyScalar(.8), [-1, 0, 0]);
       }
-      for (let u = u0 + 1.4; u + 1.3 <= u1 - 1; u += detailed ? 3.2 : 2.9) {
+      for (let u = u0 + 1.4; u + 1.3 <= u1 - 1; u += detailed ? 3.2 : distant ? 3.8 : 2.9) {
         if (detailed) this.quad(blocks, [this.at(s0 - .035, u - .14, yLow - .13), this.at(s0 - .035, u + 1.44, yLow - .13), this.at(s0 - .035, u + 1.44, yHigh + .14), this.at(s0 - .035, u - .14, yHigh + .14)], surround, [0, 0, 1]);
         pane([this.at(s0 - .05, u, yLow), this.at(s0 - .05, u + 1.3, yLow), this.at(s0 - .05, u + 1.3, yHigh), this.at(s0 - .05, u, yHigh)], [0, 0, 1], ++n);
       }
@@ -290,6 +291,14 @@ export class CityChunk {
       }
     }
     if (b.windows !== 'none') this.windows(b, y0, seed, b.windows);
+    else if (u0 < 0) {
+      // Wharf workshops read as occupied buildings even at a distance:
+      // loading doors and a short clerestory use only a few flat panels.
+      for (let s = s0 + 2; s < s1 - 3; s += 6.5) {
+        this.quad(blocks, [this.at(s, u0 - .055, y0 + .3), this.at(s + 2.6, u0 - .055, y0 + .3), this.at(s + 2.6, u0 - .055, y0 + 3.3), this.at(s, u0 - .055, y0 + 3.3)], new THREE.Color('#4a595d'), [-1, 0, 0]);
+        this.quad(blocks, [this.at(s, u0 - .06, y1 - 1.5), this.at(s + 2.6, u0 - .06, y1 - 1.5), this.at(s + 2.6, u0 - .06, y1 - .65), this.at(s, u0 - .06, y1 - .65)], GLASS, [-1, 0, 0]);
+      }
+    }
     if (b.shop) buildShopfront(this, b, y0, seed);
     dressBuilding(this, b, y0, y1, seed);
   }
@@ -343,7 +352,7 @@ export class CityChunk {
     // The near side has none: nothing on the camera's side of the road is
     // ever far enough away for the fog to soften it.
     const { skyline } = this.scenery;
-    for (const [lane, u] of [[0, 200], [1, 250], [2, 310], [3, 380], [4, 460]]) {
+    for (const [lane, u] of [[0, 260], [1, 320], [2, 390], [3, 470]]) {
       for (let n = Math.floor((this.start - 60) / 46); n * 46 < this.start + CHUNK_LENGTH + 60; n++) {
         const r = j => randomAt(n, lane * 10 + 3161 + j), s = n * 46 + r(0) * 30, w = 14 + r(1) * 18, d = 14 + r(2) * 18;
         if (!this.inChunk(s) || r(3) < .3) continue;
