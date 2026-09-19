@@ -2,6 +2,8 @@ import { randomAt, smoothstep } from './route.js';
 import { desertBridgeAt, desertCreek, desertCreekDistance, desertHeight, canyonProfile, insideMesa, dryWashCenter, dryWashWidth } from './desert-route.js';
 
 export const DESERT_DISCOVERY_SPACING = 6144;
+// Raise the chance by 25% while keeping existing sites and their spacing.
+const DISTRICT_CHANCE = .78 * 1.25;
 const sites = new Map();
 
 export const DESERT_FUEL_APRON_HALF_LENGTH = 26;
@@ -12,7 +14,7 @@ export function desertFuelApronWidth(site, s) {
 function districtSite(index) {
   if (sites.has(index)) return sites.get(index);
   let site = null;
-  if (randomAt(index, 2301) > .22) {
+  if (randomAt(index, 2301) > 1 - DISTRICT_CHANCE) {
     // Shuffle a three-district set so a long drive offers different discoveries.
     const orders = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]];
     const order = orders[Math.floor(randomAt(Math.floor(index / 3), 2302) * orders.length)];

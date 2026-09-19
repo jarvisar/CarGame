@@ -2,7 +2,9 @@ import { randomAt, headlandCenter, coastOffset, shorelineOffset, beachWidth, bri
 
 // Distances are world meters. Jittered districts give guaranteed breathing
 // room, independent of chunk load order, driving direction, and world origin.
-export const DISCOVERY_SPACING = { lighthouse: 12288, dock: 7168, whale: 20480 };
+// 25% more discovery districts per kilometer; site suitability still applies.
+const FREQUENCY = 1.25;
+export const DISCOVERY_SPACING = { lighthouse: 12288 / FREQUENCY, dock: 7168 / FREQUENCY, whale: 20480 / FREQUENCY };
 
 function clearHeadland(s) {
   const overlook = overlookAt(s);
@@ -10,7 +12,7 @@ function clearHeadland(s) {
     && (!overlook.enabled || Math.abs(s - overlook.center) > 110);
 }
 function towerSite(index) {
-  const desired = index * DISCOVERY_SPACING.lighthouse + 6144 + (randomAt(index, 2101) - .5) * 3584;
+  const desired = (index + .5) * DISCOVERY_SPACING.lighthouse + (randomAt(index, 2101) - .5) * 3584 / FREQUENCY;
   const first = Math.round((desired - 80) / 176);
   for (const offset of [0, -1, 1, -2, 2]) {
     const s = headlandCenter(first + offset), u = coastOffset(s) + 23;
@@ -25,7 +27,7 @@ function dockSite(index) {
   // Look for a broad beach near the district's own anchor, independently of
   // bridges and tidal inlets. Empty districts still leave long quiet stretches.
   if (randomAt(index, 2111) < .24) return null;
-  const desired = index * DISCOVERY_SPACING.dock + 3584 + (randomAt(index, 2112) - .5) * 1536;
+  const desired = (index + .5) * DISCOVERY_SPACING.dock + (randomAt(index, 2112) - .5) * 1536 / FREQUENCY;
   const direction = randomAt(index, 2113) > .5 ? 1 : -1;
   for (const offset of [0, 64, -64, 128, -128, 192, -192]) {
     const s = desired + offset * direction;
@@ -55,7 +57,7 @@ export function coastalDiscoveries(first, last) {
     return !tower || Math.abs(tower.s - site.s) > 900;
   }));
   for (let i = Math.floor(first / DISCOVERY_SPACING.whale) - 1; i <= Math.floor(last / DISCOVERY_SPACING.whale) + 1; i++) {
-    const s = i * DISCOVERY_SPACING.whale + 10240 + (randomAt(i, 2131) - .5) * 4096;
+    const s = (i + .5) * DISCOVERY_SPACING.whale + (randomAt(i, 2131) - .5) * 4096 / FREQUENCY;
     if (s < first || s >= last || randomAt(i, 2132) < .15) continue;
     if (coastalStructuresNear(s).some(other => Math.abs(other.s - s) < 700)) continue;
     filtered.push({ kind: 'whale', index: i, s, u: shorelineOffset(s) - 68, radius: 22 });

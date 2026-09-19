@@ -3,6 +3,8 @@ import { snowGroundHeight, snowRoadHeight, snowBridgeAt, ledgeEdge, lampAt, LAMP
 import { nearCabin } from './alpine-cabins.js';
 
 export const SNOW_DISCOVERY_SPACING = 6144;
+// Raise the chance by 25% while keeping existing sites and their spacing.
+const DISTRICT_CHANCE = .45 * 1.25;
 // Track ropes run this far either side of the line; each carries one cabin.
 export const CABLE_ROPE_OFFSET = 3;
 // Cabin floor below the rope, and the clearance kept beneath it.
@@ -139,7 +141,7 @@ function districtSite(index) {
   // Roughly half the districts host a line, and a line needs a rare combination
   // of straight road, deep ledge, flat shore and mountain shelf, so most of the
   // district gets searched before giving up.
-  if (randomAt(index, 3101) > .55) {
+  if (randomAt(index, 3101) > 1 - DISTRICT_CHANCE) {
     const desired = index * SNOW_DISCOVERY_SPACING + 3072 + (randomAt(index, 3103) - .5) * 1200;
     for (let step = 0; step < 96 && !site; step++) {
       const s = Math.round(desired / 2) * 2 + (step % 2 ? -1 : 1) * Math.ceil(step / 2) * 30;
